@@ -15,6 +15,9 @@
     "build:packages": "yarn workspaces foreach -A --topological run build",
     "server": "yarn workspace @unfairenough/server",
     "dev:server": "yarn workspace @unfairenough/server dev",
+    "lint": "biome check .",
+    "lint:fix": "biome check --fix .",
+    "format": "biome format --fix .",
     "test:e2e": "npx playwright test",
     "test:e2e:ui": "npx playwright test --ui"
   },
@@ -22,6 +25,7 @@
     "react": "19.1.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.3.14",
     "@playwright/test": "^1.58.1",
     "typescript": "~5.9.2"
   },

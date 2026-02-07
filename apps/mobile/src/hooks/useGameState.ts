@@ -1,15 +1,15 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { wsClient } from '../services/WebSocketClient';
-import { changeLanguage } from '@unfairenough/i18n';
 import type { SupportedLanguage } from '@unfairenough/i18n';
+import { changeLanguage } from '@unfairenough/i18n';
 import type {
-  WelcomePayload,
-  Question,
-  MediaPreviewPayload,
-  RoundResult,
-  GameResult,
   AnswerKey,
+  GameResult,
+  MediaPreviewPayload,
+  Question,
+  RoundResult,
+  WelcomePayload,
 } from '@unfairenough/ws-protocol';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { wsClient } from '../services/WebSocketClient';
 
 export type MobileGamePhase =
   | 'SCAN'
@@ -24,10 +24,14 @@ export type MobileGamePhase =
 
 export function useGameState() {
   const [phase, setPhase] = useState<MobileGamePhase>('SCAN');
-  const [connectionState, setConnectionState] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
+  const [connectionState, setConnectionState] = useState<
+    'disconnected' | 'connecting' | 'connected'
+  >('disconnected');
   const [playerInfo, setPlayerInfo] = useState<WelcomePayload | null>(null);
   const [countdown, setCountdown] = useState(0);
-  const [currentQuestion, setCurrentQuestion] = useState<(Question & { serverTimestamp: number }) | null>(null);
+  const [currentQuestion, setCurrentQuestion] = useState<
+    (Question & { serverTimestamp: number }) | null
+  >(null);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<AnswerKey | null>(null);
   const [confirmedAnswer, setConfirmedAnswer] = useState<AnswerKey | null>(null);
@@ -98,12 +102,15 @@ export function useGameState() {
     wsClient.join(name, roomCode, deviceId);
   }, []);
 
-  const submitAnswer = useCallback((answer: AnswerKey) => {
-    if (confirmedAnswer || !currentQuestion) return;
-    setSelectedAnswer(answer);
-    setConfirmedAnswer(answer);
-    wsClient.sendAnswer(currentQuestion.id, answer);
-  }, [confirmedAnswer, currentQuestion]);
+  const submitAnswer = useCallback(
+    (answer: AnswerKey) => {
+      if (confirmedAnswer || !currentQuestion) return;
+      setSelectedAnswer(answer);
+      setConfirmedAnswer(answer);
+      wsClient.sendAnswer(currentQuestion.id, answer);
+    },
+    [confirmedAnswer, currentQuestion],
+  );
 
   const reset = useCallback(() => {
     wsClient.disconnect();

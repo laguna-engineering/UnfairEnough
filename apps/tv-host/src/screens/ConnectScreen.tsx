@@ -1,15 +1,16 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
-import {
-  colors,
-  typography,
-  spacing,
-  borderRadius,
-  Button,
-  Card,
-  ScreenBackground,
-} from '@unfairenough/ui';
 import { useTranslation } from '@unfairenough/i18n';
+import {
+  Button,
+  borderRadius,
+  Card,
+  colors,
+  ScreenBackground,
+  spacing,
+  typography,
+} from '@unfairenough/ui';
+import type React from 'react';
+import { useCallback, useState } from 'react';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 const TV_SAFE_HORIZONTAL = 96;
 const TV_SAFE_VERTICAL = 54;
@@ -32,7 +33,10 @@ export const ConnectScreen: React.FC<Props> = ({ onConnected, onBack }) => {
     setStatus('connecting');
 
     // Normalize URL for health check
-    const host = serverUrl.trim().replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '');
+    const host = serverUrl
+      .trim()
+      .replace(/^https?:\/\//, '')
+      .replace(/^wss?:\/\//, '');
     const healthUrl = `http://${host}/api/health`;
 
     fetch(healthUrl)

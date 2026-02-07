@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, mock } from 'bun:test';
+import { beforeEach, describe, expect, it } from 'bun:test';
+import type { DbAdapter } from '@unfairenough/db';
 import { GameRoom } from '../room';
 import type { WSData } from '../types';
-import type { DbAdapter } from '@unfairenough/db';
 
 // Mock ServerWebSocket
 function createMockWs(data: Partial<WSData> = {}): any {
@@ -16,24 +16,30 @@ function createMockWs(data: Partial<WSData> = {}): any {
   };
 }
 
-function getLastMessage(ws: any): any {
+function _getLastMessage(ws: any): any {
   const messages = ws._messages;
   return JSON.parse(messages[messages.length - 1]);
 }
 
 function findMessage(ws: any, type: string): any {
-  return ws._messages
-    .map((m: string) => JSON.parse(m))
-    .find((m: any) => m.type === type);
+  return ws._messages.map((m: string) => JSON.parse(m)).find((m: any) => m.type === type);
 }
 
 function createMockDb(): DbAdapter {
   return {
-    async run() { return { changes: 0, lastInsertRowid: 0 }; },
-    async all() { return []; },
-    async get() { return null; },
+    async run() {
+      return { changes: 0, lastInsertRowid: 0 };
+    },
+    async all() {
+      return [];
+    },
+    async get() {
+      return null;
+    },
     async exec() {},
-    async transaction<T>(fn: () => Promise<T>) { return fn(); },
+    async transaction<T>(fn: () => Promise<T>) {
+      return fn();
+    },
   };
 }
 
@@ -61,10 +67,13 @@ describe('GameRoom language support', () => {
     room.setHost(hostWs);
 
     // Host sets language to Italian
-    room.handleHostMessage(hostWs, JSON.stringify({
-      type: 'SET_LANGUAGE',
-      payload: { language: 'it' },
-    }));
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'SET_LANGUAGE',
+        payload: { language: 'it' },
+      }),
+    );
 
     // Player joins after language was set
     const playerWs = createMockWs({ role: 'player' });
@@ -86,10 +95,13 @@ describe('GameRoom language support', () => {
     expect(welcome1.payload.language).toBe('en');
 
     // Host changes language
-    room.handleHostMessage(hostWs, JSON.stringify({
-      type: 'SET_LANGUAGE',
-      payload: { language: 'it' },
-    }));
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'SET_LANGUAGE',
+        payload: { language: 'it' },
+      }),
+    );
 
     // Second player joins with new language
     const playerWs2 = createMockWs({ role: 'player' });

@@ -125,4 +125,10 @@ export type BridgeMessage =
   | { type: 'SERVER_READY'; port: number; localIp: string; roomCode: string }
   | { type: 'PLAYER_JOINED'; playerId: string; name: string; color: string }
   | { type: 'PLAYER_LEFT'; playerId: string }
-  | { type: 'ANSWER'; playerId: string; questionId: string; answer: AnswerKey; serverReceivedAt: number };
+  | {
+      type: 'ANSWER';
+      playerId: string;
+      questionId: string;
+      answer: AnswerKey;
+      serverReceivedAt: number;
+    };

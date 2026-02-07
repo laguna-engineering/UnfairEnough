@@ -1,15 +1,22 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import type { Question, PlayerResult, PlayerRanking, PositionSnapshot, AnswerKey, MediaPreviewPayload } from '@unfairenough/ws-protocol';
+import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
+import type {
+  AnswerKey,
+  MediaPreviewPayload,
+  PlayerRanking,
+  PlayerResult,
+  PositionSnapshot,
+  Question,
+} from '@unfairenough/ws-protocol';
 
 // State machine pattern for game phases - prevents invalid transitions
 export type GamePhase =
-  | 'LOBBY'          // -> COUNTDOWN (when host starts)
-  | 'COUNTDOWN'      // -> QUESTION or MEDIA_PREVIEW (when countdown reaches 0)
-  | 'MEDIA_PREVIEW'  // -> QUESTION (when preview ends)
-  | 'QUESTION'       // -> REVEALING (when timer expires or all answered)
-  | 'REVEALING'      // -> RESULTS (after reveal animation)
-  | 'RESULTS'        // -> QUESTION, MEDIA_PREVIEW, or GAME_OVER
-  | 'GAME_OVER';     // -> LOBBY (when host restarts)
+  | 'LOBBY' // -> COUNTDOWN (when host starts)
+  | 'COUNTDOWN' // -> QUESTION or MEDIA_PREVIEW (when countdown reaches 0)
+  | 'MEDIA_PREVIEW' // -> QUESTION (when preview ends)
+  | 'QUESTION' // -> REVEALING (when timer expires or all answered)
+  | 'REVEALING' // -> RESULTS (after reveal animation)
+  | 'RESULTS' // -> QUESTION, MEDIA_PREVIEW, or GAME_OVER
+  | 'GAME_OVER'; // -> LOBBY (when host restarts)
 
 // Valid phase transitions
 const VALID_TRANSITIONS: Record<GamePhase, GamePhase[]> = {
@@ -78,7 +85,10 @@ const gameSlice = createSlice({
   name: 'game',
   initialState,
   reducers: {
-    setServerReady(state, action: PayloadAction<{ port: number; localIp: string; roomCode: string }>) {
+    setServerReady(
+      state,
+      action: PayloadAction<{ port: number; localIp: string; roomCode: string }>,
+    ) {
       state.serverPort = action.payload.port;
       state.localIp = action.payload.localIp;
       state.roomCode = action.payload.roomCode;
@@ -130,7 +140,10 @@ const gameSlice = createSlice({
       state.phase = 'REVEALING';
     },
 
-    showRoundResults(state, action: PayloadAction<{ results: PlayerResult[]; rankings: PlayerRanking[] }>) {
+    showRoundResults(
+      state,
+      action: PayloadAction<{ results: PlayerResult[]; rankings: PlayerRanking[] }>,
+    ) {
       if (!isValidTransition(state.phase, 'RESULTS')) return;
       state.phase = 'RESULTS';
       state.roundResults = action.payload.results;

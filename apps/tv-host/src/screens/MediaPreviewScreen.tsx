@@ -1,20 +1,14 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
-import {
-  colors,
-  typography,
-  spacing,
-  borderRadius,
-  Card,
-  ScreenBackground,
-} from '@unfairenough/ui';
 import { useTranslation } from '@unfairenough/i18n';
+import { Card, colors, ScreenBackground, spacing, typography } from '@unfairenough/ui';
+import type React from 'react';
+import { useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { useGameController } from '../hooks/useGameController';
 
 export const MediaPreviewScreen: React.FC = () => {
   const { t } = useTranslation();
   const { state, countdown } = useGameController();
-  const [imageError, setImageError] = useState(false);
+  const [_imageError, _setImageError] = useState(false);
 
   // The media info is stored in the gameSlice state when showMediaPreview is dispatched
   // We get questionNumber and totalQuestions from the current game state
@@ -32,9 +26,7 @@ export const MediaPreviewScreen: React.FC = () => {
         <Text style={styles.progress}>
           {t('game.question', { current: questionIndex + 1, total: totalQuestions })}
         </Text>
-        <Text style={styles.countdown}>
-          {t('mediaPreview.questionIn', { seconds: countdown })}
-        </Text>
+        <Text style={styles.countdown}>{t('mediaPreview.questionIn', { seconds: countdown })}</Text>
       </View>
 
       {/* Media display area */}

@@ -1,13 +1,13 @@
-import * as SQLite from 'expo-sqlite';
-import * as Crypto from 'expo-crypto';
 import {
-  createExpoAdapter,
   configurePragmas,
-  runMigrations,
-  questionsRepo,
+  createExpoAdapter,
   type DbAdapter,
   type QuestionSetInput,
+  questionsRepo,
+  runMigrations,
 } from '@unfairenough/db';
+import * as Crypto from 'expo-crypto';
+import * as SQLite from 'expo-sqlite';
 
 let db: DbAdapter | null = null;
 
@@ -209,11 +209,8 @@ async function seedSampleQuestions(db: DbAdapter): Promise<void> {
     ],
   };
 
-  await questionsRepo.importQuestionSet(
-    db,
+  await questionsRepo.importQuestionSet(db, Crypto.randomUUID(), sampleSet, () =>
     Crypto.randomUUID(),
-    sampleSet,
-    () => Crypto.randomUUID(),
   );
   console.log('Seeded 12 sample questions into local database');
 }

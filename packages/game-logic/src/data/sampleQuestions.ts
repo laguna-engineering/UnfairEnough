@@ -1,6 +1,7 @@
-import type { Question, AnswerKey } from '@unfairenough/ws-protocol';
+import type { AnswerKey, Question } from '@unfairenough/ws-protocol';
 
-export interface QuestionWithAnswer extends Omit<Question, 'questionNumber' | 'totalQuestions' | 'timeLimit'> {
+export interface QuestionWithAnswer
+  extends Omit<Question, 'questionNumber' | 'totalQuestions' | 'timeLimit'> {
   correctAnswer: AnswerKey;
 }
 

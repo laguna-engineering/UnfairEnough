@@ -1,16 +1,17 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import {
-  colors,
-  typography,
-  spacing,
-  Card,
-  Leaderboard,
-  ScreenBackground,
-  type LeaderboardEntry,
-} from '@unfairenough/ui';
 import { playersSelectors } from '@unfairenough/game-logic';
 import { useTranslation } from '@unfairenough/i18n';
+import {
+  Card,
+  colors,
+  Leaderboard,
+  type LeaderboardEntry,
+  ScreenBackground,
+  spacing,
+  typography,
+} from '@unfairenough/ui';
+import type React from 'react';
+import { useMemo } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useGameController } from '../hooks/useGameController';
 
 const answerColors = {
@@ -24,18 +25,11 @@ export const ResultsScreen: React.FC = () => {
   const { t } = useTranslation();
   const { state, currentQuestion, roundResults, rankings, positionHistory } = useGameController();
 
-  if (!currentQuestion) return null;
-
-  // Get correct answer from the first result that was correct
-  const correctAnswer = roundResults.find((r) => r.isCorrect)?.answer ||
-    currentQuestion.options[2]?.key;
-
   const players = playersSelectors.selectAll(state.players);
 
   // Compute rank changes from positionHistory
-  const previousRankings = positionHistory.length >= 2
-    ? positionHistory[positionHistory.length - 2]
-    : null;
+  const previousRankings =
+    positionHistory.length >= 2 ? positionHistory[positionHistory.length - 2] : null;
 
   const leaderboardEntries: LeaderboardEntry[] = useMemo(() => {
     return rankings.map((r) => {
@@ -58,6 +52,12 @@ export const ResultsScreen: React.FC = () => {
     });
   }, [rankings, players, roundResults, previousRankings]);
 
+  if (!currentQuestion) return null;
+
+  // Get correct answer from the first result that was correct
+  const correctAnswer =
+    roundResults.find((r) => r.isCorrect)?.answer || currentQuestion.options[2]?.key;
+
   return (
     <ScreenBackground style={styles.container}>
       <View style={styles.content}>
@@ -65,7 +65,12 @@ export const ResultsScreen: React.FC = () => {
         <Card style={styles.correctAnswerCard} variant="glow" glowColor={colors.success}>
           <Text style={styles.correctLabel}>{t('game.correctAnswerLabel')}</Text>
           <View style={styles.correctAnswerRow}>
-            <Text style={[styles.answerKey, { color: answerColors[correctAnswer as keyof typeof answerColors] }]}>
+            <Text
+              style={[
+                styles.answerKey,
+                { color: answerColors[correctAnswer as keyof typeof answerColors] },
+              ]}
+            >
               {correctAnswer}
             </Text>
             <Text style={styles.answerText}>

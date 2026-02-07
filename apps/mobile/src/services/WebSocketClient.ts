@@ -4,14 +4,14 @@
  */
 
 import type {
+  AnswerKey,
   ClientMessage,
+  GameResult,
+  MediaPreviewPayload,
+  Question,
+  RoundResult,
   ServerMessage,
   WelcomePayload,
-  Question,
-  MediaPreviewPayload,
-  RoundResult,
-  GameResult,
-  AnswerKey,
 } from '@unfairenough/ws-protocol';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected';
@@ -127,7 +127,7 @@ class WebSocketClient {
         case 'ANSWER_ACK':
           this.callbacks.onAnswerAck?.(
             message.payload.questionId,
-            message.payload.serverReceivedAt
+            message.payload.serverReceivedAt,
           );
           break;
 
@@ -183,8 +183,7 @@ class WebSocketClient {
   private scheduleReconnect(): void {
     if (this.reconnectTimeout || !this.url) return;
 
-    const delay =
-      RECONNECT_DELAYS[Math.min(this.reconnectAttempt, RECONNECT_DELAYS.length - 1)];
+    const delay = RECONNECT_DELAYS[Math.min(this.reconnectAttempt, RECONNECT_DELAYS.length - 1)];
     this.reconnectAttempt++;
 
     this.reconnectTimeout = setTimeout(() => {

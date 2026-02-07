@@ -1,15 +1,15 @@
-import { describe, it, expect, beforeEach, afterAll } from 'bun:test';
 import { Database } from 'bun:sqlite';
+import { afterAll, beforeEach, describe, expect, it } from 'bun:test';
+import type { DbAdapter } from '@unfairenough/db';
 import {
-  createBunAdapter,
   configurePragmas,
-  runMigrations,
-  questionsRepo,
-  playersRepo,
+  createBunAdapter,
   gamesRepo,
   parseQuestionSetYaml,
+  playersRepo,
+  questionsRepo,
+  runMigrations,
 } from '@unfairenough/db';
-import type { DbAdapter } from '@unfairenough/db';
 
 let rawDb: InstanceType<typeof Database>;
 let db: DbAdapter;
@@ -35,7 +35,7 @@ describe('migrations', () => {
 
   it('creates all expected tables', async () => {
     const tables = await db.all<{ name: string }>(
-      "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+      "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
     );
     const names = tables.map((t) => t.name);
     expect(names).toContain('question_sets');
@@ -227,8 +227,24 @@ describe('questions repository', () => {
       name: 'Ordered Set',
       defaultTimeLimit: 10,
       questions: [
-        { type: 'multiple_choice' as const, text: 'First', options: [{ key: 'A', text: 'A' }, { key: 'B', text: 'B' }], correctAnswer: 'A' as const },
-        { type: 'multiple_choice' as const, text: 'Second', options: [{ key: 'A', text: 'A' }, { key: 'B', text: 'B' }], correctAnswer: 'B' as const },
+        {
+          type: 'multiple_choice' as const,
+          text: 'First',
+          options: [
+            { key: 'A', text: 'A' },
+            { key: 'B', text: 'B' },
+          ],
+          correctAnswer: 'A' as const,
+        },
+        {
+          type: 'multiple_choice' as const,
+          text: 'Second',
+          options: [
+            { key: 'A', text: 'A' },
+            { key: 'B', text: 'B' },
+          ],
+          correctAnswer: 'B' as const,
+        },
       ],
     };
 
@@ -246,7 +262,15 @@ describe('questions repository', () => {
       name: 'To Delete',
       defaultTimeLimit: 10,
       questions: [
-        { type: 'multiple_choice' as const, text: 'Q', options: [{ key: 'A', text: 'A' }, { key: 'B', text: 'B' }], correctAnswer: 'A' as const },
+        {
+          type: 'multiple_choice' as const,
+          text: 'Q',
+          options: [
+            { key: 'A', text: 'A' },
+            { key: 'B', text: 'B' },
+          ],
+          correctAnswer: 'A' as const,
+        },
       ],
     };
 
@@ -263,7 +287,15 @@ describe('questions repository', () => {
       name: 'Deleted Pool',
       defaultTimeLimit: 10,
       questions: [
-        { type: 'multiple_choice' as const, text: 'Hidden Q', options: [{ key: 'A', text: 'A' }, { key: 'B', text: 'B' }], correctAnswer: 'A' as const },
+        {
+          type: 'multiple_choice' as const,
+          text: 'Hidden Q',
+          options: [
+            { key: 'A', text: 'A' },
+            { key: 'B', text: 'B' },
+          ],
+          correctAnswer: 'A' as const,
+        },
       ],
     };
 

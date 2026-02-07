@@ -1,11 +1,6 @@
 import type { DbAdapter } from '../adapter';
-import type {
-  QuestionSetRow,
-  QuestionRow,
-  QuestionWithMeta,
-  QuestionSetWithMeta,
-} from '../schema';
 import type { QuestionSetInput } from '../import/validator';
+import type { QuestionRow, QuestionSetRow, QuestionSetWithMeta, QuestionWithMeta } from '../schema';
 
 function rowToQuestionWithMeta(row: QuestionRow): QuestionWithMeta {
   return {
@@ -17,9 +12,10 @@ function rowToQuestionWithMeta(row: QuestionRow): QuestionWithMeta {
     category: row.category,
     tags: row.tags ? JSON.parse(row.tags) : [],
     timeLimit: row.time_limit,
-    media: row.media_type && row.media_url
-      ? { type: row.media_type, url: row.media_url, previewDuration: row.media_preview_duration }
-      : null,
+    media:
+      row.media_type && row.media_url
+        ? { type: row.media_type, url: row.media_url, previewDuration: row.media_preview_duration }
+        : null,
     options: JSON.parse(row.options),
     correctAnswer: row.correct_answer,
     playerDifficulty: row.player_difficulty ? JSON.parse(row.player_difficulty) : null,
@@ -118,10 +114,7 @@ export async function getRandomQuestions(
   return rows.map(rowToQuestionWithMeta);
 }
 
-export async function getQuestionsBySet(
-  db: DbAdapter,
-  setId: string,
-): Promise<QuestionWithMeta[]> {
+export async function getQuestionsBySet(db: DbAdapter, setId: string): Promise<QuestionWithMeta[]> {
   const rows = await db.all<QuestionRow>(
     'SELECT * FROM questions WHERE set_id = ? ORDER BY rowid',
     [setId],
@@ -147,10 +140,7 @@ export async function getQuestionSet(
   return row ? rowToQuestionSetWithMeta(row) : null;
 }
 
-export async function softDeleteQuestionSet(
-  db: DbAdapter,
-  setId: string,
-): Promise<boolean> {
+export async function softDeleteQuestionSet(db: DbAdapter, setId: string): Promise<boolean> {
   const result = await db.run(
     "UPDATE question_sets SET deleted_at = datetime('now') WHERE id = ? AND deleted_at IS NULL",
     [setId],

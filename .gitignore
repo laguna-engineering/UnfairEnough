@@ -28,3 +28,4 @@ test-results/
 
 # Claude
 .claude/*.local.json
+.claude/.lint-cache.json

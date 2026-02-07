@@ -1,6 +1,6 @@
+import { gamesRepo, playersRepo } from '@unfairenough/db';
 import { Hono } from 'hono';
 import { getDb } from '../db';
-import { playersRepo, gamesRepo } from '@unfairenough/db';
 
 const players = new Hono();
 

@@ -11,7 +11,10 @@ import type { DbAdapter, RunResult, SqlValue } from './adapter';
  *   db.withTransactionAsync(fn) -> Promise<void>
  */
 export function createExpoAdapter(db: {
-  runAsync(sql: string, ...params: SqlValue[]): Promise<{ lastInsertRowId: number; changes: number }>;
+  runAsync(
+    sql: string,
+    ...params: SqlValue[]
+  ): Promise<{ lastInsertRowId: number; changes: number }>;
   getAllAsync<T>(sql: string, ...params: SqlValue[]): Promise<T[]>;
   getFirstAsync<T>(sql: string, ...params: SqlValue[]): Promise<T | null>;
   execAsync(sql: string): Promise<void>;
@@ -19,9 +22,8 @@ export function createExpoAdapter(db: {
 }): DbAdapter {
   return {
     async run(sql: string, params?: SqlValue[]): Promise<RunResult> {
-      const result = params && params.length > 0
-        ? await db.runAsync(sql, ...params)
-        : await db.runAsync(sql);
+      const result =
+        params && params.length > 0 ? await db.runAsync(sql, ...params) : await db.runAsync(sql);
       return {
         changes: result.changes,
         lastInsertRowid: result.lastInsertRowId,

@@ -1,4 +1,4 @@
-import type { AnswerKey, QuestionOption } from '@unfairenough/ws-protocol';
+import type { QuestionOption } from '@unfairenough/ws-protocol';
 
 // ── Row types (match SQLite columns) ─────────────────────────
 
@@ -8,9 +8,9 @@ export interface QuestionSetRow {
   author: string | null;
   description: string | null;
   default_time_limit: number;
-  tags: string | null;           // JSON array
+  tags: string | null; // JSON array
   question_count: number;
-  deleted_at: string | null;     // soft delete
+  deleted_at: string | null; // soft delete
   created_at: string;
   updated_at: string;
 }
@@ -22,12 +22,12 @@ export interface QuestionRow {
   type: QuestionType;
   text: string;
   category: string | null;
-  tags: string | null;           // JSON array
+  tags: string | null; // JSON array
   time_limit: number | null;
   media_type: MediaType | null;
   media_url: string | null;
   media_preview_duration: number;
-  options: string;               // JSON array of {key, text}
+  options: string; // JSON array of {key, text}
   correct_answer: string;
   player_difficulty: string | null; // JSON object
   explanation: string | null;
@@ -67,7 +67,7 @@ export interface RoundResultRow {
   player_id: string;
   player_name: string;
   answer: string | null;
-  is_correct: number;            // 0 or 1
+  is_correct: number; // 0 or 1
   response_time_ms: number | null;
   points_earned: number;
   total_score: number;

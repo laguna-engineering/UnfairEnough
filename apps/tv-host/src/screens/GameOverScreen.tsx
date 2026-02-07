@@ -1,18 +1,18 @@
-import React from 'react';
-import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
-import {
-  colors,
-  typography,
-  spacing,
-  Card,
-  Button,
-  PlayerAvatar,
-  ScreenBackground,
-  PositionChart,
-  type PositionChartPlayer,
-} from '@unfairenough/ui';
 import { playersSelectors, rankPlayers } from '@unfairenough/game-logic';
 import { useTranslation } from '@unfairenough/i18n';
+import {
+  Button,
+  Card,
+  colors,
+  PlayerAvatar,
+  PositionChart,
+  type PositionChartPlayer,
+  ScreenBackground,
+  spacing,
+  typography,
+} from '@unfairenough/ui';
+import type React from 'react';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useGameController } from '../hooks/useGameController';
 
 export const GameOverScreen: React.FC = () => {
@@ -21,9 +21,7 @@ export const GameOverScreen: React.FC = () => {
   const { width: windowWidth } = useWindowDimensions();
 
   const players = playersSelectors.selectAll(state.players);
-  const rankings = rankPlayers(
-    players.map((p) => ({ id: p.id, name: p.name, score: p.score }))
-  );
+  const rankings = rankPlayers(players.map((p) => ({ id: p.id, name: p.name, score: p.score })));
 
   const winner = rankings[0];
   const podium = rankings.slice(0, 3);
@@ -44,10 +42,14 @@ export const GameOverScreen: React.FC = () => {
 
   const getOrdinal = (rank: number) => {
     switch (rank) {
-      case 1: return t('results.ordinal1');
-      case 2: return t('results.ordinal2');
-      case 3: return t('results.ordinal3');
-      default: return `#${rank}`;
+      case 1:
+        return t('results.ordinal1');
+      case 2:
+        return t('results.ordinal2');
+      case 3:
+        return t('results.ordinal3');
+      default:
+        return `#${rank}`;
     }
   };
 
@@ -79,7 +81,9 @@ export const GameOverScreen: React.FC = () => {
             <Card style={styles.winnerCard} variant="glow" glowColor={colors.accentYellow}>
               <Text style={styles.winnerLabel}>{t('results.winner')}</Text>
               <Text style={styles.winnerName}>{winner.name}</Text>
-              <Text style={styles.winnerScore}>{t('results.pointsCount', { score: winner.score })}</Text>
+              <Text style={styles.winnerScore}>
+                {t('results.pointsCount', { score: winner.score })}
+              </Text>
             </Card>
           )}
 
@@ -134,7 +138,9 @@ export const GameOverScreen: React.FC = () => {
               {rest.map((player) => (
                 <Card key={player.id} style={styles.restCard}>
                   <Text style={styles.restRank}>#{player.rank}</Text>
-                  <Text style={styles.restName} numberOfLines={1}>{player.name}</Text>
+                  <Text style={styles.restName} numberOfLines={1}>
+                    {player.name}
+                  </Text>
                   <Text style={styles.restScore}>{player.score}</Text>
                 </Card>
               ))}

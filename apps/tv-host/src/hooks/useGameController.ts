@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback } from 'react';
-import { useGameMode, type GameMode } from '../context/GameModeContext';
-import type { RootState, GamePhase } from '@unfairenough/game-logic';
+import type { GamePhase, RootState } from '@unfairenough/game-logic';
+import { useCallback, useEffect, useState } from 'react';
+import { type GameMode, useGameMode } from '../context/GameModeContext';
 
 export function useGameController() {
   const { mode, controller, serverUrl } = useGameMode();
@@ -26,13 +26,19 @@ export function useGameController() {
     controller.reset();
   }, [controller]);
 
-  const configureGame = useCallback((gameType: 'casual' | 'configured', questionSetId?: string) => {
-    controller.configureGame(gameType, questionSetId);
-  }, [controller]);
+  const configureGame = useCallback(
+    (gameType: 'casual' | 'configured', questionSetId?: string) => {
+      controller.configureGame(gameType, questionSetId);
+    },
+    [controller],
+  );
 
-  const setLanguage = useCallback((language: string) => {
-    controller.setLanguage(language);
-  }, [controller]);
+  const setLanguage = useCallback(
+    (language: string) => {
+      controller.setLanguage(language);
+    },
+    [controller],
+  );
 
   // Build the QR URL based on mode
   const { roomCode, localIp, serverPort } = state.game;

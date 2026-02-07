@@ -1,12 +1,12 @@
-import React from 'react';
+import type React from 'react';
 import { useGameController } from '../hooks/useGameController';
-import { LobbyScreen } from './LobbyScreen';
 import { CountdownScreen } from './CountdownScreen';
+import { GameOverScreen } from './GameOverScreen';
+import { LobbyScreen } from './LobbyScreen';
 import { MediaPreviewScreen } from './MediaPreviewScreen';
 import { QuestionScreen } from './QuestionScreen';
-import { RevealScreen } from './RevealScreen';
 import { ResultsScreen } from './ResultsScreen';
-import { GameOverScreen } from './GameOverScreen';
+import { RevealScreen } from './RevealScreen';
 
 export const GameScreen: React.FC = () => {
   const { phase } = useGameController();

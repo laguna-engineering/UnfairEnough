@@ -1,4 +1,4 @@
-import { test, expect, type Page, type WebSocketRoute } from '@playwright/test';
+import { expect, type Page, test, type WebSocketRoute } from '@playwright/test';
 
 const WELCOME_MSG = JSON.stringify({
   type: 'WELCOME',

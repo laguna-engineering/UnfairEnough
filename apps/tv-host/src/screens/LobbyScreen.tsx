@@ -1,19 +1,20 @@
-import React, { useCallback, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
+import { type QuestionSetWithMeta, questionsRepo } from '@unfairenough/db';
+import { playersSelectors } from '@unfairenough/game-logic';
+import { changeLanguage, type SupportedLanguage, useTranslation } from '@unfairenough/i18n';
 import {
-  colors,
-  typography,
-  spacing,
-  borderRadius,
   Button,
+  borderRadius,
   Card,
+  colors,
   PlayerAvatar,
   ScreenBackground,
+  spacing,
+  typography,
 } from '@unfairenough/ui';
-import { playersSelectors } from '@unfairenough/game-logic';
-import { useTranslation, changeLanguage, type SupportedLanguage } from '@unfairenough/i18n';
-import { questionsRepo, type QuestionSetWithMeta } from '@unfairenough/db';
+import type React from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 import { useGameController } from '../hooks/useGameController';
 import { getDb } from '../services/database';
 import { ImportQuestionsModal } from './ImportQuestionsModal';
@@ -30,8 +31,11 @@ const LANGUAGES: { code: SupportedLanguage; label: string }[] = [
 
 export const LobbyScreen: React.FC = () => {
   const { t, i18n } = useTranslation();
-  const { state, startGame, configureGame, setLanguage, roomCode, qrUrl, gameConfig, mode } = useGameController();
-  const [selectedMode, setSelectedMode] = useState<'casual' | 'configured'>(gameConfig.gameType ?? 'casual');
+  const { state, startGame, configureGame, setLanguage, roomCode, qrUrl, gameConfig, mode } =
+    useGameController();
+  const [selectedMode, setSelectedMode] = useState<'casual' | 'configured'>(
+    gameConfig.gameType ?? 'casual',
+  );
   const [showImportModal, setShowImportModal] = useState(false);
   const [questionSets, setQuestionSets] = useState<QuestionSetWithMeta[]>([]);
   const [totalQuestions, setTotalQuestions] = useState(0);
@@ -53,17 +57,23 @@ export const LobbyScreen: React.FC = () => {
     loadQuestionSets();
   }, [loadQuestionSets]);
 
-  const handleLanguageChange = useCallback((lang: SupportedLanguage) => {
-    changeLanguage(lang);
-    setLanguage(lang);
-  }, [setLanguage]);
+  const handleLanguageChange = useCallback(
+    (lang: SupportedLanguage) => {
+      changeLanguage(lang);
+      setLanguage(lang);
+    },
+    [setLanguage],
+  );
 
-  const handleModeChange = useCallback((mode: 'casual' | 'configured') => {
-    setSelectedMode(mode);
-    if (mode === 'casual') {
-      configureGame('casual');
-    }
-  }, [configureGame]);
+  const handleModeChange = useCallback(
+    (mode: 'casual' | 'configured') => {
+      setSelectedMode(mode);
+      if (mode === 'casual') {
+        configureGame('casual');
+      }
+    },
+    [configureGame],
+  );
 
   const players = playersSelectors.selectAll(state.players);
   const playerCount = players.length;
@@ -112,7 +122,9 @@ export const LobbyScreen: React.FC = () => {
                   />
                 </View>
                 <View style={styles.codeContainer}>
-                  <Text style={styles.codeLabel}>{t('lobby.orEnterCode', { code: '' }).replace(': ', '')}</Text>
+                  <Text style={styles.codeLabel}>
+                    {t('lobby.orEnterCode', { code: '' }).replace(': ', '')}
+                  </Text>
                   <Text style={styles.roomCode}>{roomCode}</Text>
                 </View>
               </>
@@ -143,9 +155,7 @@ export const LobbyScreen: React.FC = () => {
                 />
               ))}
               {players.length === 0 && (
-                <Text style={styles.waitingText}>
-                  {t('lobby.scanQrToJoin')}
-                </Text>
+                <Text style={styles.waitingText}>{t('lobby.scanQrToJoin')}</Text>
               )}
             </View>
           </Card>
@@ -198,9 +208,7 @@ export const LobbyScreen: React.FC = () => {
                   onPress={() => setShowImportModal(true)}
                   style={styles.importButton}
                 >
-                  <Text style={styles.importButtonText}>
-                    {t('gameConfig.importQuestions')}
-                  </Text>
+                  <Text style={styles.importButtonText}>{t('gameConfig.importQuestions')}</Text>
                 </TouchableOpacity>
               )}
             </View>

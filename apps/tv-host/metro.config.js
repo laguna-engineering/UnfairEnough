@@ -21,10 +21,7 @@ config.resolver.disableHierarchicalLookup = true;
 // TV-specific extensions support
 if (process.env?.EXPO_TV === '1') {
   const originalSourceExts = config.resolver.sourceExts;
-  const tvSourceExts = [
-    ...originalSourceExts.map((e) => `tv.${e}`),
-    ...originalSourceExts,
-  ];
+  const tvSourceExts = [...originalSourceExts.map((e) => `tv.${e}`), ...originalSourceExts];
   config.resolver.sourceExts = tvSourceExts;
 }
 

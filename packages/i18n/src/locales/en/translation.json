@@ -73,7 +73,7 @@
     "noSets": "No question sets available",
     "questionsCount": "{{count}} questions",
     "configuring": "Configuring...",
-    "configured": "Game configured!",
+    "configuredSuccess": "Game configured!",
     "importQuestions": "Import Questions",
     "importFromUrl": "Import from URL",
     "urlPlaceholder": "https://example.com/questions.yaml",

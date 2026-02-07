@@ -3,17 +3,26 @@
  * Uses react-native-tcp-socket to run a real WebSocket server
  */
 
+import type { Question, ServerMessage } from '@unfairenough/ws-protocol';
 import { Buffer } from 'buffer';
-import TcpSocket from 'react-native-tcp-socket';
 import * as Crypto from 'expo-crypto';
 import * as Network from 'expo-network';
-import type { ServerMessage, Question } from '@unfairenough/ws-protocol';
+import TcpSocket from 'react-native-tcp-socket';
 
 const PORT = 8080;
 const COLORS = [
-  '#FF6B9D', '#4ECDC4', '#FFE66D', '#95E1D3',
-  '#F38181', '#AA96DA', '#FCBAD3', '#A8D8EA',
-  '#FF9F43', '#6C5CE7', '#00B894', '#FD79A8',
+  '#FF6B9D',
+  '#4ECDC4',
+  '#FFE66D',
+  '#95E1D3',
+  '#F38181',
+  '#AA96DA',
+  '#FCBAD3',
+  '#A8D8EA',
+  '#FF9F43',
+  '#6C5CE7',
+  '#00B894',
+  '#FD79A8',
 ];
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
@@ -51,22 +60,22 @@ function generateRoomCode(): string {
 }
 
 async function createWebSocketAcceptKey(key: string): Promise<string> {
-  const hash = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA1,
-    key + WS_GUID,
-    { encoding: Crypto.CryptoEncoding.BASE64 }
-  );
+  const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA1, key + WS_GUID, {
+    encoding: Crypto.CryptoEncoding.BASE64,
+  });
   return hash;
 }
 
-function parseWebSocketFrame(buffer: Buffer): { opcode: number; payload: string; totalLength: number } | null {
+function parseWebSocketFrame(
+  buffer: Buffer,
+): { opcode: number; payload: string; totalLength: number } | null {
   if (buffer.length < 2) return null;
 
   const firstByte = buffer[0];
   const secondByte = buffer[1];
-  const opcode = firstByte & 0x0F;
+  const opcode = firstByte & 0x0f;
   const isMasked = (secondByte & 0x80) !== 0;
-  let payloadLength = secondByte & 0x7F;
+  let payloadLength = secondByte & 0x7f;
   let offset = 2;
 
   if (payloadLength === 126) {
@@ -223,7 +232,8 @@ class WebSocketServerService {
   }
 
   private handleWebSocketData(client: Client): void {
-    let frame;
+    let frame: ReturnType<typeof parseWebSocketFrame> = null;
+    // biome-ignore lint/suspicious/noAssignInExpressions: standard parser loop pattern
     while ((frame = parseWebSocketFrame(client.buffer)) !== null) {
       client.buffer = client.buffer.slice(frame.totalLength);
 
@@ -250,7 +260,10 @@ class WebSocketServerService {
 
           client.playerId = playerId;
 
-          this.sendToClient(client, { type: 'WELCOME', payload: { ...playerData, language: this.language } });
+          this.sendToClient(client, {
+            type: 'WELCOME',
+            payload: { ...playerData, language: this.language },
+          });
           this.callbacks.onPlayerJoined?.(playerData);
           this.broadcast({ type: 'PLAYER_JOINED', payload: playerData });
           break;

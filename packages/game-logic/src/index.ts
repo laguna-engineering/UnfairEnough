@@ -1,55 +1,54 @@
 // Store
-export { createStore, type AppStore, type RootState, type AppDispatch } from './store';
+
+// Data
+export {
+  getRandomQuestions,
+  type QuestionWithAnswer,
+  sampleQuestions,
+} from './data/sampleQuestions';
 
 // Game slice
 export {
-  default as gameReducer,
-  setServerReady,
-  startGameCountdown,
-  setCountdown,
-  showMediaPreview,
-  tickGameCountdown,
-  showQuestion,
-  tickQuestionTimer,
-  receiveAnswer,
-  startRevealing,
-  showRoundResults,
-  nextQuestion,
-  endGame,
-  resetGame,
-  cancelGame,
-  updateConfig,
-  type GamePhase,
   type Answer,
+  cancelGame,
+  default as gameReducer,
+  endGame,
   type GameConfig,
+  type GamePhase,
+  nextQuestion,
+  receiveAnswer,
+  resetGame,
+  setCountdown,
+  setServerReady,
+  showMediaPreview,
+  showQuestion,
+  showRoundResults,
+  startGameCountdown,
+  startRevealing,
+  tickGameCountdown,
+  tickQuestionTimer,
+  updateConfig,
 } from './slices/gameSlice';
 
 // Players slice
 export {
-  default as playersReducer,
   addPlayer,
-  removePlayer,
-  updateScore,
   addPoints,
-  setPlayerConnected,
   clearPlayers,
-  resetScores,
-  playersSelectors,
+  default as playersReducer,
   type Player,
+  playersSelectors,
+  removePlayer,
+  resetScores,
+  setPlayerConnected,
+  updateScore,
 } from './slices/playersSlice';
-
+export { type AppDispatch, type AppStore, createStore, type RootState } from './store';
 // Utilities
 export {
   calculateScore,
-  rankPlayers,
   getPositionSuffix,
   type PlayerScore,
   type RankedPlayer,
+  rankPlayers,
 } from './utils/scoring';
-
-// Data
-export {
-  sampleQuestions,
-  getRandomQuestions,
-  type QuestionWithAnswer,
-} from './data/sampleQuestions';

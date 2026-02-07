@@ -1,8 +1,8 @@
-import React from 'react';
-import { StyleSheet, ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import type React from 'react';
+import { StyleSheet, type ViewStyle } from 'react-native';
 import { gradients } from '../theme/colors';
-import { spacing, borderRadius, shadows } from '../theme/spacing';
+import { borderRadius, shadows, spacing } from '../theme/spacing';
 
 export interface CardProps {
   children: React.ReactNode;
@@ -11,12 +11,7 @@ export interface CardProps {
   glowColor?: string;
 }
 
-export const Card: React.FC<CardProps> = ({
-  children,
-  style,
-  variant = 'default',
-  glowColor,
-}) => {
+export const Card: React.FC<CardProps> = ({ children, style, variant = 'default', glowColor }) => {
   const getShadowStyle = () => {
     switch (variant) {
       case 'elevated':
@@ -28,9 +23,8 @@ export const Card: React.FC<CardProps> = ({
     }
   };
 
-  const gradientColors = variant === 'elevated' || variant === 'glow'
-    ? gradients.cardElevated
-    : gradients.card;
+  const gradientColors =
+    variant === 'elevated' || variant === 'glow' ? gradients.cardElevated : gradients.card;
 
   return (
     <LinearGradient

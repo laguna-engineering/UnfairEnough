@@ -1,13 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import {
-  colors,
-  typography,
-  spacing,
-  ScreenBackground,
-} from '@unfairenough/ui';
 import { useTranslation } from '@unfairenough/i18n';
+import { colors, ScreenBackground, spacing, typography } from '@unfairenough/ui';
 import type { MediaPreviewPayload } from '@unfairenough/ws-protocol';
+import type React from 'react';
+import { useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
 interface Props {
   mediaPreview: MediaPreviewPayload;
@@ -37,9 +33,7 @@ export const MediaPreviewScreen: React.FC<Props> = ({ mediaPreview }) => {
       <View style={styles.centerContent}>
         <Text style={styles.eyeIcon}>{'👀'}</Text>
         <Text style={styles.lookAtTv}>{t('mediaPreview.lookAtTv')}</Text>
-        <Text style={styles.countdown}>
-          {t('mediaPreview.questionIn', { seconds: countdown })}
-        </Text>
+        <Text style={styles.countdown}>{t('mediaPreview.questionIn', { seconds: countdown })}</Text>
       </View>
     </ScreenBackground>
   );

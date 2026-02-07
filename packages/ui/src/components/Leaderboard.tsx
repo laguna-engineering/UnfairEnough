@@ -1,8 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import type React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
+import { borderRadius, spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
-import { spacing, borderRadius } from '../theme/spacing';
 import { RankChangeIndicator } from './RankChangeIndicator';
 
 export interface LeaderboardEntry {
@@ -56,23 +56,13 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
             ]}
           >
             {/* Rank */}
-            <Text style={[styles.rank, { color: getRankColor(entry.rank) }]}>
-              #{entry.rank}
-            </Text>
+            <Text style={[styles.rank, { color: getRankColor(entry.rank) }]}>#{entry.rank}</Text>
 
             {/* Color dot */}
-            {entry.color && (
-              <View style={[styles.colorDot, { backgroundColor: entry.color }]} />
-            )}
+            {entry.color && <View style={[styles.colorDot, { backgroundColor: entry.color }]} />}
 
             {/* Name */}
-            <Text
-              style={[
-                styles.name,
-                isHighlighted && styles.highlightedName,
-              ]}
-              numberOfLines={1}
-            >
+            <Text style={[styles.name, isHighlighted && styles.highlightedName]} numberOfLines={1}>
               {entry.name}
             </Text>
 

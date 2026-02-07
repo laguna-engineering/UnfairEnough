@@ -1,4 +1,4 @@
-import { test, expect, type Locator } from '@playwright/test';
+import { expect, type Locator, test } from '@playwright/test';
 
 // React Native web renders TouchableOpacity as a <div> with aria-disabled="true",
 // not a <button>. When enabled the attribute is removed entirely.

@@ -1,16 +1,16 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { useTranslation } from '@unfairenough/i18n';
 import {
+  AnswerButton,
+  type AnswerState,
   colors,
-  typography,
+  ScreenBackground,
   spacing,
   Timer,
-  AnswerButton,
-  ScreenBackground,
-  type AnswerState,
+  typography,
 } from '@unfairenough/ui';
-import { useTranslation } from '@unfairenough/i18n';
-import type { Question, AnswerKey } from '@unfairenough/ws-protocol';
+import type { AnswerKey, Question } from '@unfairenough/ws-protocol';
+import type React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
 interface PlayScreenProps {
   question: Question & { serverTimestamp: number };
@@ -40,11 +40,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({
         <Text style={styles.questionNumber}>
           {question.questionNumber} / {question.totalQuestions}
         </Text>
-        <Timer
-          seconds={timeRemaining}
-          totalSeconds={question.timeLimit}
-          size="small"
-        />
+        <Timer seconds={timeRemaining} totalSeconds={question.timeLimit} size="small" />
       </View>
 
       {/* Status */}

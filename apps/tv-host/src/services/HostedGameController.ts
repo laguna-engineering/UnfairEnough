@@ -4,26 +4,26 @@
  * Maps incoming ServerMessages to Redux dispatches.
  */
 
-import type { IGameController } from './IGameController';
-import type { ServerMessage } from '@unfairenough/ws-protocol';
 import {
+  addPlayer,
   createStore,
-  setServerReady,
-  startGameCountdown,
-  setCountdown,
-  showMediaPreview,
-  showQuestion,
-  startRevealing,
-  showRoundResults,
   endGame,
+  type RootState,
+  removePlayer,
   resetGame,
   resetScores,
+  setCountdown,
+  setServerReady,
+  showMediaPreview,
+  showQuestion,
+  showRoundResults,
+  startGameCountdown,
+  startRevealing,
   updateConfig,
-  addPlayer,
-  removePlayer,
   updateScore,
-  type RootState,
 } from '@unfairenough/game-logic';
+import type { ServerMessage } from '@unfairenough/ws-protocol';
+import type { IGameController } from './IGameController';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
@@ -101,7 +101,11 @@ export class HostedGameController implements IGameController {
   // ── Private ────────────────────────────────────────────────────
 
   private connect(): void {
-    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;
+    if (
+      this.ws &&
+      (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)
+    )
+      return;
 
     this.setConnectionState('connecting');
 
@@ -196,10 +200,12 @@ export class HostedGameController implements IGameController {
         for (const pr of playerResults) {
           this.store.dispatch(updateScore({ id: pr.playerId, score: pr.totalScore }));
         }
-        this.store.dispatch(showRoundResults({
-          results: playerResults,
-          rankings: rankings ?? [],
-        }));
+        this.store.dispatch(
+          showRoundResults({
+            results: playerResults,
+            rankings: rankings ?? [],
+          }),
+        );
         break;
       }
 
@@ -208,10 +214,12 @@ export class HostedGameController implements IGameController {
         break;
 
       case 'GAME_CONFIGURED':
-        this.store.dispatch(updateConfig({
-          gameType: message.payload.gameType as 'casual' | 'configured',
-          totalQuestions: message.payload.questionCount,
-        }));
+        this.store.dispatch(
+          updateConfig({
+            gameType: message.payload.gameType as 'casual' | 'configured',
+            totalQuestions: message.payload.questionCount,
+          }),
+        );
         break;
 
       case 'ERROR':

@@ -1,13 +1,13 @@
-import { describe, test, expect } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import {
   createStore,
-  startGameCountdown,
-  showQuestion,
-  showMediaPreview,
-  startRevealing,
-  showRoundResults,
   nextQuestion,
   setCountdown,
+  showMediaPreview,
+  showQuestion,
+  showRoundResults,
+  startGameCountdown,
+  startRevealing,
 } from '../index';
 
 function makeQuestion(id: string, text: string, questionNumber: number) {
@@ -45,7 +45,7 @@ function advanceToResults(store: ReturnType<typeof createStore>) {
 describe('gameSlice question transitions', () => {
   test('nextQuestion → showQuestion updates currentQuestion', () => {
     const store = createStore();
-    const q1 = advanceToFirstQuestion(store);
+    const _q1 = advanceToFirstQuestion(store);
 
     expect(store.getState().game.currentQuestion?.id).toBe('q1');
     expect(store.getState().game.currentQuestion?.text).toBe('First question');
@@ -69,12 +69,14 @@ describe('gameSlice question transitions', () => {
     advanceToResults(store);
 
     store.dispatch(nextQuestion());
-    store.dispatch(showMediaPreview({
-      questionNumber: 2,
-      totalQuestions: 3,
-      media: { type: 'image', url: 'https://example.com/img.jpg' },
-      duration: 5,
-    }));
+    store.dispatch(
+      showMediaPreview({
+        questionNumber: 2,
+        totalQuestions: 3,
+        media: { type: 'image', url: 'https://example.com/img.jpg' },
+        duration: 5,
+      }),
+    );
 
     expect(store.getState().game.phase).toBe('MEDIA_PREVIEW');
 

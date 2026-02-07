@@ -1,14 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import {
-  colors,
-  typography,
-  spacing,
-  Card,
-  ScreenBackground,
-} from '@unfairenough/ui';
 import { useTranslation } from '@unfairenough/i18n';
-import type { RoundResult, AnswerKey } from '@unfairenough/ws-protocol';
+import { Card, colors, ScreenBackground, spacing, typography } from '@unfairenough/ui';
+import type { AnswerKey, RoundResult } from '@unfairenough/ws-protocol';
+import type React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
 interface ResultScreenProps {
   result: RoundResult;
@@ -45,7 +39,11 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
 
         {/* Result Text */}
         <Text style={[styles.resultText, { color: isCorrect ? colors.success : colors.error }]}>
-          {isCorrect ? t('game.correct') : confirmedAnswer ? t('game.incorrect') : t('game.noAnswer')}
+          {isCorrect
+            ? t('game.correct')
+            : confirmedAnswer
+              ? t('game.incorrect')
+              : t('game.noAnswer')}
         </Text>
 
         {/* Points Earned */}
@@ -55,9 +53,7 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
 
         {/* Response Time */}
         {myResult?.responseTimeMs && (
-          <Text style={styles.time}>
-            {(myResult.responseTimeMs / 1000).toFixed(2)}s
-          </Text>
+          <Text style={styles.time}>{(myResult.responseTimeMs / 1000).toFixed(2)}s</Text>
         )}
 
         {/* Correct Answer */}

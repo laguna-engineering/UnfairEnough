@@ -1,14 +1,15 @@
-import React, { useEffect, useRef } from 'react';
+import type React from 'react';
+import { useEffect, useRef } from 'react';
 import { useGameState } from '../hooks/useGameState';
-import { initDeviceId, getDeviceId } from '../services/deviceId';
-import { ScanScreen } from './ScanScreen';
-import { JoinScreen } from './JoinScreen';
-import { WaitingScreen } from './WaitingScreen';
+import { getDeviceId, initDeviceId } from '../services/deviceId';
 import { CountdownScreen } from './CountdownScreen';
+import { GameOverScreen } from './GameOverScreen';
+import { JoinScreen } from './JoinScreen';
 import { MediaPreviewScreen } from './MediaPreviewScreen';
 import { PlayScreen } from './PlayScreen';
 import { ResultScreen } from './ResultScreen';
-import { GameOverScreen } from './GameOverScreen';
+import { ScanScreen } from './ScanScreen';
+import { WaitingScreen } from './WaitingScreen';
 
 export const GameScreen: React.FC = () => {
   const {

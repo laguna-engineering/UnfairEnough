@@ -167,6 +167,10 @@ yarn prebuild:mobile       # Expo prebuild for mobile
 
 yarn server typecheck      # Type-check the server (bun types)
 
+yarn lint                  # Biome lint + format check
+yarn lint:fix              # Auto-fix lint + formatting
+yarn format                # Auto-fix formatting only
+
 yarn test:e2e              # Playwright E2E tests (headless)
 yarn test:e2e:ui           # Playwright with interactive UI
 ```
@@ -183,6 +187,7 @@ yarn test:e2e:ui           # Playwright with interactive UI
 | Database | SQLite (bun:sqlite on server, expo-sqlite on TV) |
 | i18n | i18next (EN, IT) |
 | Testing | Playwright (mobile web E2E) |
+| Linting | Biome (lint + format) |
 
 ## Notes
 
@@ -190,4 +195,3 @@ yarn test:e2e:ui           # Playwright with interactive UI
 - Path alias `@unfairenough/*` maps to `packages/*/src`.
 - React 19.1.0 is pinned globally via `resolutions`.
 - Max 12 players per room.
-- No linter is configured yet.

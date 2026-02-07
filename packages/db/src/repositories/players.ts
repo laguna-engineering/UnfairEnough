@@ -1,5 +1,5 @@
 import type { DbAdapter } from '../adapter';
-import type { PlayerRow, PlayerProfile } from '../schema';
+import type { PlayerProfile, PlayerRow } from '../schema';
 
 function rowToProfile(row: PlayerRow): PlayerProfile {
   return {
@@ -19,21 +19,12 @@ export async function findByDeviceId(
   db: DbAdapter,
   deviceId: string,
 ): Promise<PlayerProfile | null> {
-  const row = await db.get<PlayerRow>(
-    'SELECT * FROM players WHERE device_id = ?',
-    [deviceId],
-  );
+  const row = await db.get<PlayerRow>('SELECT * FROM players WHERE device_id = ?', [deviceId]);
   return row ? rowToProfile(row) : null;
 }
 
-export async function getPlayer(
-  db: DbAdapter,
-  playerId: string,
-): Promise<PlayerProfile | null> {
-  const row = await db.get<PlayerRow>(
-    'SELECT * FROM players WHERE id = ?',
-    [playerId],
-  );
+export async function getPlayer(db: DbAdapter, playerId: string): Promise<PlayerProfile | null> {
+  const row = await db.get<PlayerRow>('SELECT * FROM players WHERE id = ?', [playerId]);
   return row ? rowToProfile(row) : null;
 }
 
@@ -58,20 +49,14 @@ export async function updateDisplayName(
   playerId: string,
   displayName: string,
 ): Promise<void> {
-  await db.run(
-    "UPDATE players SET display_name = ?, last_seen_at = datetime('now') WHERE id = ?",
-    [displayName, playerId],
-  );
+  await db.run("UPDATE players SET display_name = ?, last_seen_at = datetime('now') WHERE id = ?", [
+    displayName,
+    playerId,
+  ]);
 }
 
-export async function updateLastSeen(
-  db: DbAdapter,
-  playerId: string,
-): Promise<void> {
-  await db.run(
-    "UPDATE players SET last_seen_at = datetime('now') WHERE id = ?",
-    [playerId],
-  );
+export async function updateLastSeen(db: DbAdapter, playerId: string): Promise<void> {
+  await db.run("UPDATE players SET last_seen_at = datetime('now') WHERE id = ?", [playerId]);
 }
 
 export async function incrementGames(
@@ -85,19 +70,11 @@ export async function incrementGames(
   );
 }
 
-export async function incrementWins(
-  db: DbAdapter,
-  playerId: string,
-): Promise<void> {
-  await db.run(
-    'UPDATE players SET total_wins = total_wins + 1 WHERE id = ?',
-    [playerId],
-  );
+export async function incrementWins(db: DbAdapter, playerId: string): Promise<void> {
+  await db.run('UPDATE players SET total_wins = total_wins + 1 WHERE id = ?', [playerId]);
 }
 
 export async function listPlayers(db: DbAdapter): Promise<PlayerProfile[]> {
-  const rows = await db.all<PlayerRow>(
-    'SELECT * FROM players ORDER BY last_seen_at DESC',
-  );
+  const rows = await db.all<PlayerRow>('SELECT * FROM players ORDER BY last_seen_at DESC');
   return rows.map(rowToProfile);
 }

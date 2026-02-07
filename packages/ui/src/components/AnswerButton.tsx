@@ -1,15 +1,10 @@
-import React from 'react';
-import {
-  TouchableOpacity,
-  Text,
-  StyleSheet,
-  ViewStyle,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { colors, gradients } from '../theme/colors';
-import { typography } from '../theme/typography';
-import { spacing, borderRadius } from '../theme/spacing';
 import type { AnswerKey } from '@unfairenough/ws-protocol';
+import { LinearGradient } from 'expo-linear-gradient';
+import type React from 'react';
+import { StyleSheet, Text, TouchableOpacity, type ViewStyle } from 'react-native';
+import { colors, gradients } from '../theme/colors';
+import { borderRadius, spacing } from '../theme/spacing';
+import { typography } from '../theme/typography';
 
 export type AnswerState = 'default' | 'selected' | 'correct' | 'incorrect' | 'disabled';
 

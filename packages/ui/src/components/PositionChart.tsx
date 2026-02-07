@@ -1,9 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import Svg, { Path, Circle, Line, Text as SvgText } from 'react-native-svg';
+import { StyleSheet, View } from 'react-native';
+import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
 import { colors } from '../theme/colors';
-import { typography } from '../theme/typography';
-import { spacing } from '../theme/spacing';
 
 export interface PositionChartPlayer {
   playerId: string;
@@ -52,30 +50,30 @@ export const PositionChart: React.FC<PositionChartProps> = ({
     PADDING_TOP + ((rank - 1) / Math.max(1, maxPlayers - 1)) * chartHeight;
 
   // Build path data for each player
-  const playerPaths = players.map((player) => {
-    const points: { x: number; y: number; rank: number }[] = [];
+  const playerPaths = players
+    .map((player) => {
+      const points: { x: number; y: number; rank: number }[] = [];
 
-    for (const snapshot of positionHistory) {
-      const pos = snapshot.positions.find((p) => p.playerId === player.playerId);
-      if (pos) {
-        points.push({
-          x: xForRound(snapshot.round),
-          y: yForRank(pos.rank),
-          rank: pos.rank,
-        });
+      for (const snapshot of positionHistory) {
+        const pos = snapshot.positions.find((p) => p.playerId === player.playerId);
+        if (pos) {
+          points.push({
+            x: xForRound(snapshot.round),
+            y: yForRank(pos.rank),
+            rank: pos.rank,
+          });
+        }
       }
-    }
 
-    if (points.length === 0) return null;
+      if (points.length === 0) return null;
 
-    const d = points
-      .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
-      .join(' ');
+      const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
 
-    const lastPoint = points[points.length - 1];
+      const lastPoint = points[points.length - 1];
 
-    return { player, d, points, lastPoint };
-  }).filter(Boolean) as {
+      return { player, d, points, lastPoint };
+    })
+    .filter(Boolean) as {
     player: PositionChartPlayer;
     d: string;
     points: { x: number; y: number; rank: number }[];

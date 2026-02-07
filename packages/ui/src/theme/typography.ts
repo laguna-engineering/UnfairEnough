@@ -1,4 +1,4 @@
-import { TextStyle } from 'react-native';
+import type { TextStyle } from 'react-native';
 
 // Typography scale following Neon Sakura theme
 // Sniglet for titles/headings, Nunito for body text

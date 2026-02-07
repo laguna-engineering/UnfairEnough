@@ -1,16 +1,16 @@
-import React from 'react';
-import {
-  TouchableOpacity,
-  Text,
-  StyleSheet,
-  ViewStyle,
-  TextStyle,
-  ActivityIndicator,
-} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import type React from 'react';
+import {
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  type TextStyle,
+  TouchableOpacity,
+  type ViewStyle,
+} from 'react-native';
 import { colors, gradients } from '../theme/colors';
+import { borderRadius, spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
-import { spacing, borderRadius } from '../theme/spacing';
 
 export interface ButtonProps {
   title: string;
@@ -81,9 +81,7 @@ export const Button: React.FC<ButtonProps> = ({
           {loading ? (
             <ActivityIndicator color={getTextColor()} />
           ) : (
-            <Text style={[typography.button, { color: getTextColor() }, textStyle]}>
-              {title}
-            </Text>
+            <Text style={[typography.button, { color: getTextColor() }, textStyle]}>{title}</Text>
           )}
         </LinearGradient>
       </TouchableOpacity>
@@ -106,9 +104,7 @@ export const Button: React.FC<ButtonProps> = ({
       {loading ? (
         <ActivityIndicator color={getTextColor()} />
       ) : (
-        <Text style={[typography.button, { color: getTextColor() }, textStyle]}>
-          {title}
-        </Text>
+        <Text style={[typography.button, { color: getTextColor() }, textStyle]}>{title}</Text>
       )}
     </TouchableOpacity>
   );

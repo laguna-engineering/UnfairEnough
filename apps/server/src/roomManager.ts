@@ -1,6 +1,6 @@
+import type { DbAdapter } from '@unfairenough/db';
 import { generateRoomCode } from '@unfairenough/ws-protocol';
 import { GameRoom } from './room';
-import type { DbAdapter } from '@unfairenough/db';
 
 const rooms = new Map<string, GameRoom>();
 

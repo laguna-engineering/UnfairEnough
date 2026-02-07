@@ -1,15 +1,16 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, Platform, TouchableOpacity } from 'react-native';
+import { type SupportedLanguage, useTranslation } from '@unfairenough/i18n';
 import {
-  colors,
-  typography,
-  spacing,
-  borderRadius,
   Button,
+  borderRadius,
   Card,
+  colors,
   ScreenBackground,
+  spacing,
+  typography,
 } from '@unfairenough/ui';
-import { useTranslation, type SupportedLanguage } from '@unfairenough/i18n';
+import type React from 'react';
+import { useCallback, useState } from 'react';
+import { Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 // Only import camera on native platforms
 let CameraView: any = null;
@@ -33,16 +34,21 @@ interface ScanScreenProps {
 export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageChange }) => {
   const { t, i18n } = useTranslation();
 
-  const handleLanguageChange = useCallback((lang: SupportedLanguage) => {
-    onLanguageChange(lang);
-  }, [onLanguageChange]);
+  const handleLanguageChange = useCallback(
+    (lang: SupportedLanguage) => {
+      onLanguageChange(lang);
+    },
+    [onLanguageChange],
+  );
   const [manualCode, setManualCode] = useState('');
   const [manualIp, setManualIp] = useState('');
   const [showIpInput, setShowIpInput] = useState(false);
   const [scanned, setScanned] = useState(false);
-  const [permission, requestPermission] = Platform.OS !== 'web' && useCameraPermissions
-    ? useCameraPermissions()
-    : [{ granted: false }, () => {}];
+  const [permission, requestPermission] =
+    Platform.OS !== 'web' && useCameraPermissions
+      ? // biome-ignore lint/correctness/useHookAtTopLevel: conditionally available on native only
+        useCameraPermissions()
+      : [{ granted: false }, () => {}];
 
   const handleBarCodeScanned = ({ data }: { data: string }) => {
     if (scanned) return;
@@ -176,9 +182,7 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
       <ScreenBackground style={styles.container}>
         <Card style={styles.permissionCard}>
           <Text style={styles.permissionTitle}>{t('scan.cameraPermission')}</Text>
-          <Text style={styles.permissionText}>
-            {t('scan.cameraPermissionMessage')}
-          </Text>
+          <Text style={styles.permissionText}>{t('scan.cameraPermissionMessage')}</Text>
           <Button
             title={t('scan.grantPermission')}
             onPress={requestPermission}

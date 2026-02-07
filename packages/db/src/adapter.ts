@@ -54,7 +54,9 @@ export function createBunAdapter(db: {
       // we can safely use a sync transaction wrapper.
       const txn = db.transaction(() => {
         let result: T;
-        fn().then((r) => { result = r; });
+        fn().then((r) => {
+          result = r;
+        });
         return result!;
       });
       return txn();

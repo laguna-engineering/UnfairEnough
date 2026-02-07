@@ -1,7 +1,6 @@
 import { Database } from 'bun:sqlite';
-import { createBunAdapter, configurePragmas, runMigrations, questionsRepo } from '@unfairenough/db';
-import type { DbAdapter } from '@unfairenough/db';
-import type { QuestionSetInput } from '@unfairenough/db';
+import type { DbAdapter, QuestionSetInput } from '@unfairenough/db';
+import { configurePragmas, createBunAdapter, questionsRepo, runMigrations } from '@unfairenough/db';
 
 let db: DbAdapter;
 
@@ -199,6 +198,8 @@ async function seedSampleQuestions(db: DbAdapter): Promise<void> {
     ],
   };
 
-  await questionsRepo.importQuestionSet(db, crypto.randomUUID(), sampleSet, () => crypto.randomUUID());
+  await questionsRepo.importQuestionSet(db, crypto.randomUUID(), sampleSet, () =>
+    crypto.randomUUID(),
+  );
   console.log('Seeded 12 sample questions into database');
 }

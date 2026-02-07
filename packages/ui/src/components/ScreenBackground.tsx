@@ -1,6 +1,6 @@
-import React from 'react';
-import { ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import type React from 'react';
+import type { ViewStyle } from 'react-native';
 import { gradients } from '../theme/colors';
 
 export interface ScreenBackgroundProps {
@@ -8,10 +8,7 @@ export interface ScreenBackgroundProps {
   style?: ViewStyle;
 }
 
-export const ScreenBackground: React.FC<ScreenBackgroundProps> = ({
-  children,
-  style,
-}) => {
+export const ScreenBackground: React.FC<ScreenBackgroundProps> = ({ children, style }) => {
   return (
     <LinearGradient
       colors={gradients.screenBackground}

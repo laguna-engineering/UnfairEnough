@@ -1,4 +1,4 @@
-import { createSlice, createEntityAdapter, PayloadAction } from '@reduxjs/toolkit';
+import { createEntityAdapter, createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 export interface Player {
   id: string;

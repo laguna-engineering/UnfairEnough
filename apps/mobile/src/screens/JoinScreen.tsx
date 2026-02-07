@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
-import {
-  colors,
-  typography,
-  spacing,
-  borderRadius,
-  Button,
-  Card,
-  ScreenBackground,
-} from '@unfairenough/ui';
 import { useTranslation } from '@unfairenough/i18n';
+import {
+  Button,
+  borderRadius,
+  Card,
+  colors,
+  ScreenBackground,
+  spacing,
+  typography,
+} from '@unfairenough/ui';
+import type React from 'react';
+import { useState } from 'react';
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 
 interface JoinScreenProps {
   onJoin: (name: string) => void;

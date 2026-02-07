@@ -1,15 +1,15 @@
 // Neon Sakura theme colors
 export const colors = {
-  primary: '#FF6B9D',      // Cherry blossom pink
-  secondary: '#4ECDC4',    // Electric teal
+  primary: '#FF6B9D', // Cherry blossom pink
+  secondary: '#4ECDC4', // Electric teal
   accentYellow: '#FFE66D', // Golden spark
   accentPurple: '#9B59B6', // Twilight purple
-  background: '#1a1a2e',   // Deep indigo night
-  card: '#16213e',         // Navy blue
+  background: '#1a1a2e', // Deep indigo night
+  card: '#16213e', // Navy blue
   textPrimary: '#FFFFFF',
   textSecondary: '#E0E0E0',
-  success: '#00D9A5',      // Mint correct
-  error: '#FF6B6B',        // Soft coral wrong
+  success: '#00D9A5', // Mint correct
+  error: '#FF6B6B', // Soft coral wrong
 };
 
 export const gradients = {

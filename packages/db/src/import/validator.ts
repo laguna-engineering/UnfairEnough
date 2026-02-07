@@ -70,9 +70,10 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
     }
 
     const qObj = q as Record<string, unknown>;
-    const type = typeof qObj.type === 'string' && VALID_QUESTION_TYPES.includes(qObj.type)
-      ? qObj.type as 'multiple_choice' | 'true_false'
-      : 'multiple_choice';
+    const type =
+      typeof qObj.type === 'string' && VALID_QUESTION_TYPES.includes(qObj.type)
+        ? (qObj.type as 'multiple_choice' | 'true_false')
+        : 'multiple_choice';
 
     if (typeof qObj.text !== 'string' || qObj.text.trim().length === 0) {
       errors.push(`${prefix}.text: required non-empty string`);
@@ -106,7 +107,9 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
       if (Array.isArray(qObj.options)) {
         const optionKeys = qObj.options.map((o: any) => o?.key);
         if (!optionKeys.includes(qObj.correctAnswer)) {
-          errors.push(`${prefix}.correctAnswer: "${qObj.correctAnswer}" not found in options [${optionKeys.join(', ')}]`);
+          errors.push(
+            `${prefix}.correctAnswer: "${qObj.correctAnswer}" not found in options [${optionKeys.join(', ')}]`,
+          );
         }
       }
     } else if (type === 'true_false') {
@@ -141,7 +144,10 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
     }
 
     // Validate timeLimit
-    if (qObj.timeLimit !== undefined && (typeof qObj.timeLimit !== 'number' || qObj.timeLimit < 1 || qObj.timeLimit > 120)) {
+    if (
+      qObj.timeLimit !== undefined &&
+      (typeof qObj.timeLimit !== 'number' || qObj.timeLimit < 1 || qObj.timeLimit > 120)
+    ) {
       errors.push(`${prefix}.timeLimit: must be a number between 1 and 120`);
     }
 
@@ -150,14 +156,19 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
       text: String(qObj.text ?? ''),
       type,
       category: typeof qObj.category === 'string' ? qObj.category : undefined,
-      tags: Array.isArray(qObj.tags) ? qObj.tags.filter((t): t is string => typeof t === 'string') : undefined,
+      tags: Array.isArray(qObj.tags)
+        ? qObj.tags.filter((t): t is string => typeof t === 'string')
+        : undefined,
       timeLimit: typeof qObj.timeLimit === 'number' ? qObj.timeLimit : undefined,
       media,
-      options: Array.isArray(qObj.options) ? qObj.options.map((o: any) => ({ key: String(o?.key ?? ''), text: String(o?.text ?? '') })) : [],
+      options: Array.isArray(qObj.options)
+        ? qObj.options.map((o: any) => ({ key: String(o?.key ?? ''), text: String(o?.text ?? '') }))
+        : [],
       correctAnswer: String(qObj.correctAnswer ?? ''),
-      playerDifficulty: qObj.playerDifficulty && typeof qObj.playerDifficulty === 'object'
-        ? qObj.playerDifficulty as Record<string, number>
-        : undefined,
+      playerDifficulty:
+        qObj.playerDifficulty && typeof qObj.playerDifficulty === 'object'
+          ? (qObj.playerDifficulty as Record<string, number>)
+          : undefined,
       explanation: typeof qObj.explanation === 'string' ? qObj.explanation : undefined,
     });
   }
@@ -167,7 +178,9 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
     author: typeof obj.author === 'string' ? obj.author : undefined,
     description: typeof obj.description === 'string' ? obj.description : undefined,
     defaultTimeLimit,
-    tags: Array.isArray(obj.tags) ? obj.tags.filter((t): t is string => typeof t === 'string') : undefined,
+    tags: Array.isArray(obj.tags)
+      ? obj.tags.filter((t): t is string => typeof t === 'string')
+      : undefined,
     questions,
   };
 

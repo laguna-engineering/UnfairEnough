@@ -102,9 +102,7 @@ interface Migration {
   sql: string;
 }
 
-const migrations: Migration[] = [
-  { version: 1, sql: MIGRATION_V1 },
-];
+const migrations: Migration[] = [{ version: 1, sql: MIGRATION_V1 }];
 
 /**
  * Configure PRAGMAs for optimal performance.
@@ -157,5 +155,5 @@ function splitStatements(sql: string): string[] {
     .split(';')
     .map((s) => s.trim())
     .filter((s) => s.length > 0)
-    .map((s) => s + ';');
+    .map((s) => `${s};`);
 }

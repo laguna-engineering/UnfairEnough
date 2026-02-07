@@ -73,7 +73,7 @@
     "noSets": "Nessun set di domande disponibile",
     "questionsCount": "{{count}} domande",
     "configuring": "Configurazione...",
-    "configured": "Partita configurata!",
+    "configuredSuccess": "Partita configurata!",
     "importQuestions": "Importa Domande",
     "importFromUrl": "Importa da URL",
     "urlPlaceholder": "https://esempio.com/domande.yaml",

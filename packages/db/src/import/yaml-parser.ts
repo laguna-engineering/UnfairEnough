@@ -1,5 +1,5 @@
 import YAML from 'yaml';
-import { validateQuestionSet, type QuestionSetInput } from './validator';
+import { type QuestionSetInput, validateQuestionSet } from './validator';
 
 export type ParseResult =
   | { success: true; data: QuestionSetInput }

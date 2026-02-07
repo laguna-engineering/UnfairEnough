@@ -1,14 +1,14 @@
-import { describe, it, expect, beforeEach, afterAll } from 'bun:test';
 import { Database } from 'bun:sqlite';
-import {
-  createBunAdapter,
-  configurePragmas,
-  runMigrations,
-  playersRepo,
-  gamesRepo,
-  questionsRepo,
-} from '@unfairenough/db';
+import { afterAll, beforeEach, describe, expect, it } from 'bun:test';
 import type { DbAdapter } from '@unfairenough/db';
+import {
+  configurePragmas,
+  createBunAdapter,
+  gamesRepo,
+  playersRepo,
+  questionsRepo,
+  runMigrations,
+} from '@unfairenough/db';
 import { GameRoom } from '../room';
 
 let rawDb: InstanceType<typeof Database>;
@@ -34,20 +34,25 @@ beforeEach(async () => {
   await runMigrations(db);
 
   // Seed some questions so games can start
-  await questionsRepo.importQuestionSet(db, 'test-set', {
-    name: 'Test',
-    defaultTimeLimit: 10,
-    questions: Array.from({ length: 5 }, (_, i) => ({
-      id: `q${i}`,
-      type: 'multiple_choice' as const,
-      text: `Question ${i}`,
-      options: [
-        { key: 'A', text: 'A' },
-        { key: 'B', text: 'B' },
-      ],
-      correctAnswer: 'A' as const,
-    })),
-  }, () => crypto.randomUUID());
+  await questionsRepo.importQuestionSet(
+    db,
+    'test-set',
+    {
+      name: 'Test',
+      defaultTimeLimit: 10,
+      questions: Array.from({ length: 5 }, (_, i) => ({
+        id: `q${i}`,
+        type: 'multiple_choice' as const,
+        text: `Question ${i}`,
+        options: [
+          { key: 'A', text: 'A' },
+          { key: 'B', text: 'B' },
+        ],
+        correctAnswer: 'A' as const,
+      })),
+    },
+    () => crypto.randomUUID(),
+  );
 });
 
 afterAll(() => {

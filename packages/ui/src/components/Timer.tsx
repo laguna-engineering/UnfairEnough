@@ -1,6 +1,6 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import type React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { colors, gradients } from '../theme/colors';
 import { typography } from '../theme/typography';
 
@@ -10,11 +10,7 @@ export interface TimerProps {
   size?: 'small' | 'large';
 }
 
-export const Timer: React.FC<TimerProps> = ({
-  seconds,
-  totalSeconds,
-  size = 'large',
-}) => {
+export const Timer: React.FC<TimerProps> = ({ seconds, totalSeconds, size = 'large' }) => {
   const progress = seconds / totalSeconds;
   const isLow = seconds <= 3;
 
@@ -34,18 +30,13 @@ export const Timer: React.FC<TimerProps> = ({
 
   return (
     <View style={styles.container}>
-      <Text style={[textStyle, { color: getColor() }]}>
-        {seconds}
-      </Text>
+      <Text style={[textStyle, { color: getColor() }]}>{seconds}</Text>
       <View style={styles.progressContainer}>
         <LinearGradient
           colors={getGradientColors()}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
-          style={[
-            styles.progressBar,
-            { width: `${progress * 100}%` },
-          ]}
+          style={[styles.progressBar, { width: `${progress * 100}%` }]}
         />
       </View>
     </View>

@@ -1,16 +1,16 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import {
-  colors,
-  typography,
-  spacing,
-  borderRadius,
-  Card,
-  Timer,
-  ScreenBackground,
-} from '@unfairenough/ui';
 import { playersSelectors } from '@unfairenough/game-logic';
 import { useTranslation } from '@unfairenough/i18n';
+import {
+  borderRadius,
+  Card,
+  colors,
+  ScreenBackground,
+  spacing,
+  Timer,
+  typography,
+} from '@unfairenough/ui';
+import type React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { useGameController } from '../hooks/useGameController';
 
 const answerColors = {
@@ -34,13 +34,12 @@ export const QuestionScreen: React.FC = () => {
       {/* Header with timer and progress */}
       <View style={styles.header}>
         <Text style={styles.progress}>
-          {t('game.question', { current: currentQuestion.questionNumber, total: currentQuestion.totalQuestions })}
+          {t('game.question', {
+            current: currentQuestion.questionNumber,
+            total: currentQuestion.totalQuestions,
+          })}
         </Text>
-        <Timer
-          seconds={countdown}
-          totalSeconds={currentQuestion.timeLimit}
-          size="large"
-        />
+        <Timer seconds={countdown} totalSeconds={currentQuestion.timeLimit} size="large" />
         <Text style={styles.answeredCount}>
           {t('game.answeredCount', { answered: answeredCount, total: totalPlayers })}
         </Text>
@@ -57,10 +56,7 @@ export const QuestionScreen: React.FC = () => {
           {currentQuestion.options.slice(0, 2).map((option) => (
             <View
               key={option.key}
-              style={[
-                styles.optionCard,
-                { borderLeftColor: answerColors[option.key] },
-              ]}
+              style={[styles.optionCard, { borderLeftColor: answerColors[option.key] }]}
             >
               <Text style={[styles.optionKey, { color: answerColors[option.key] }]}>
                 {option.key}
@@ -73,10 +69,7 @@ export const QuestionScreen: React.FC = () => {
           {currentQuestion.options.slice(2, 4).map((option) => (
             <View
               key={option.key}
-              style={[
-                styles.optionCard,
-                { borderLeftColor: answerColors[option.key] },
-              ]}
+              style={[styles.optionCard, { borderLeftColor: answerColors[option.key] }]}
             >
               <Text style={[styles.optionKey, { color: answerColors[option.key] }]}>
                 {option.key}

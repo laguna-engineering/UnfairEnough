@@ -1,9 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import type React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
+import { borderRadius, spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
-import { spacing, borderRadius } from '../theme/spacing';
 
 export interface PlayerAvatarProps {
   name: string;
@@ -61,16 +61,12 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
           },
         ]}
       >
-        <Text style={[styles.initials, { fontSize: sizeStyles.fontSize }]}>
-          {initials}
-        </Text>
+        <Text style={[styles.initials, { fontSize: sizeStyles.fontSize }]}>{initials}</Text>
       </LinearGradient>
       <Text style={styles.name} numberOfLines={1}>
         {name}
       </Text>
-      {showScore && score !== undefined && (
-        <Text style={styles.score}>{score}</Text>
-      )}
+      {showScore && score !== undefined && <Text style={styles.score}>{score}</Text>}
     </View>
   );
 };

@@ -1,15 +1,16 @@
-import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { type SupportedLanguage, useTranslation } from '@unfairenough/i18n';
 import {
-  colors,
-  typography,
-  spacing,
   borderRadius,
   Card,
+  colors,
   ScreenBackground,
+  spacing,
+  typography,
 } from '@unfairenough/ui';
-import { useTranslation, type SupportedLanguage } from '@unfairenough/i18n';
 import type { WelcomePayload } from '@unfairenough/ws-protocol';
+import type React from 'react';
+import { useCallback } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const LANGUAGES: { code: SupportedLanguage; label: string }[] = [
   { code: 'en', label: 'EN' },
@@ -24,9 +25,12 @@ interface WaitingScreenProps {
 export const WaitingScreen: React.FC<WaitingScreenProps> = ({ playerInfo, onLanguageChange }) => {
   const { t, i18n } = useTranslation();
 
-  const handleLanguageChange = useCallback((lang: SupportedLanguage) => {
-    onLanguageChange?.(lang);
-  }, [onLanguageChange]);
+  const handleLanguageChange = useCallback(
+    (lang: SupportedLanguage) => {
+      onLanguageChange?.(lang);
+    },
+    [onLanguageChange],
+  );
 
   return (
     <ScreenBackground style={styles.container}>
@@ -52,21 +56,15 @@ export const WaitingScreen: React.FC<WaitingScreenProps> = ({ playerInfo, onLang
           <Text style={styles.firstTime}>{t('profile.firstTime')}</Text>
         )}
 
-        <Text style={styles.roomCode}>
-          {t('join.room', { code: playerInfo?.roomCode })}
-        </Text>
+        <Text style={styles.roomCode}>{t('join.room', { code: playerInfo?.roomCode })}</Text>
 
         <View style={styles.waitingContainer}>
           <ActivityIndicator color={colors.primary} size="small" />
-          <Text style={styles.waitingText}>
-            {t('join.waitingForHost')}
-          </Text>
+          <Text style={styles.waitingText}>{t('join.waitingForHost')}</Text>
         </View>
       </Card>
 
-      <Text style={styles.hint}>
-        {t('join.lookAtTvHint')}
-      </Text>
+      <Text style={styles.hint}>{t('join.lookAtTvHint')}</Text>
 
       {onLanguageChange && (
         <View style={styles.languageSwitcher}>

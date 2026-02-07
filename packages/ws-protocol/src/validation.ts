@@ -1,4 +1,4 @@
-import type { ClientMessage, AnswerKey } from './messages';
+import type { AnswerKey, ClientMessage } from './messages';
 
 const MAX_NAME_LENGTH = 20;
 const VALID_ANSWERS: AnswerKey[] = ['A', 'B', 'C', 'D'];
@@ -9,10 +9,7 @@ const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[
  */
 export function sanitizeName(name: unknown): string {
   if (typeof name !== 'string') return '';
-  return name
-    .trim()
-    .slice(0, MAX_NAME_LENGTH)
-    .replace(/[<>]/g, '');
+  return name.trim().slice(0, MAX_NAME_LENGTH).replace(/[<>]/g, '');
 }
 
 /**
@@ -52,9 +49,8 @@ export function parseClientMessage(data: unknown): ClientMessage {
       if (!name) {
         throw new Error('Name is required');
       }
-      const deviceId = typeof p.deviceId === 'string' && isValidUUID(p.deviceId)
-        ? p.deviceId
-        : undefined;
+      const deviceId =
+        typeof p.deviceId === 'string' && isValidUUID(p.deviceId) ? p.deviceId : undefined;
       return {
         type: 'JOIN',
         payload: {
@@ -113,8 +109,8 @@ export function generatePlayerId(): string {
   }
   // Fallback for environments without crypto.randomUUID
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
 }

@@ -1,16 +1,10 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Modal,
-  TextInput,
-  ActivityIndicator,
-} from 'react-native';
-import * as Crypto from 'expo-crypto';
-import { colors, typography, spacing, borderRadius, Button } from '@unfairenough/ui';
-import { useTranslation } from '@unfairenough/i18n';
 import { parseQuestionSetYaml, questionsRepo } from '@unfairenough/db';
+import { useTranslation } from '@unfairenough/i18n';
+import { Button, borderRadius, colors, spacing, typography } from '@unfairenough/ui';
+import * as Crypto from 'expo-crypto';
+import type React from 'react';
+import { useState } from 'react';
+import { ActivityIndicator, Modal, StyleSheet, Text, TextInput, View } from 'react-native';
 import { getDb } from '../services/database';
 
 interface Props {
@@ -57,9 +51,11 @@ export const ImportQuestionsModal: React.FC<Props> = ({ visible, onClose, onImpo
       setLoading(false);
       onImported();
     } catch (err) {
-      setError(t('gameConfig.importError', {
-        error: err instanceof Error ? err.message : String(err),
-      }));
+      setError(
+        t('gameConfig.importError', {
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
       setLoading(false);
     }
   };

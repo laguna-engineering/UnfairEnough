@@ -1,7 +1,7 @@
-import React from 'react';
-import { Text, StyleSheet } from 'react-native';
-import { colors, typography, spacing, ScreenBackground } from '@unfairenough/ui';
 import { useTranslation } from '@unfairenough/i18n';
+import { colors, ScreenBackground, spacing, typography } from '@unfairenough/ui';
+import type React from 'react';
+import { StyleSheet, Text } from 'react-native';
 
 interface CountdownScreenProps {
   countdown: number;

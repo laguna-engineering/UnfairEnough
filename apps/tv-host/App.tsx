@@ -1,17 +1,18 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { StatusBar } from 'expo-status-bar';
-import { useFonts } from '@expo-google-fonts/sniglet/useFonts';
-import { Sniglet_400Regular } from '@expo-google-fonts/sniglet/400Regular';
 import { Nunito_400Regular } from '@expo-google-fonts/nunito/400Regular';
 import { Nunito_600SemiBold } from '@expo-google-fonts/nunito/600SemiBold';
 import { Nunito_700Bold } from '@expo-google-fonts/nunito/700Bold';
+import { Sniglet_400Regular } from '@expo-google-fonts/sniglet/400Regular';
+import { useFonts } from '@expo-google-fonts/sniglet/useFonts';
+import { StatusBar } from 'expo-status-bar';
+import type React from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { GameModeProvider } from './src/context/GameModeContext';
+import { ConnectScreen } from './src/screens/ConnectScreen';
+import { GameScreen } from './src/screens/GameScreen';
+import { ModeSelectionScreen } from './src/screens/ModeSelectionScreen';
 import { gameController } from './src/services/GameController';
 import { HostedGameController } from './src/services/HostedGameController';
 import type { IGameController } from './src/services/IGameController';
-import { ModeSelectionScreen } from './src/screens/ModeSelectionScreen';
-import { ConnectScreen } from './src/screens/ConnectScreen';
-import { GameScreen } from './src/screens/GameScreen';
 import '@unfairenough/i18n';
 
 type AppScreen = 'mode_select' | 'local_game' | 'connect' | 'hosted_game';
@@ -69,7 +70,10 @@ export default function App() {
       return (
         <>
           <StatusBar style="light" hidden />
-          <ModeSelectionScreen onSelectLocal={handleSelectLocal} onSelectHosted={handleSelectHosted} />
+          <ModeSelectionScreen
+            onSelectLocal={handleSelectLocal}
+            onSelectHosted={handleSelectHosted}
+          />
         </>
       );
 

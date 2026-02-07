@@ -1,26 +1,32 @@
-import type { ServerWebSocket } from 'bun';
+import type { DbAdapter, QuestionWithMeta } from '@unfairenough/db';
+import { gamesRepo, playersRepo, questionsRepo } from '@unfairenough/db';
 import type {
-  ServerMessage,
-  ClientMessage,
-  PlayerResult,
   AnswerKey,
+  ClientMessage,
   PlayerRanking,
+  PlayerResult,
   PositionSnapshot,
+  ServerMessage,
   WelcomePayload,
 } from '@unfairenough/ws-protocol';
-import {
-  parseClientMessage,
-  generatePlayerId,
-} from '@unfairenough/ws-protocol';
+import { generatePlayerId, parseClientMessage } from '@unfairenough/ws-protocol';
+import type { ServerWebSocket } from 'bun';
 import { calculateScore, rankPlayers } from '../../../packages/game-logic/src/utils/scoring';
-import type { DbAdapter, QuestionWithMeta } from '@unfairenough/db';
-import { questionsRepo, playersRepo, gamesRepo } from '@unfairenough/db';
-import type { WSData, RoomPlayer, HostMessage } from './types';
+import type { HostMessage, RoomPlayer, WSData } from './types';
 
 const COLORS = [
-  '#FF6B9D', '#4ECDC4', '#FFE66D', '#95E1D3',
-  '#F38181', '#AA96DA', '#FCBAD3', '#A8D8EA',
-  '#FF9F43', '#6C5CE7', '#00B894', '#FD79A8',
+  '#FF6B9D',
+  '#4ECDC4',
+  '#FFE66D',
+  '#95E1D3',
+  '#F38181',
+  '#AA96DA',
+  '#FCBAD3',
+  '#A8D8EA',
+  '#FF9F43',
+  '#6C5CE7',
+  '#00B894',
+  '#FD79A8',
 ];
 
 const DEFAULT_QUESTION_TIME_LIMIT = 10;
@@ -93,7 +99,11 @@ export class GameRoom {
 
   // ── Player management ────────────────────────────────────────
 
-  async addPlayer(ws: ServerWebSocket<WSData>, name: string, deviceId?: string): Promise<string | null> {
+  async addPlayer(
+    ws: ServerWebSocket<WSData>,
+    name: string,
+    deviceId?: string,
+  ): Promise<string | null> {
     if (this.players.size >= MAX_PLAYERS) {
       this.sendTo(ws, {
         type: 'ERROR',
@@ -115,7 +125,7 @@ export class GameRoom {
 
     // Look up or create player profile
     let profileId: string | undefined;
-    let welcomePayload: WelcomePayload = {
+    const welcomePayload: WelcomePayload = {
       playerId,
       playerColor: color,
       roomCode: this.roomCode,
@@ -217,7 +227,7 @@ export class GameRoom {
     }
   }
 
-  handleHostMessage(ws: ServerWebSocket<WSData>, raw: string | Buffer): void {
+  handleHostMessage(_ws: ServerWebSocket<WSData>, raw: string | Buffer): void {
     let message: HostMessage;
     try {
       message = JSON.parse(raw.toString());
@@ -245,7 +255,9 @@ export class GameRoom {
 
   // ── Game configuration ───────────────────────────────────────
 
-  private async configureGame(payload: import('@unfairenough/ws-protocol').ConfigureGamePayload): Promise<void> {
+  private async configureGame(
+    payload: import('@unfairenough/ws-protocol').ConfigureGamePayload,
+  ): Promise<void> {
     if (this.phase !== 'LOBBY') return;
 
     if (payload.gameType === 'configured' && payload.questionSetId) {
@@ -285,7 +297,10 @@ export class GameRoom {
 
       this.sendToHost({
         type: 'GAME_CONFIGURED',
-        payload: { gameType: 'casual', questionCount: this.configuredTotalQuestions ?? TOTAL_QUESTIONS },
+        payload: {
+          gameType: 'casual',
+          questionCount: this.configuredTotalQuestions ?? TOTAL_QUESTIONS,
+        },
       });
     }
   }
@@ -314,15 +329,17 @@ export class GameRoom {
 
     // Create game session in DB
     this.gameId = crypto.randomUUID();
-    gamesRepo.createGame(
-      this.db,
-      this.gameId,
-      this.roomCode,
-      this.gameType,
-      this.players.size,
-      this.questions.length,
-      this.questionSetId ?? undefined,
-    ).catch((err) => console.error('Failed to create game session:', err));
+    gamesRepo
+      .createGame(
+        this.db,
+        this.gameId,
+        this.roomCode,
+        this.gameType,
+        this.players.size,
+        this.questions.length,
+        this.questionSetId ?? undefined,
+      )
+      .catch((err) => console.error('Failed to create game session:', err));
 
     this.phase = 'COUNTDOWN';
 
@@ -389,7 +406,9 @@ export class GameRoom {
       questionNumber: this.currentQuestionIndex + 1,
       totalQuestions: this.questions.length,
       serverTimestamp: this.questionStartTime,
-      media: q.media ? { type: q.media.type, url: q.media.url, previewDuration: q.media.previewDuration } : undefined,
+      media: q.media
+        ? { type: q.media.type, url: q.media.url, previewDuration: q.media.previewDuration }
+        : undefined,
     };
 
     this.broadcast({ type: 'QUESTION', payload });
@@ -410,11 +429,7 @@ export class GameRoom {
     }, 1000);
   }
 
-  private handleAnswer(
-    ws: ServerWebSocket<WSData>,
-    questionId: string,
-    answer: AnswerKey,
-  ): void {
+  private handleAnswer(ws: ServerWebSocket<WSData>, questionId: string, answer: AnswerKey): void {
     if (this.phase !== 'QUESTION') return;
 
     const q = this.questions[this.currentQuestionIndex];
@@ -518,22 +533,25 @@ export class GameRoom {
     if (this.gameId) {
       const gameId = this.gameId;
       const roundNumber = this.currentQuestionIndex + 1;
-      const roundResults: Parameters<typeof gamesRepo.insertRoundResults>[2] = playerResults.map((pr) => {
-        const playerRanking = rankings.find((r) => r.playerId === pr.playerId);
-        return {
-          questionId: q.id,
-          roundNumber,
-          playerId: pr.playerId,
-          playerName: pr.name,
-          answer: pr.answer,
-          isCorrect: pr.isCorrect,
-          responseTimeMs: pr.responseTimeMs,
-          pointsEarned: pr.pointsEarned,
-          totalScore: pr.totalScore,
-          rank: playerRanking?.rank ?? 0,
-        };
-      });
-      gamesRepo.insertRoundResults(this.db, gameId, roundResults)
+      const roundResults: Parameters<typeof gamesRepo.insertRoundResults>[2] = playerResults.map(
+        (pr) => {
+          const playerRanking = rankings.find((r) => r.playerId === pr.playerId);
+          return {
+            questionId: q.id,
+            roundNumber,
+            playerId: pr.playerId,
+            playerName: pr.name,
+            answer: pr.answer,
+            isCorrect: pr.isCorrect,
+            responseTimeMs: pr.responseTimeMs,
+            pointsEarned: pr.pointsEarned,
+            totalScore: pr.totalScore,
+            rank: playerRanking?.rank ?? 0,
+          };
+        },
+      );
+      gamesRepo
+        .insertRoundResults(this.db, gameId, roundResults)
         .catch((err) => console.error('Failed to insert round results:', err));
     }
 
@@ -586,7 +604,7 @@ export class GameRoom {
 
   private async recordGameEnd(
     winner: { playerId: string; name: string; score: number },
-    rankings: PlayerRanking[],
+    _rankings: PlayerRanking[],
   ): Promise<void> {
     if (!this.gameId) return;
 

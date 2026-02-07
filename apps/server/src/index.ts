@@ -1,11 +1,10 @@
 import { Hono } from 'hono';
-import { upgradeWebSocket, websocket } from 'hono/bun';
-import { serveStatic } from 'hono/bun';
-import { createRoom, getRoom, destroyRoom, setDbAdapter } from './roomManager';
-import { initDatabase, getDb } from './db';
-import questionSetsRoutes from './routes/questionSets';
-import playersRoutes from './routes/players';
+import { serveStatic, upgradeWebSocket, websocket } from 'hono/bun';
+import { initDatabase } from './db';
+import { createRoom, destroyRoom, getRoom, setDbAdapter } from './roomManager';
 import gamesRoutes from './routes/games';
+import playersRoutes from './routes/players';
+import questionSetsRoutes from './routes/questionSets';
 import type { WSData } from './types';
 
 const app = new Hono();
@@ -62,7 +61,10 @@ app.get(
           raw.send(
             JSON.stringify({
               type: 'ERROR',
-              payload: { code: 'INVALID_PARAMS', message: 'Use ?role=host or ?role=player&roomCode=XXXX' },
+              payload: {
+                code: 'INVALID_PARAMS',
+                message: 'Use ?role=host or ?role=player&roomCode=XXXX',
+              },
             }),
           );
           raw.close();

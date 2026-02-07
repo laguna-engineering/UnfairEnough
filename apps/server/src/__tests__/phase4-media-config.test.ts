@@ -1,12 +1,7 @@
-import { describe, it, expect, beforeEach, afterAll } from 'bun:test';
 import { Database } from 'bun:sqlite';
-import {
-  createBunAdapter,
-  configurePragmas,
-  runMigrations,
-  questionsRepo,
-} from '@unfairenough/db';
+import { afterAll, beforeEach, describe, expect, it } from 'bun:test';
 import type { DbAdapter } from '@unfairenough/db';
+import { configurePragmas, createBunAdapter, questionsRepo, runMigrations } from '@unfairenough/db';
 import { GameRoom } from '../room';
 
 let rawDb: InstanceType<typeof Database>;
@@ -36,49 +31,59 @@ beforeEach(async () => {
   await runMigrations(db);
 
   // Seed questions without media
-  await questionsRepo.importQuestionSet(db, 'basic-set', {
-    name: 'Basic Questions',
-    defaultTimeLimit: 10,
-    questions: Array.from({ length: 5 }, (_, i) => ({
-      id: `basic-q${i}`,
-      type: 'multiple_choice' as const,
-      text: `Basic Question ${i}`,
-      options: [
-        { key: 'A', text: 'Option A' },
-        { key: 'B', text: 'Option B' },
-      ],
-      correctAnswer: 'A' as const,
-    })),
-  }, () => crypto.randomUUID());
-
-  // Seed questions WITH media (very short preview for testing)
-  await questionsRepo.importQuestionSet(db, 'media-set', {
-    name: 'Media Questions',
-    defaultTimeLimit: 10,
-    questions: [
-      {
-        id: 'media-q1',
+  await questionsRepo.importQuestionSet(
+    db,
+    'basic-set',
+    {
+      name: 'Basic Questions',
+      defaultTimeLimit: 10,
+      questions: Array.from({ length: 5 }, (_, i) => ({
+        id: `basic-q${i}`,
         type: 'multiple_choice' as const,
-        text: 'Question with image',
-        media: { type: 'image', url: 'https://example.com/image.jpg', previewDuration: 1 },
-        options: [
-          { key: 'A', text: 'Option A' },
-          { key: 'B', text: 'Option B' },
-        ],
-        correctAnswer: 'B' as const,
-      },
-      {
-        id: 'media-q2',
-        type: 'multiple_choice' as const,
-        text: 'Question without media',
+        text: `Basic Question ${i}`,
         options: [
           { key: 'A', text: 'Option A' },
           { key: 'B', text: 'Option B' },
         ],
         correctAnswer: 'A' as const,
-      },
-    ],
-  }, () => crypto.randomUUID());
+      })),
+    },
+    () => crypto.randomUUID(),
+  );
+
+  // Seed questions WITH media (very short preview for testing)
+  await questionsRepo.importQuestionSet(
+    db,
+    'media-set',
+    {
+      name: 'Media Questions',
+      defaultTimeLimit: 10,
+      questions: [
+        {
+          id: 'media-q1',
+          type: 'multiple_choice' as const,
+          text: 'Question with image',
+          media: { type: 'image', url: 'https://example.com/image.jpg', previewDuration: 1 },
+          options: [
+            { key: 'A', text: 'Option A' },
+            { key: 'B', text: 'Option B' },
+          ],
+          correctAnswer: 'B' as const,
+        },
+        {
+          id: 'media-q2',
+          type: 'multiple_choice' as const,
+          text: 'Question without media',
+          options: [
+            { key: 'A', text: 'Option A' },
+            { key: 'B', text: 'Option B' },
+          ],
+          correctAnswer: 'A' as const,
+        },
+      ],
+    },
+    () => crypto.randomUUID(),
+  );
 });
 
 afterAll(() => {
@@ -93,10 +98,13 @@ describe('CONFIGURE_GAME', () => {
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
 
-    room.handleHostMessage(hostWs, JSON.stringify({
-      type: 'CONFIGURE_GAME',
-      payload: { gameType: 'casual', totalQuestions: 3 },
-    }));
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'CONFIGURE_GAME',
+        payload: { gameType: 'casual', totalQuestions: 3 },
+      }),
+    );
 
     await wait(50);
 
@@ -113,10 +121,13 @@ describe('CONFIGURE_GAME', () => {
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
 
-    room.handleHostMessage(hostWs, JSON.stringify({
-      type: 'CONFIGURE_GAME',
-      payload: { gameType: 'configured', questionSetId: 'media-set' },
-    }));
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'CONFIGURE_GAME',
+        payload: { gameType: 'configured', questionSetId: 'media-set' },
+      }),
+    );
 
     await wait(50);
 
@@ -133,10 +144,13 @@ describe('CONFIGURE_GAME', () => {
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
 
-    room.handleHostMessage(hostWs, JSON.stringify({
-      type: 'CONFIGURE_GAME',
-      payload: { gameType: 'configured', questionSetId: 'nonexistent-set' },
-    }));
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'CONFIGURE_GAME',
+        payload: { gameType: 'configured', questionSetId: 'nonexistent-set' },
+      }),
+    );
 
     await wait(50);
 
@@ -149,20 +163,28 @@ describe('CONFIGURE_GAME', () => {
 
   it('returns error for empty question set', async () => {
     // Create an empty set
-    await questionsRepo.importQuestionSet(db, 'empty-set', {
-      name: 'Empty Set',
-      defaultTimeLimit: 10,
-      questions: [],
-    }, () => crypto.randomUUID());
+    await questionsRepo.importQuestionSet(
+      db,
+      'empty-set',
+      {
+        name: 'Empty Set',
+        defaultTimeLimit: 10,
+        questions: [],
+      },
+      () => crypto.randomUUID(),
+    );
 
     const room = new GameRoom('TEST', db);
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
 
-    room.handleHostMessage(hostWs, JSON.stringify({
-      type: 'CONFIGURE_GAME',
-      payload: { gameType: 'configured', questionSetId: 'empty-set' },
-    }));
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'CONFIGURE_GAME',
+        payload: { gameType: 'configured', questionSetId: 'empty-set' },
+      }),
+    );
 
     await wait(50);
 
@@ -179,10 +201,13 @@ describe('CONFIGURE_GAME', () => {
     room.setHost(hostWs);
 
     // Configure
-    room.handleHostMessage(hostWs, JSON.stringify({
-      type: 'CONFIGURE_GAME',
-      payload: { gameType: 'configured', questionSetId: 'media-set' },
-    }));
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'CONFIGURE_GAME',
+        payload: { gameType: 'configured', questionSetId: 'media-set' },
+      }),
+    );
     await wait(50);
 
     // Reset
@@ -190,10 +215,13 @@ describe('CONFIGURE_GAME', () => {
 
     // Reconfigure as casual
     hostWs._messages.length = 0;
-    room.handleHostMessage(hostWs, JSON.stringify({
-      type: 'CONFIGURE_GAME',
-      payload: { gameType: 'casual' },
-    }));
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'CONFIGURE_GAME',
+        payload: { gameType: 'casual' },
+      }),
+    );
     await wait(50);
 
     const configMsg = hostWs._messages.find((m: any) => m.type === 'GAME_CONFIGURED');
@@ -216,10 +244,13 @@ describe('MEDIA_PREVIEW phase', () => {
     await room.addPlayer(playerWs, 'Alice');
 
     // Configure with media set
-    room.handleHostMessage(hostWs, JSON.stringify({
-      type: 'CONFIGURE_GAME',
-      payload: { gameType: 'configured', questionSetId: 'media-set' },
-    }));
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'CONFIGURE_GAME',
+        payload: { gameType: 'configured', questionSetId: 'media-set' },
+      }),
+    );
     await wait(50);
 
     // Start the game
@@ -255,10 +286,13 @@ describe('MEDIA_PREVIEW phase', () => {
     await room.addPlayer(playerWs, 'Bob');
 
     // Configure with basic set (no media)
-    room.handleHostMessage(hostWs, JSON.stringify({
-      type: 'CONFIGURE_GAME',
-      payload: { gameType: 'configured', questionSetId: 'basic-set', totalQuestions: 1 },
-    }));
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'CONFIGURE_GAME',
+        payload: { gameType: 'configured', questionSetId: 'basic-set', totalQuestions: 1 },
+      }),
+    );
     await wait(50);
 
     // Start
@@ -291,10 +325,13 @@ describe('configured game mode', () => {
     await room.addPlayer(playerWs, 'Alice');
 
     // Configure with media-set
-    room.handleHostMessage(hostWs, JSON.stringify({
-      type: 'CONFIGURE_GAME',
-      payload: { gameType: 'configured', questionSetId: 'media-set' },
-    }));
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'CONFIGURE_GAME',
+        payload: { gameType: 'configured', questionSetId: 'media-set' },
+      }),
+    );
     await wait(50);
 
     // Start
@@ -320,10 +357,13 @@ describe('configured game mode', () => {
     await room.addPlayer(playerWs, 'Alice');
 
     // Configure with basic-set but limit to 2 questions
-    room.handleHostMessage(hostWs, JSON.stringify({
-      type: 'CONFIGURE_GAME',
-      payload: { gameType: 'configured', questionSetId: 'basic-set', totalQuestions: 2 },
-    }));
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'CONFIGURE_GAME',
+        payload: { gameType: 'configured', questionSetId: 'basic-set', totalQuestions: 2 },
+      }),
+    );
     await wait(50);
 
     const configMsg = hostWs._messages.find((m: any) => m.type === 'GAME_CONFIGURED');
@@ -347,10 +387,13 @@ describe('timer cleanup', () => {
     await room.addPlayer(playerWs, 'Alice');
 
     // Configure with media set and start
-    room.handleHostMessage(hostWs, JSON.stringify({
-      type: 'CONFIGURE_GAME',
-      payload: { gameType: 'configured', questionSetId: 'media-set' },
-    }));
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'CONFIGURE_GAME',
+        payload: { gameType: 'configured', questionSetId: 'media-set' },
+      }),
+    );
     await wait(50);
 
     room.handleHostMessage(hostWs, JSON.stringify({ type: 'START_GAME' }));

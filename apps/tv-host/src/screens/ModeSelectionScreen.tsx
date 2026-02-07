@@ -1,14 +1,7 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import {
-  colors,
-  typography,
-  spacing,
-  borderRadius,
-  Card,
-  ScreenBackground,
-} from '@unfairenough/ui';
 import { useTranslation } from '@unfairenough/i18n';
+import { Card, colors, ScreenBackground, spacing, typography } from '@unfairenough/ui';
+import type React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const TV_SAFE_HORIZONTAL = 96;
 const TV_SAFE_VERTICAL = 54;

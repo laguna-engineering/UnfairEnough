@@ -25,12 +25,15 @@ yarn prebuild:mobile      # Expo prebuild for mobile
 # Type checking
 yarn server typecheck     # Server only (bun types)
 
+# Linting & formatting (Biome)
+yarn lint                 # Check lint + formatting
+yarn lint:fix             # Auto-fix lint + formatting
+yarn format               # Auto-fix formatting only
+
 # E2E testing (Playwright)
 yarn test:e2e             # Run all E2E tests (headless)
 yarn test:e2e:ui          # Run with Playwright UI
 ```
-
-No linter is configured yet.
 
 ## Architecture
 

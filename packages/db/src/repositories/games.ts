@@ -1,11 +1,5 @@
 import type { DbAdapter } from '../adapter';
-import type {
-  GameRow,
-  RoundResultRow,
-  GameSession,
-  RoundResultEntry,
-  GameType,
-} from '../schema';
+import type { GameRow, GameSession, GameType, RoundResultEntry, RoundResultRow } from '../schema';
 
 function rowToGameSession(row: GameRow): GameSession {
   return {
@@ -109,29 +103,19 @@ export async function insertRoundResults(
   }
 }
 
-export async function getGame(
-  db: DbAdapter,
-  gameId: string,
-): Promise<GameSession | null> {
+export async function getGame(db: DbAdapter, gameId: string): Promise<GameSession | null> {
   const row = await db.get<GameRow>('SELECT * FROM games WHERE id = ?', [gameId]);
   return row ? rowToGameSession(row) : null;
 }
 
-export async function getRecentGames(
-  db: DbAdapter,
-  limit = 20,
-): Promise<GameSession[]> {
-  const rows = await db.all<GameRow>(
-    'SELECT * FROM games ORDER BY started_at DESC LIMIT ?',
-    [limit],
-  );
+export async function getRecentGames(db: DbAdapter, limit = 20): Promise<GameSession[]> {
+  const rows = await db.all<GameRow>('SELECT * FROM games ORDER BY started_at DESC LIMIT ?', [
+    limit,
+  ]);
   return rows.map(rowToGameSession);
 }
 
-export async function getGameResults(
-  db: DbAdapter,
-  gameId: string,
-): Promise<RoundResultEntry[]> {
+export async function getGameResults(db: DbAdapter, gameId: string): Promise<RoundResultEntry[]> {
   const rows = await db.all<RoundResultRow>(
     'SELECT * FROM round_results WHERE game_id = ? ORDER BY round_number, rank',
     [gameId],

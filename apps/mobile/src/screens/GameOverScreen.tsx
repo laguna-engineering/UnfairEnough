@@ -1,15 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import {
-  colors,
-  typography,
-  spacing,
-  Card,
-  Button,
-  ScreenBackground,
-} from '@unfairenough/ui';
 import { useTranslation } from '@unfairenough/i18n';
+import { Button, Card, colors, ScreenBackground, spacing, typography } from '@unfairenough/ui';
 import type { GameResult } from '@unfairenough/ws-protocol';
+import type React from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 interface GameOverScreenProps {
   result: GameResult;
@@ -54,14 +47,18 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
         {isWinner ? (
           <>
             <Text style={styles.winnerText}>{t('results.youWon')}</Text>
-            <Text style={styles.score}>{t('results.pointsCount', { score: myRanking?.score })}</Text>
+            <Text style={styles.score}>
+              {t('results.pointsCount', { score: myRanking?.score })}
+            </Text>
           </>
         ) : (
           <>
             <Text style={styles.position}>
               {t('results.yourPosition', { position: myRanking?.rank ?? 0 })}
             </Text>
-            <Text style={styles.score}>{t('results.pointsCount', { score: myRanking?.score })}</Text>
+            <Text style={styles.score}>
+              {t('results.pointsCount', { score: myRanking?.score })}
+            </Text>
           </>
         )}
         {totalGamesBefore != null && (
@@ -78,19 +75,13 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
           {result.rankings.map((player) => (
             <View
               key={player.playerId}
-              style={[
-                styles.leaderboardRow,
-                player.playerId === playerId && styles.highlightedRow,
-              ]}
+              style={[styles.leaderboardRow, player.playerId === playerId && styles.highlightedRow]}
             >
               <Text style={[styles.rank, { color: getRankColor(player.rank) }]}>
                 #{player.rank}
               </Text>
               <Text
-                style={[
-                  styles.playerName,
-                  player.playerId === playerId && styles.highlightedName,
-                ]}
+                style={[styles.playerName, player.playerId === playerId && styles.highlightedName]}
                 numberOfLines={1}
               >
                 {player.name}
@@ -102,11 +93,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
         </ScrollView>
       </Card>
 
-      <Button
-        title={t('results.playAgain')}
-        onPress={onPlayAgain}
-        style={styles.playAgainButton}
-      />
+      <Button title={t('results.playAgain')} onPress={onPlayAgain} style={styles.playAgainButton} />
     </ScreenBackground>
   );
 };

@@ -3,35 +3,35 @@
  * Orchestrates the game flow, timing, and scoring
  */
 
-import type { IGameController } from './IGameController';
-import { wsServer } from './WebSocketServer';
-import { initDatabase, getDb } from './database';
-import { questionsRepo, type QuestionWithMeta } from '@unfairenough/db';
+import { type QuestionWithMeta, questionsRepo } from '@unfairenough/db';
 import {
+  addPlayer,
+  addPoints,
+  calculateScore,
   createStore,
+  endGame,
+  nextQuestion,
+  playersSelectors,
+  type QuestionWithAnswer,
+  type RootState,
+  rankPlayers,
+  receiveAnswer,
+  removePlayer,
+  resetGame,
   setServerReady,
-  startGameCountdown,
-  tickGameCountdown,
   showMediaPreview,
   showQuestion,
-  tickQuestionTimer,
-  receiveAnswer,
-  startRevealing,
   showRoundResults,
-  nextQuestion,
-  endGame,
-  resetGame,
+  startGameCountdown,
+  startRevealing,
+  tickGameCountdown,
+  tickQuestionTimer,
   updateConfig,
-  addPlayer,
-  removePlayer,
-  addPoints,
-  playersSelectors,
-  calculateScore,
-  rankPlayers,
-  type RootState,
-  type QuestionWithAnswer,
 } from '@unfairenough/game-logic';
-import type { PlayerResult, AnswerKey } from '@unfairenough/ws-protocol';
+import type { AnswerKey, PlayerResult } from '@unfairenough/ws-protocol';
+import { getDb, initDatabase } from './database';
+import type { IGameController } from './IGameController';
+import { wsServer } from './WebSocketServer';
 
 class GameController implements IGameController {
   private store = createStore();
@@ -61,7 +61,7 @@ class GameController implements IGameController {
             color: data.color,
             score: 0,
             isConnected: true,
-          })
+          }),
         );
       },
       onPlayerLeft: (data) => {
@@ -99,27 +99,29 @@ class GameController implements IGameController {
     }
 
     // Load questions from DB, then start countdown
-    this.loadQuestions().then((questions) => {
-      this.questions = questions;
-      this.currentQuestionIndex = 0;
+    this.loadQuestions()
+      .then((questions) => {
+        this.questions = questions;
+        this.currentQuestionIndex = 0;
 
-      this.store.dispatch(startGameCountdown());
-      wsServer.sendGameStarting(3);
+        this.store.dispatch(startGameCountdown());
+        wsServer.sendGameStarting(3);
 
-      this.countdownTimer = setInterval(() => {
-        this.store.dispatch(tickGameCountdown());
-        const newState = this.getState();
+        this.countdownTimer = setInterval(() => {
+          this.store.dispatch(tickGameCountdown());
+          const newState = this.getState();
 
-        if (newState.game.countdown <= 0) {
-          this.clearCountdownTimer();
-          this.showNextQuestion();
-        } else {
-          wsServer.sendGameStarting(newState.game.countdown);
-        }
-      }, 1000);
-    }).catch((err) => {
-      console.error('Failed to load questions:', err);
-    });
+          if (newState.game.countdown <= 0) {
+            this.clearCountdownTimer();
+            this.showNextQuestion();
+          } else {
+            wsServer.sendGameStarting(newState.game.countdown);
+          }
+        }, 1000);
+      })
+      .catch((err) => {
+        console.error('Failed to load questions:', err);
+      });
   }
 
   /**
@@ -241,7 +243,7 @@ class GameController implements IGameController {
         playerId: data.playerId,
         answer: data.answer,
         serverReceivedAt: data.serverReceivedAt,
-      })
+      }),
     );
   }
 
@@ -306,7 +308,7 @@ class GameController implements IGameController {
     const updatedState = this.getState();
     const updatedPlayers = playersSelectors.selectAll(updatedState.players);
     const rankings = rankPlayers(
-      updatedPlayers.map((p) => ({ id: p.id, name: p.name, score: p.score }))
+      updatedPlayers.map((p) => ({ id: p.id, name: p.name, score: p.score })),
     ).map((r) => ({
       playerId: r.id,
       name: r.name,
@@ -348,9 +350,7 @@ class GameController implements IGameController {
 
     const state = this.getState();
     const players = playersSelectors.selectAll(state.players);
-    const rankings = rankPlayers(
-      players.map((p) => ({ id: p.id, name: p.name, score: p.score }))
-    );
+    const rankings = rankPlayers(players.map((p) => ({ id: p.id, name: p.name, score: p.score })));
 
     const winner = rankings[0] || { playerId: '', name: '', score: 0 };
 
@@ -382,16 +382,19 @@ class GameController implements IGameController {
     if (gameType === 'configured' && questionSetId) {
       // Validate the set exists and has questions
       const db = getDb();
-      questionsRepo.getQuestionSet(db, questionSetId).then((set) => {
-        if (!set || set.questionCount === 0) {
-          console.warn('Question set not found or empty:', questionSetId);
-          this.store.dispatch(updateConfig({ gameType: 'casual', questionSetId: undefined }));
-        } else {
-          this.store.dispatch(updateConfig({ totalQuestions: set.questionCount }));
-        }
-      }).catch((err) => {
-        console.error('Failed to validate question set:', err);
-      });
+      questionsRepo
+        .getQuestionSet(db, questionSetId)
+        .then((set) => {
+          if (!set || set.questionCount === 0) {
+            console.warn('Question set not found or empty:', questionSetId);
+            this.store.dispatch(updateConfig({ gameType: 'casual', questionSetId: undefined }));
+          } else {
+            this.store.dispatch(updateConfig({ totalQuestions: set.questionCount }));
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to validate question set:', err);
+        });
     }
   }
 

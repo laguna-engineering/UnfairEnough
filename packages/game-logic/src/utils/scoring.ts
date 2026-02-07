@@ -11,7 +11,7 @@ const MAX_TIME_BONUS = 900; // Total max = 1000 points
 export function calculateScore(
   isCorrect: boolean,
   responseTimeMs: number,
-  timeLimitSeconds: number
+  timeLimitSeconds: number,
 ): number {
   if (!isCorrect) return 0;
 
