@@ -66,6 +66,7 @@ export function useGameController() {
     countdown: state.game.countdown,
     currentQuestion: state.game.currentQuestion,
     roundResults: state.game.roundResults,
+    roundTags: state.game.roundTags,
     rankings: state.game.rankings,
     positionHistory: state.game.positionHistory,
     gameConfig: state.game.config,

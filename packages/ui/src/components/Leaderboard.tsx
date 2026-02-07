@@ -11,6 +11,7 @@ export interface LeaderboardEntry {
   rank: number;
   score: number;
   pointsEarned?: number;
+  difficultyMultiplier?: number;
   color?: string;
   isCorrect?: boolean;
   rankChange?: number; // positive = moved up, negative = moved down
@@ -68,7 +69,12 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
 
             {/* Points earned this round */}
             {showPoints && entry.pointsEarned !== undefined && entry.pointsEarned > 0 && (
-              <Text style={styles.pointsEarned}>+{entry.pointsEarned}</Text>
+              <Text style={styles.pointsEarned}>
+                +{entry.pointsEarned}
+                {entry.difficultyMultiplier !== undefined && entry.difficultyMultiplier > 1.005
+                  ? ` (x${entry.difficultyMultiplier.toFixed(2)})`
+                  : ''}
+              </Text>
             )}
 
             {/* Total score */}

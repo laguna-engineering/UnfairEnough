@@ -54,6 +54,7 @@ interface GameState {
   countdown: number;
   answers: Record<string, Answer>;
   roundResults: PlayerResult[];
+  roundTags: string[];
   rankings: PlayerRanking[];
   positionHistory: PositionSnapshot[];
   config: GameConfig;
@@ -69,6 +70,7 @@ const initialState: GameState = {
   countdown: 0,
   answers: {},
   roundResults: [],
+  roundTags: [],
   rankings: [],
   positionHistory: [],
   config: {
@@ -142,11 +144,16 @@ const gameSlice = createSlice({
 
     showRoundResults(
       state,
-      action: PayloadAction<{ results: PlayerResult[]; rankings: PlayerRanking[] }>,
+      action: PayloadAction<{
+        results: PlayerResult[];
+        rankings: PlayerRanking[];
+        tags?: string[];
+      }>,
     ) {
       if (!isValidTransition(state.phase, 'RESULTS')) return;
       state.phase = 'RESULTS';
       state.roundResults = action.payload.results;
+      state.roundTags = action.payload.tags ?? [];
       state.rankings = action.payload.rankings;
       state.positionHistory.push({
         round: state.questionIndex + 1,
@@ -163,6 +170,7 @@ const gameSlice = createSlice({
       if (state.phase !== 'RESULTS') return;
       state.questionIndex += 1;
       state.roundResults = [];
+      state.roundTags = [];
       // Phase stays at RESULTS — showQuestion or showMediaPreview will handle the transition
       // Keep rankings (last round's) and positionHistory (cumulative)
     },
@@ -189,6 +197,7 @@ const gameSlice = createSlice({
       state.countdown = 0;
       state.answers = {};
       state.roundResults = [];
+      state.roundTags = [];
       state.rankings = [];
       state.positionHistory = [];
     },

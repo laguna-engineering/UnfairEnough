@@ -195,7 +195,7 @@ export class HostedGameController implements IGameController {
         break;
 
       case 'ROUND_END': {
-        const { playerResults, rankings } = message.payload;
+        const { playerResults, rankings, tags } = message.payload;
         // Update each player's score
         for (const pr of playerResults) {
           this.store.dispatch(updateScore({ id: pr.playerId, score: pr.totalScore }));
@@ -204,6 +204,7 @@ export class HostedGameController implements IGameController {
           showRoundResults({
             results: playerResults,
             rankings: rankings ?? [],
+            tags,
           }),
         );
         break;

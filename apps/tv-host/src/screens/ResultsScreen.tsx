@@ -23,7 +23,8 @@ const answerColors = {
 
 export const ResultsScreen: React.FC = () => {
   const { t } = useTranslation();
-  const { state, currentQuestion, roundResults, rankings, positionHistory } = useGameController();
+  const { state, currentQuestion, roundResults, roundTags, rankings, positionHistory } =
+    useGameController();
 
   const players = playersSelectors.selectAll(state.players);
 
@@ -45,6 +46,7 @@ export const ResultsScreen: React.FC = () => {
         rank: r.rank,
         score: r.score,
         pointsEarned: result?.pointsEarned ?? 0,
+        difficultyMultiplier: result?.difficultyMultiplier,
         color: player?.color,
         isCorrect: result?.isCorrect ?? false,
         rankChange,
@@ -77,6 +79,15 @@ export const ResultsScreen: React.FC = () => {
               {currentQuestion.options.find((o) => o.key === correctAnswer)?.text}
             </Text>
           </View>
+          {roundTags.length > 0 && (
+            <View style={styles.tagsRow}>
+              {roundTags.map((tag) => (
+                <View key={tag} style={styles.tagBadge}>
+                  <Text style={styles.tagText}>{tag}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </Card>
 
         {/* Leaderboard */}
@@ -126,6 +137,23 @@ const styles = StyleSheet.create({
   answerText: {
     ...typography.displayMedium,
     color: colors.textPrimary,
+  },
+  tagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.md,
+    justifyContent: 'center',
+  },
+  tagBadge: {
+    backgroundColor: colors.card,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: 12,
+  },
+  tagText: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
   },
   leaderboardSection: {
     flex: 1,

@@ -126,7 +126,10 @@
     "correctAnswerLabel": "Correct Answer",
     "correctAnswerIs": "Correct answer:",
     "answeredCount": "{{answered}} / {{total}} answered",
-    "totalScore": "Total: {{score}}"
+    "totalScore": "Total: {{score}}",
+    "scoreBreakdown": "{{base}} x {{multiplier}} = {{total}}",
+    "difficultyBonus": "+{{percent}}%",
+    "tags": "Tags"
   },
   "results": {
     "gameOver": "Game Over!",

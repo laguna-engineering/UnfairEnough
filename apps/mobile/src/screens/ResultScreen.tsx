@@ -48,7 +48,16 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
 
         {/* Points Earned */}
         {myResult && isCorrect && (
-          <Text style={styles.points}>{t('game.points', { points: myResult.pointsEarned })}</Text>
+          <>
+            <Text style={styles.points}>{t('game.points', { points: myResult.pointsEarned })}</Text>
+            {myResult.difficultyMultiplier > 1.0 && (
+              <Text style={styles.bonusBadge}>
+                {t('game.difficultyBonus', {
+                  percent: Math.round((myResult.difficultyMultiplier - 1) * 100),
+                })}
+              </Text>
+            )}
+          </>
         )}
 
         {/* Response Time */}
@@ -109,6 +118,11 @@ const styles = StyleSheet.create({
   points: {
     ...typography.h1,
     color: colors.accentYellow,
+    marginBottom: spacing.xs,
+  },
+  bonusBadge: {
+    ...typography.bodySmall,
+    color: colors.success,
     marginBottom: spacing.sm,
   },
   time: {
