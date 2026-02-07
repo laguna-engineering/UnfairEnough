@@ -5,6 +5,7 @@ import { createRoom, destroyRoom, getRoom, setDbAdapter } from './roomManager';
 import gamesRoutes from './routes/games';
 import playersRoutes from './routes/players';
 import questionSetsRoutes from './routes/questionSets';
+import tagsRoutes from './routes/tags';
 import type { WSData } from './types';
 
 const app = new Hono();
@@ -16,6 +17,7 @@ app.get('/api/health', (c) => c.json({ status: 'ok' }));
 app.route('/api/question-sets', questionSetsRoutes);
 app.route('/api/players', playersRoutes);
 app.route('/api/games', gamesRoutes);
+app.route('/api/tags', tagsRoutes);
 
 // ── WebSocket endpoint ─────────────────────────────────────────
 app.get(

@@ -1,4 +1,4 @@
-import { gamesRepo, playersRepo } from '@unfairenough/db';
+import { gamesRepo, playersRepo, playerTagScoresRepo } from '@unfairenough/db';
 import { Hono } from 'hono';
 import { getDb } from '../db';
 
@@ -49,8 +49,19 @@ players.get('/:id/stats', async (c) => {
     });
   }
 
+  // Get tag scores
+  const tagScores = await playerTagScoresRepo.getPlayerTagScores(db, id);
+  const tagStats = tagScores.map((ts) => ({
+    tag: ts.tag,
+    score: ts.score,
+    correct: ts.totalCorrect,
+    incorrect: ts.totalIncorrect,
+    gamesPlayed: ts.gamesPlayed,
+  }));
+
   return c.json({
     player,
+    tagScores: tagStats,
     recentGames: playerGames,
   });
 });
