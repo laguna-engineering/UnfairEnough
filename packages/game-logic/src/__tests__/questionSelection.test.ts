@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { QuestionWithMeta } from '@unfairenough/db';
-import type { RoundSelectionContext } from '../utils/questionSelection';
-import { selectNextQuestion } from '../utils/questionSelection';
+import type { RoundSelectionContext, SelectableQuestion } from '../utils/questionSelection';
+import { buildQuestionPool, selectNextQuestion } from '../utils/questionSelection';
 
 function makeQuestion(id: string, tags: string[] = []): QuestionWithMeta {
   return {
@@ -23,6 +23,21 @@ function makeQuestion(id: string, tags: string[] = []): QuestionWithMeta {
     explanation: null,
   };
 }
+
+function makeMinimalQuestion(id: string, tags: string[] = []): SelectableQuestion {
+  return { id, tags };
+}
+
+/** Deterministic seeded random for reproducible tests */
+function seededRandom(seed: number): () => number {
+  let s = seed;
+  return () => {
+    s = (s * 16807 + 0) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+}
+
+// ── selectNextQuestion ─────────────────────────────────────────────
 
 describe('selectNextQuestion', () => {
   test('single question remaining returns it directly', () => {
@@ -48,7 +63,6 @@ describe('selectNextQuestion', () => {
       playerTagScores: new Map(),
     };
 
-    // Run multiple times — should return different results (probabilistic, but with 3 options it's highly likely)
     const results = new Set<string>();
     for (let i = 0; i < 50; i++) {
       results.add(selectNextQuestion(questions, context).id);
@@ -65,29 +79,26 @@ describe('selectNextQuestion', () => {
       ],
       playerTagScores: new Map(),
     };
-    // Should not crash, just returns something
     const result = selectNextQuestion(questions, context);
     expect(questions).toContain(result);
   });
 
   test('trailing player gets questions easier for them', () => {
-    // Alice (trailing) is good at gaming, Bob (leading) is good at science
     const gamingQ = makeQuestion('q-gaming', ['gaming']);
     const scienceQ = makeQuestion('q-science', ['science']);
     const questions = [gamingQ, scienceQ];
 
     const context: RoundSelectionContext = {
       players: [
-        { profileId: 'alice', name: 'Alice', currentScore: 200 }, // trailing
-        { profileId: 'bob', name: 'Bob', currentScore: 800 }, // leading
+        { profileId: 'alice', name: 'Alice', currentScore: 200 },
+        { profileId: 'bob', name: 'Bob', currentScore: 800 },
       ],
       playerTagScores: new Map([
-        ['alice', new Map([['gaming', 5000]])], // Alice is great at gaming
-        ['bob', new Map([['science', 5000]])], // Bob is great at science
+        ['alice', new Map([['gaming', 5000]])],
+        ['bob', new Map([['science', 5000]])],
       ]),
     };
 
-    // Run many times — gaming questions should be strongly preferred
     const counts = new Map<string, number>();
     for (let i = 0; i < 200; i++) {
       const q = selectNextQuestion(questions, context);
@@ -96,12 +107,10 @@ describe('selectNextQuestion', () => {
 
     const gamingCount = counts.get('q-gaming') ?? 0;
     const scienceCount = counts.get('q-science') ?? 0;
-    // Gaming should be picked significantly more often
     expect(gamingCount).toBeGreaterThan(scienceCount);
   });
 
   test('leading player good at tag X, trailing also good at tag X → no strong catch-up from X', () => {
-    // Both players are good at gaming, so gaming questions don't help trailing player catch up
     const gamingQ = makeQuestion('q-gaming', ['gaming']);
     const neutralQ = makeQuestion('q-neutral', ['misc']);
     const questions = [gamingQ, neutralQ];
@@ -117,17 +126,14 @@ describe('selectNextQuestion', () => {
       ]),
     };
 
-    // Both should be selected with more balanced distribution
     const counts = new Map<string, number>();
     for (let i = 0; i < 200; i++) {
       const q = selectNextQuestion(questions, context);
       counts.set(q.id, (counts.get(q.id) ?? 0) + 1);
     }
 
-    // Neither should dominate overwhelmingly when both are good at the same tag
     const gamingCount = counts.get('q-gaming') ?? 0;
     const neutralCount = counts.get('q-neutral') ?? 0;
-    // Both should appear (no extreme bias)
     expect(gamingCount).toBeGreaterThan(0);
     expect(neutralCount).toBeGreaterThan(0);
   });
@@ -139,10 +145,9 @@ describe('selectNextQuestion', () => {
         { profileId: 'p1', name: 'Alice', currentScore: 200 },
         { profileId: 'p2', name: 'Bob', currentScore: 800 },
       ],
-      playerTagScores: new Map(), // No tag data at all
+      playerTagScores: new Map(),
     };
 
-    // Should not crash
     const result = selectNextQuestion(questions, context);
     expect(questions).toContain(result);
   });
@@ -160,7 +165,6 @@ describe('selectNextQuestion', () => {
       playerTagScores: new Map([['alice', new Map([['gaming', 5000]])]]),
     };
 
-    // Tagged question should generally be preferred over untagged
     const counts = new Map<string, number>();
     for (let i = 0; i < 100; i++) {
       const q = selectNextQuestion(questions, context);
@@ -184,5 +188,274 @@ describe('selectNextQuestion', () => {
       expect(result).toBeDefined();
       expect(questions).toContain(result);
     }
+  });
+
+  // ── Phase ramp tests ───────────────────────────────────────────
+
+  test('roundIndex=0 (phase ramp start) selects randomly', () => {
+    const gamingQ = makeQuestion('q-gaming', ['gaming']);
+    const scienceQ = makeQuestion('q-science', ['science']);
+    const questions = [gamingQ, scienceQ];
+
+    const context: RoundSelectionContext = {
+      players: [
+        { profileId: 'alice', name: 'Alice', currentScore: 200 },
+        { profileId: 'bob', name: 'Bob', currentScore: 800 },
+      ],
+      playerTagScores: new Map([
+        ['alice', new Map([['gaming', 5000]])],
+        ['bob', new Map([['science', 5000]])],
+      ]),
+      roundIndex: 0,
+      totalRounds: 10,
+    };
+
+    // At roundIndex=0 catchUpInfluence=0, so selection is random
+    const random = seededRandom(42);
+    const result = selectNextQuestion(questions, context, random);
+    expect(questions).toContain(result);
+  });
+
+  test('phase ramp deterministic: same seed produces same result', () => {
+    const questions = [
+      makeQuestion('q1', ['gaming']),
+      makeQuestion('q2', ['science']),
+      makeQuestion('q3', ['history']),
+    ];
+    const context: RoundSelectionContext = {
+      players: [
+        { profileId: 'alice', name: 'Alice', currentScore: 200 },
+        { profileId: 'bob', name: 'Bob', currentScore: 800 },
+      ],
+      playerTagScores: new Map([['alice', new Map([['gaming', 5000]])]]),
+      roundIndex: 5,
+      totalRounds: 10,
+    };
+
+    const result1 = selectNextQuestion(questions, context, seededRandom(123));
+    const result2 = selectNextQuestion(questions, context, seededRandom(123));
+    expect(result1.id).toBe(result2.id);
+  });
+
+  test('late rounds (high roundIndex) favor catch-up more than early rounds', () => {
+    const gamingQ = makeQuestion('q-gaming', ['gaming']);
+    const scienceQ = makeQuestion('q-science', ['science']);
+    const questions = [gamingQ, scienceQ];
+
+    // Alice trails, is great at gaming → catch-up should prefer gaming Q
+    const baseContext = {
+      players: [
+        { profileId: 'alice', name: 'Alice', currentScore: 200 },
+        { profileId: 'bob', name: 'Bob', currentScore: 800 },
+      ],
+      playerTagScores: new Map([
+        ['alice', new Map([['gaming', 5000]])],
+        ['bob', new Map([['science', 5000]])],
+      ]),
+    };
+
+    // Early round (roundIndex=1 out of 20 → catchUpInfluence ≈ 0.067)
+    let earlyGaming = 0;
+    for (let i = 0; i < 500; i++) {
+      const q = selectNextQuestion(questions, {
+        ...baseContext,
+        roundIndex: 1,
+        totalRounds: 20,
+      });
+      if (q.id === 'q-gaming') earlyGaming++;
+    }
+
+    // Late round (roundIndex=18 out of 20 → catchUpInfluence = 1.0)
+    let lateGaming = 0;
+    for (let i = 0; i < 500; i++) {
+      const q = selectNextQuestion(questions, {
+        ...baseContext,
+        roundIndex: 18,
+        totalRounds: 20,
+      });
+      if (q.id === 'q-gaming') lateGaming++;
+    }
+
+    // Late rounds should show stronger catch-up preference
+    expect(lateGaming).toBeGreaterThan(earlyGaming);
+  });
+
+  test('single player returns random (no catch-up possible)', () => {
+    const questions = [makeQuestion('q1', ['gaming']), makeQuestion('q2', ['science'])];
+    const context: RoundSelectionContext = {
+      players: [{ profileId: 'p1', name: 'Alice', currentScore: 100 }],
+      playerTagScores: new Map([['p1', new Map([['gaming', 5000]])]]),
+      roundIndex: 5,
+      totalRounds: 10,
+    };
+
+    const results = new Set<string>();
+    for (let i = 0; i < 50; i++) {
+      results.add(selectNextQuestion(questions, context).id);
+    }
+    // Should pick from both (random)
+    expect(results.size).toBeGreaterThan(1);
+  });
+
+  test('works with SelectableQuestion (minimal interface)', () => {
+    const q1 = makeMinimalQuestion('q1', ['gaming']);
+    const q2 = makeMinimalQuestion('q2', ['science']);
+
+    const context: RoundSelectionContext = {
+      players: [
+        { profileId: 'p1', name: 'Alice', currentScore: 200 },
+        { profileId: 'p2', name: 'Bob', currentScore: 800 },
+      ],
+      playerTagScores: new Map(),
+      roundIndex: 5,
+      totalRounds: 10,
+    };
+
+    const result = selectNextQuestion([q1, q2], context);
+    expect([q1, q2]).toContain(result);
+  });
+});
+
+// ── buildQuestionPool ──────────────────────────────────────────────
+
+describe('buildQuestionPool', () => {
+  test('empty input returns empty array', () => {
+    const result = buildQuestionPool([], { nRounds: 5 });
+    expect(result).toEqual([]);
+  });
+
+  test('pool smaller than nRounds returns all questions', () => {
+    const questions = [makeMinimalQuestion('q1', ['a']), makeMinimalQuestion('q2', ['b'])];
+    const result = buildQuestionPool(questions, { nRounds: 5 });
+    expect(result).toHaveLength(2);
+    expect(new Set(result.map((q) => q.id))).toEqual(new Set(['q1', 'q2']));
+  });
+
+  test('pool equal to nRounds returns all questions', () => {
+    const questions = [
+      makeMinimalQuestion('q1', ['a']),
+      makeMinimalQuestion('q2', ['b']),
+      makeMinimalQuestion('q3', ['c']),
+    ];
+    const result = buildQuestionPool(questions, { nRounds: 3 });
+    expect(result).toHaveLength(3);
+  });
+
+  test('cold start (no tag scores) maximizes tag diversity', () => {
+    // 10 questions: 5 "gaming", 3 "science", 2 "history"
+    const questions = [
+      ...Array.from({ length: 5 }, (_, i) => makeMinimalQuestion(`g${i}`, ['gaming'])),
+      ...Array.from({ length: 3 }, (_, i) => makeMinimalQuestion(`s${i}`, ['science'])),
+      ...Array.from({ length: 2 }, (_, i) => makeMinimalQuestion(`h${i}`, ['history'])),
+    ];
+
+    const random = seededRandom(42);
+    const result = buildQuestionPool(questions, { nRounds: 3 }, random);
+    // Target size = min(9, 10) = 9
+
+    // All three tags should be represented
+    const tags = new Set(result.flatMap((q) => q.tags));
+    expect(tags).toContain('gaming');
+    expect(tags).toContain('science');
+    expect(tags).toContain('history');
+  });
+
+  test('deterministic: same seed produces same pool', () => {
+    const questions = Array.from({ length: 20 }, (_, i) =>
+      makeMinimalQuestion(`q${i}`, [`tag${i % 5}`]),
+    );
+
+    const result1 = buildQuestionPool(questions, { nRounds: 5 }, seededRandom(99));
+    const result2 = buildQuestionPool(questions, { nRounds: 5 }, seededRandom(99));
+
+    expect(result1.map((q) => q.id)).toEqual(result2.map((q) => q.id));
+  });
+
+  test('with tag scores: includes strength-targeted and diverse questions', () => {
+    const questions = [
+      makeMinimalQuestion('gaming1', ['gaming']),
+      makeMinimalQuestion('gaming2', ['gaming']),
+      makeMinimalQuestion('gaming3', ['gaming']),
+      makeMinimalQuestion('science1', ['science']),
+      makeMinimalQuestion('science2', ['science']),
+      makeMinimalQuestion('history1', ['history']),
+      makeMinimalQuestion('art1', ['art']),
+      makeMinimalQuestion('music1', ['music']),
+      makeMinimalQuestion('sports1', ['sports']),
+    ];
+
+    const playerTagScores = new Map([
+      ['player1', new Map([['gaming', 5000]])], // Strong at gaming
+    ]);
+
+    const random = seededRandom(42);
+    const result = buildQuestionPool(
+      questions,
+      { nRounds: 2, playerTagScores },
+      random,
+    );
+    // Target size = min(6, 9) = 6
+
+    expect(result).toHaveLength(6);
+
+    // Strength bucket should include gaming questions (high score)
+    const ids = result.map((q) => q.id);
+    // At least some gaming questions should be in the pool
+    const gamingInPool = ids.filter((id) => id.startsWith('gaming')).length;
+    expect(gamingInPool).toBeGreaterThanOrEqual(1);
+  });
+
+  test('target size is capped at 3× nRounds', () => {
+    const questions = Array.from({ length: 100 }, (_, i) =>
+      makeMinimalQuestion(`q${i}`, [`tag${i % 10}`]),
+    );
+
+    const result = buildQuestionPool(questions, { nRounds: 5 }, seededRandom(1));
+    expect(result).toHaveLength(15); // 5 * 3
+  });
+
+  test('target size capped at available questions', () => {
+    const questions = Array.from({ length: 8 }, (_, i) =>
+      makeMinimalQuestion(`q${i}`, [`tag${i % 3}`]),
+    );
+
+    const result = buildQuestionPool(questions, { nRounds: 5 }, seededRandom(1));
+    // 5*3=15 but only 8 available → returns all 8
+    expect(result).toHaveLength(8);
+  });
+
+  test('works with QuestionWithMeta (full type)', () => {
+    const questions = [
+      makeQuestion('q1', ['gaming']),
+      makeQuestion('q2', ['science']),
+      makeQuestion('q3', ['history']),
+      makeQuestion('q4', ['art']),
+    ];
+
+    const result = buildQuestionPool(questions, { nRounds: 1 }, seededRandom(42));
+    // target = min(3, 4) = 3
+    expect(result).toHaveLength(3);
+    // Should return QuestionWithMeta instances
+    expect(result[0].text).toBeDefined();
+  });
+
+  test('empty tag scores map treated as cold start', () => {
+    const questions = Array.from({ length: 10 }, (_, i) =>
+      makeMinimalQuestion(`q${i}`, [`tag${i % 4}`]),
+    );
+
+    const withEmpty = buildQuestionPool(
+      questions,
+      { nRounds: 3, playerTagScores: new Map() },
+      seededRandom(42),
+    );
+    const withoutScores = buildQuestionPool(
+      questions,
+      { nRounds: 3 },
+      seededRandom(42),
+    );
+
+    // Both should produce same result (same cold-start path)
+    expect(withEmpty.map((q) => q.id)).toEqual(withoutScores.map((q) => q.id));
   });
 });

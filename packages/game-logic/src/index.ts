@@ -45,8 +45,11 @@ export {
 } from './slices/playersSlice';
 export { type AppDispatch, type AppStore, createStore, type RootState } from './store';
 export {
+  buildQuestionPool,
+  type PoolBuildContext,
   type RoundSelectionContext,
   type RoundSelectionPlayer,
+  type SelectableQuestion,
   selectNextQuestion,
 } from './utils/questionSelection';
 // Utilities
