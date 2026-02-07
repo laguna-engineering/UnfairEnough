@@ -157,7 +157,17 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
       type,
       category: typeof qObj.category === 'string' ? qObj.category : undefined,
       tags: Array.isArray(qObj.tags)
-        ? qObj.tags.filter((t): t is string => typeof t === 'string')
+        ? (() => {
+            const raw = qObj.tags
+              .filter((t): t is string => typeof t === 'string')
+              .map((t) => t.toLowerCase().trim())
+              .filter((t) => t.length > 0);
+            const deduped = [...new Set(raw)];
+            if (deduped.length > 10) {
+              errors.push(`${prefix}.tags: has ${deduped.length} tags (recommended max 10)`);
+            }
+            return deduped;
+          })()
         : undefined,
       timeLimit: typeof qObj.timeLimit === 'number' ? qObj.timeLimit : undefined,
       media,
@@ -179,7 +189,14 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
     description: typeof obj.description === 'string' ? obj.description : undefined,
     defaultTimeLimit,
     tags: Array.isArray(obj.tags)
-      ? obj.tags.filter((t): t is string => typeof t === 'string')
+      ? [
+          ...new Set(
+            obj.tags
+              .filter((t): t is string => typeof t === 'string')
+              .map((t) => t.toLowerCase().trim())
+              .filter((t) => t.length > 0),
+          ),
+        ]
       : undefined,
     questions,
   };

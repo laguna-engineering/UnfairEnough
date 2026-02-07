@@ -59,7 +59,9 @@
           },
           "tags": {
             "type": "array",
-            "items": { "type": "string" }
+            "items": { "type": "string" },
+            "maxItems": 10,
+            "description": "Tags for difficulty personalization (e.g. zelda, nintendo, gaming). Max 10."
           },
           "timeLimit": {
             "type": "integer",

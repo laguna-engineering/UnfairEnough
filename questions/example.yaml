@@ -10,6 +10,7 @@ questions:
   - id: ex-1
     text: "What color is the sky on a clear day?"
     category: science
+    tags: [science, nature, weather]
     options:
       - key: A
         text: "Red"
@@ -24,6 +25,7 @@ questions:
   - id: ex-2
     text: "How many legs does a spider have?"
     category: science
+    tags: [science, animals, biology]
     timeLimit: 10
     options:
       - key: A
@@ -40,6 +42,7 @@ questions:
   - id: ex-3
     text: "What is the name of this animal?"
     category: animals
+    tags: [animals, images]
     media:
       type: image
       url: "https://example.com/cat.jpg"
