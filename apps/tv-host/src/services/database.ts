@@ -7,7 +7,6 @@ import {
   runMigrations,
 } from '@unfairenough/db';
 import * as Crypto from 'expo-crypto';
-import * as SQLite from 'expo-sqlite';
 
 let db: DbAdapter | null = null;
 
@@ -22,6 +21,8 @@ let db: DbAdapter | null = null;
 export async function initDatabase(): Promise<DbAdapter> {
   if (db) return db;
 
+  // Lazy require: expo-sqlite uses native modules unavailable on web
+  const SQLite = require('expo-sqlite');
   const sqlite = await SQLite.openDatabaseAsync('unfairenough.db');
   db = createExpoAdapter(sqlite);
 

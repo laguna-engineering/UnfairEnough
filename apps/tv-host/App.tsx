@@ -6,11 +6,11 @@ import { useFonts } from '@expo-google-fonts/sniglet/useFonts';
 import { StatusBar } from 'expo-status-bar';
 import type React from 'react';
 import { useCallback, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 import { GameModeProvider } from './src/context/GameModeContext';
 import { ConnectScreen } from './src/screens/ConnectScreen';
 import { GameScreen } from './src/screens/GameScreen';
 import { ModeSelectionScreen } from './src/screens/ModeSelectionScreen';
-import { gameController } from './src/services/GameController';
 import { HostedGameController } from './src/services/HostedGameController';
 import type { IGameController } from './src/services/IGameController';
 import '@unfairenough/i18n';
@@ -25,7 +25,9 @@ export default function App() {
     Nunito_700Bold,
   });
 
-  const [screen, setScreen] = useState<AppScreen>('mode_select');
+  const [screen, setScreen] = useState<AppScreen>(
+    Platform.OS === 'web' ? 'connect' : 'mode_select',
+  );
   const [hostedServerUrl, setHostedServerUrl] = useState<string>('');
   const hostedControllerRef = useRef<HostedGameController | null>(null);
 
@@ -57,7 +59,7 @@ export default function App() {
   const handleBack = useCallback(() => {
     hostedControllerRef.current?.cleanup();
     hostedControllerRef.current = null;
-    setScreen('mode_select');
+    setScreen(Platform.OS === 'web' ? 'connect' : 'mode_select');
   }, []);
 
   if (!fontsLoaded) return null;
@@ -85,7 +87,9 @@ export default function App() {
         </>
       );
 
-    case 'local_game':
+    case 'local_game': {
+      // Lazy require to avoid loading react-native-tcp-socket on web
+      const { gameController } = require('./src/services/GameController');
       controller = gameController;
       content = <GameScreen />;
       return (
@@ -96,6 +100,7 @@ export default function App() {
           </GameModeProvider>
         </>
       );
+    }
 
     case 'hosted_game':
       controller = hostedControllerRef.current!;
