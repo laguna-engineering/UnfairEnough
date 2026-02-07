@@ -27,7 +27,12 @@ const COLORS = [
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
 type ServerReadyCallback = (data: { port: number; localIp: string; roomCode: string }) => void;
-type PlayerJoinedCallback = (data: { playerId: string; name: string; color: string }) => void;
+type PlayerJoinedCallback = (data: {
+  playerId: string;
+  name: string;
+  color: string;
+  deviceId?: string;
+}) => void;
 type PlayerLeftCallback = (data: { playerId: string }) => void;
 type AnswerReceivedCallback = (data: {
   playerId: string;
@@ -256,6 +261,7 @@ class WebSocketServerService {
         case 'JOIN': {
           const playerId = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           const color = COLORS[this.colorIndex++ % COLORS.length];
+          const deviceId: string | undefined = message.payload.deviceId;
           const playerData = { playerId, name: message.payload.name, color };
 
           client.playerId = playerId;
@@ -264,7 +270,7 @@ class WebSocketServerService {
             type: 'WELCOME',
             payload: { ...playerData, language: this.language },
           });
-          this.callbacks.onPlayerJoined?.(playerData);
+          this.callbacks.onPlayerJoined?.({ ...playerData, deviceId });
           this.broadcast({ type: 'PLAYER_JOINED', payload: playerData });
           break;
         }

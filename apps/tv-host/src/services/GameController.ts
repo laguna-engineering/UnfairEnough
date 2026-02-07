@@ -3,21 +3,32 @@
  * Orchestrates the game flow, timing, and scoring
  */
 
-import { type QuestionWithMeta, questionsRepo } from '@unfairenough/db';
+import {
+  type QuestionWithMeta,
+  playerTagScoresRepo,
+  playersRepo,
+  questionsRepo,
+} from '@unfairenough/db';
 import {
   addPlayer,
   addPoints,
+  buildQuestionPool,
   calculateScore,
+  computePlayerDifficulty,
+  computeTagUpdates,
   createStore,
+  decayedScore,
+  difficultyMultiplier,
   endGame,
   nextQuestion,
   playersSelectors,
-  type QuestionWithAnswer,
-  type RootState,
   rankPlayers,
   receiveAnswer,
   removePlayer,
+  resolvePlayerDifficulty,
   resetGame,
+  type RootState,
+  selectNextQuestion,
   setServerReady,
   showMediaPreview,
   showQuestion,
@@ -33,6 +44,12 @@ import { getDb, initDatabase } from './database';
 import type { IGameController } from './IGameController';
 import { wsServer } from './WebSocketServer';
 
+/** In-memory player profile info resolved at join time */
+interface LocalPlayerProfile {
+  profileId: string;
+  deviceId: string;
+}
+
 class GameController implements IGameController {
   private store = createStore();
   private countdownTimer: ReturnType<typeof setInterval> | null = null;
@@ -40,9 +57,17 @@ class GameController implements IGameController {
   private mediaPreviewTimeout: ReturnType<typeof setTimeout> | null = null;
   private revealTimeout: ReturnType<typeof setTimeout> | null = null;
   private resultsTimeout: ReturnType<typeof setTimeout> | null = null;
-  private questions: QuestionWithAnswer[] = [];
+
+  // Question state — keep full QuestionWithMeta for tags, difficulty, etc.
+  private questionPool: QuestionWithMeta[] = [];
+  private usedQuestionIds = new Set<string>();
   private currentQuestionIndex = 0;
   private questionStartTime = 0;
+
+  // Tag-based personalization state
+  private playerProfiles = new Map<string, LocalPlayerProfile>(); // playerId -> profile
+  private playerTagScores = new Map<string, Map<string, number>>(); // profileId -> tag -> decayed score
+  private currentRoundDifficulties = new Map<string, number>(); // playerId -> difficulty
 
   constructor() {
     this.setupServerCallbacks();
@@ -63,14 +88,48 @@ class GameController implements IGameController {
             isConnected: true,
           }),
         );
+        // Resolve player profile if deviceId was provided
+        if (data.deviceId) {
+          this.resolvePlayerProfile(data.playerId, data.name, data.deviceId);
+        }
       },
       onPlayerLeft: (data) => {
         this.store.dispatch(removePlayer(data.playerId));
+        this.playerProfiles.delete(data.playerId);
       },
       onAnswerReceived: (data) => {
         this.handleAnswer(data);
       },
     });
+  }
+
+  /**
+   * Resolve player profile from deviceId — look up or create in local DB.
+   */
+  private async resolvePlayerProfile(
+    playerId: string,
+    name: string,
+    deviceId: string,
+  ): Promise<void> {
+    try {
+      const db = getDb();
+      const existing = await playersRepo.findByDeviceId(db, deviceId);
+      if (existing) {
+        this.playerProfiles.set(playerId, { profileId: existing.id, deviceId });
+        if (existing.displayName !== name) {
+          await playersRepo.updateDisplayName(db, existing.id, name);
+        } else {
+          await playersRepo.updateLastSeen(db, existing.id);
+        }
+      } else {
+        const profileId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const player = playersSelectors.selectById(this.store.getState().players, playerId);
+        await playersRepo.createPlayer(db, profileId, name, player?.color ?? '#FFFFFF', deviceId);
+        this.playerProfiles.set(playerId, { profileId, deviceId });
+      }
+    } catch (err) {
+      console.error('Player profile resolution failed:', err);
+    }
   }
 
   async initialize(): Promise<void> {
@@ -98,68 +157,150 @@ class GameController implements IGameController {
       return;
     }
 
-    // Load questions from DB, then start countdown
-    this.loadQuestions()
-      .then((questions) => {
-        this.questions = questions;
-        this.currentQuestionIndex = 0;
-
-        this.store.dispatch(startGameCountdown());
-        wsServer.sendGameStarting(3);
-
-        this.countdownTimer = setInterval(() => {
-          this.store.dispatch(tickGameCountdown());
-          const newState = this.getState();
-
-          if (newState.game.countdown <= 0) {
-            this.clearCountdownTimer();
-            this.showNextQuestion();
-          } else {
-            wsServer.sendGameStarting(newState.game.countdown);
-          }
-        }, 1000);
-      })
-      .catch((err) => {
-        console.error('Failed to load questions:', err);
-      });
+    this.loadQuestionsAndStart().catch((err) => {
+      console.error('Failed to load questions:', err);
+    });
   }
 
   /**
-   * Load questions from the local SQLite database.
+   * Load questions, build pool, load tag scores, and start the countdown.
    */
-  private async loadQuestions(): Promise<QuestionWithAnswer[]> {
+  private async loadQuestionsAndStart(): Promise<void> {
     const db = getDb();
     const state = this.getState();
     const { gameType, questionSetId, totalQuestions } = state.game.config;
+
+    // Load tag scores for profiled players
+    await this.loadPlayerTagScores();
 
     let dbQuestions: QuestionWithMeta[];
 
     if (gameType === 'configured' && questionSetId) {
       dbQuestions = await questionsRepo.getQuestionsBySet(db, questionSetId);
+      this.questionPool = dbQuestions;
     } else {
-      dbQuestions = await questionsRepo.getRandomQuestions(db, totalQuestions);
+      // Casual mode: load 3× and curate via buildQuestionPool
+      const rawPool = await questionsRepo.getRandomQuestions(db, totalQuestions * 3);
+      this.questionPool = buildQuestionPool(rawPool, {
+        nRounds: totalQuestions,
+        playerTagScores: this.playerTagScores,
+      });
     }
 
-    return dbQuestions.map((q) => ({
-      id: q.id,
-      text: q.text,
-      type: q.type,
-      options: q.options,
-      correctAnswer: q.correctAnswer as AnswerKey,
-      media: q.media ?? undefined,
-    }));
+    if (this.questionPool.length === 0) {
+      console.warn('No questions available');
+      return;
+    }
+
+    this.currentQuestionIndex = 0;
+    this.usedQuestionIds.clear();
+
+    this.store.dispatch(startGameCountdown());
+    wsServer.sendGameStarting(3);
+
+    this.countdownTimer = setInterval(() => {
+      this.store.dispatch(tickGameCountdown());
+      const newState = this.getState();
+
+      if (newState.game.countdown <= 0) {
+        this.clearCountdownTimer();
+        this.showNextQuestion();
+      } else {
+        wsServer.sendGameStarting(newState.game.countdown);
+      }
+    }, 1000);
+  }
+
+  /**
+   * Load decayed tag scores for all profiled players into memory.
+   */
+  private async loadPlayerTagScores(): Promise<void> {
+    this.playerTagScores.clear();
+    const profileIds = [...this.playerProfiles.values()].map((p) => p.profileId);
+    if (profileIds.length === 0) return;
+
+    try {
+      const db = getDb();
+      const allScores = await playerTagScoresRepo.getTagScoresForPlayers(db, profileIds);
+      for (const [profileId, tagScores] of allScores) {
+        const scoreMap = new Map<string, number>();
+        for (const ts of tagScores) {
+          scoreMap.set(ts.tag, decayedScore(ts.score, ts.gamesPlayed));
+        }
+        this.playerTagScores.set(profileId, scoreMap);
+      }
+    } catch (err) {
+      console.error('Failed to load player tag scores:', err);
+    }
+  }
+
+  private get totalQuestionCount(): number {
+    const state = this.getState();
+    const { gameType, totalQuestions } = state.game.config;
+    if (gameType === 'configured') return this.questionPool.length;
+    return Math.min(totalQuestions, this.questionPool.length);
+  }
+
+  /**
+   * Get the current question — configured mode uses index, casual mode uses last used ID.
+   */
+  private getCurrentQuestion(): QuestionWithMeta | null {
+    const state = this.getState();
+    if (state.game.config.gameType === 'configured') {
+      return this.questionPool[this.currentQuestionIndex] ?? null;
+    }
+    // Casual mode: find by last used ID
+    const usedIds = [...this.usedQuestionIds];
+    const lastUsedId = usedIds[this.currentQuestionIndex];
+    if (!lastUsedId) return null;
+    return this.questionPool.find((q) => q.id === lastUsedId) ?? null;
   }
 
   /**
    * Show the next question (with optional media preview)
    */
   private showNextQuestion(): void {
-    if (this.currentQuestionIndex >= this.questions.length) {
+    if (this.currentQuestionIndex >= this.totalQuestionCount) {
       this.endGame();
       return;
     }
 
-    const question = this.questions[this.currentQuestionIndex];
+    const state = this.getState();
+    let question: QuestionWithMeta;
+
+    if (state.game.config.gameType === 'configured') {
+      // Configured mode: use authored order
+      if (this.currentQuestionIndex >= this.questionPool.length) {
+        this.endGame();
+        return;
+      }
+      question = this.questionPool[this.currentQuestionIndex];
+    } else {
+      // Casual mode: dynamically select from remaining pool
+      const remaining = this.questionPool.filter((q) => !this.usedQuestionIds.has(q.id));
+      if (remaining.length === 0) {
+        this.endGame();
+        return;
+      }
+
+      const players = this.buildSelectionPlayers();
+      if (players.length === 0) {
+        // No profiled players — random pick
+        question = remaining[Math.floor(Math.random() * remaining.length)];
+      } else {
+        question = selectNextQuestion(remaining, {
+          players,
+          playerTagScores: this.playerTagScores,
+          roundIndex: this.currentQuestionIndex,
+          totalRounds: this.totalQuestionCount,
+        });
+      }
+      this.usedQuestionIds.add(question.id);
+    }
+
+    // Compute per-player difficulties for this question
+    this.computeRoundDifficulties(question);
+
     const media = question.media;
 
     if (media) {
@@ -167,7 +308,7 @@ class GameController implements IGameController {
 
       const previewPayload = {
         questionNumber: this.currentQuestionIndex + 1,
-        totalQuestions: this.questions.length,
+        totalQuestions: this.totalQuestionCount,
         media: { type: media.type as 'image' | 'audio' | 'video', url: media.url },
         duration: previewDuration,
       };
@@ -185,9 +326,50 @@ class GameController implements IGameController {
   }
 
   /**
+   * Build RoundSelectionPlayer array from profiled players for selectNextQuestion.
+   */
+  private buildSelectionPlayers() {
+    const state = this.getState();
+    const players = playersSelectors.selectAll(state.players);
+    return players
+      .filter((p) => this.playerProfiles.has(p.id))
+      .map((p) => ({
+        profileId: this.playerProfiles.get(p.id)!.profileId,
+        name: p.name,
+        currentScore: p.score,
+      }));
+  }
+
+  /**
+   * Compute per-player difficulty for the current question.
+   */
+  private computeRoundDifficulties(q: QuestionWithMeta): void {
+    this.currentRoundDifficulties.clear();
+    const state = this.getState();
+    const players = playersSelectors.selectAll(state.players);
+
+    for (const player of players) {
+      const profile = this.playerProfiles.get(player.id);
+      if (profile && q.tags.length > 0) {
+        const tagScores =
+          this.playerTagScores.get(profile.profileId) ?? new Map<string, number>();
+        const dynamicDifficulty = computePlayerDifficulty(tagScores, q.tags);
+        const effective = resolvePlayerDifficulty(
+          player.name,
+          q.playerDifficulty,
+          dynamicDifficulty,
+        );
+        this.currentRoundDifficulties.set(player.id, effective);
+      } else {
+        this.currentRoundDifficulties.set(player.id, 2.5);
+      }
+    }
+  }
+
+  /**
    * Send the actual question (after optional media preview)
    */
-  private sendQuestion(question: QuestionWithAnswer): void {
+  private sendQuestion(question: QuestionWithMeta): void {
     const state = this.getState();
     const timeLimit = state.game.config.questionTimeLimit;
 
@@ -197,7 +379,7 @@ class GameController implements IGameController {
       options: question.options,
       timeLimit,
       questionNumber: this.currentQuestionIndex + 1,
-      totalQuestions: this.questions.length,
+      totalQuestions: this.totalQuestionCount,
       serverTimestamp: Date.now(),
     };
 
@@ -262,12 +444,17 @@ class GameController implements IGameController {
   }
 
   /**
-   * Calculate and show round results
+   * Calculate and show round results with difficulty multipliers
    */
   private showRoundResults(): void {
     const state = this.getState();
-    const currentQuestion = this.questions[this.currentQuestionIndex];
-    const correctAnswer = currentQuestion.correctAnswer;
+    const currentQuestion = this.getCurrentQuestion();
+    if (!currentQuestion) {
+      this.endGame();
+      return;
+    }
+
+    const correctAnswer = currentQuestion.correctAnswer as AnswerKey;
     const timeLimit = state.game.config.questionTimeLimit;
 
     const players = playersSelectors.selectAll(state.players);
@@ -277,12 +464,17 @@ class GameController implements IGameController {
       const playerAnswer = answers[player.id];
       const isCorrect = playerAnswer?.answer === correctAnswer;
       let responseTimeMs: number | null = null;
-      let pointsEarned = 0;
+      let baseScore = 0;
 
       if (playerAnswer) {
         responseTimeMs = playerAnswer.serverReceivedAt - this.questionStartTime;
-        pointsEarned = calculateScore(isCorrect, responseTimeMs, timeLimit);
+        baseScore = calculateScore(isCorrect, responseTimeMs, timeLimit);
       }
+
+      // Apply difficulty multiplier
+      const playerDifficulty = this.currentRoundDifficulties.get(player.id) ?? 2.5;
+      const multiplier = difficultyMultiplier(playerDifficulty);
+      const pointsEarned = Math.round(baseScore * multiplier);
 
       // Update score in store
       if (pointsEarned > 0) {
@@ -299,8 +491,11 @@ class GameController implements IGameController {
         answer: playerAnswer?.answer ?? null,
         isCorrect,
         responseTimeMs,
+        baseScore,
+        difficultyMultiplier: multiplier,
         pointsEarned,
         totalScore: updatedPlayer?.score ?? player.score,
+        difficulty: playerDifficulty,
       };
     });
 
@@ -318,28 +513,67 @@ class GameController implements IGameController {
 
     this.store.dispatch(showRoundResults({ results: playerResults, rankings }));
 
-    // Broadcast results
+    // Broadcast results with tags
     wsServer.broadcast({
       type: 'ROUND_END',
       payload: {
         questionId: currentQuestion.id,
         correctAnswer,
+        tags: currentQuestion.tags.length > 0 ? currentQuestion.tags : undefined,
         playerResults,
         rankings,
       },
     });
 
+    // Update tag scores for profiled players (async, don't block gameplay)
+    this.updateTagScoresAfterRound(currentQuestion, playerResults).catch((err) =>
+      console.error('Failed to update tag scores:', err),
+    );
+
     // Move to next question after showing results
     this.resultsTimeout = setTimeout(() => {
       this.resultsTimeout = null;
       this.currentQuestionIndex++;
-      if (this.currentQuestionIndex < this.questions.length) {
+      if (this.currentQuestionIndex < this.totalQuestionCount) {
         this.store.dispatch(nextQuestion());
         this.showNextQuestion();
       } else {
         this.endGame();
       }
     }, 5000);
+  }
+
+  /**
+   * Update tag scores in-memory and persist to local DB after each round.
+   */
+  private async updateTagScoresAfterRound(
+    question: QuestionWithMeta,
+    playerResults: PlayerResult[],
+  ): Promise<void> {
+    if (question.tags.length === 0) return;
+
+    const db = getDb();
+
+    for (const result of playerResults) {
+      const profile = this.playerProfiles.get(result.playerId);
+      if (!profile) continue;
+
+      const updates = computeTagUpdates(question.tags, result.isCorrect, result.baseScore);
+
+      for (const update of updates) {
+        // Persist to local DB
+        const id = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        playerTagScoresRepo
+          .upsertTagScore(db, id, profile.profileId, update.tag, update.delta, result.isCorrect)
+          .catch((err) => console.error('Failed to upsert tag score:', err));
+
+        // Update in-memory scores for next round's question selection
+        const existing =
+          this.playerTagScores.get(profile.profileId) ?? new Map<string, number>();
+        existing.set(update.tag, (existing.get(update.tag) ?? 0) + update.delta);
+        this.playerTagScores.set(profile.profileId, existing);
+      }
+    }
   }
 
   /**
@@ -371,6 +605,23 @@ class GameController implements IGameController {
         positionHistory: state.game.positionHistory,
       },
     });
+
+    // Increment games_played on all tag scores for decay tracking
+    this.incrementTagGamesPlayed().catch((err) =>
+      console.error('Failed to increment tag games played:', err),
+    );
+  }
+
+  /**
+   * Increment games_played for decay tracking on all profiled players' tag scores.
+   */
+  private async incrementTagGamesPlayed(): Promise<void> {
+    const db = getDb();
+    for (const profile of this.playerProfiles.values()) {
+      playerTagScoresRepo
+        .incrementGamesPlayed(db, profile.profileId)
+        .catch((err) => console.error('Failed to increment tag games played:', err));
+    }
   }
 
   /**
@@ -380,7 +631,6 @@ class GameController implements IGameController {
     this.store.dispatch(updateConfig({ gameType, questionSetId }));
 
     if (gameType === 'configured' && questionSetId) {
-      // Validate the set exists and has questions
       const db = getDb();
       questionsRepo
         .getQuestionSet(db, questionSetId)
@@ -408,8 +658,11 @@ class GameController implements IGameController {
   reset(): void {
     this.clearAllTimers();
     this.store.dispatch(resetGame());
-    this.questions = [];
+    this.questionPool = [];
+    this.usedQuestionIds.clear();
     this.currentQuestionIndex = 0;
+    this.playerTagScores.clear();
+    this.currentRoundDifficulties.clear();
   }
 
   private clearCountdownTimer(): void {
