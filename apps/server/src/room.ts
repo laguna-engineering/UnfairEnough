@@ -11,7 +11,10 @@ import type {
 } from '@unfairenough/ws-protocol';
 import { generatePlayerId, parseClientMessage } from '@unfairenough/ws-protocol';
 import type { ServerWebSocket } from 'bun';
-import { selectNextQuestion } from '../../../packages/game-logic/src/utils/questionSelection';
+import {
+  buildQuestionPool,
+  selectNextQuestion,
+} from '../../../packages/game-logic/src/utils/questionSelection';
 import { calculateScore, rankPlayers } from '../../../packages/game-logic/src/utils/scoring';
 import {
   computePlayerDifficulty,
@@ -325,6 +328,9 @@ export class GameRoom {
     if (this.phase !== 'LOBBY') return;
     if (this.players.size === 0) return;
 
+    // Load tag scores early — needed for both pool building and per-round selection
+    await this.loadPlayerTagScores();
+
     // Load questions based on game configuration
     if (this.gameType === 'configured' && this.questionSetId) {
       this.questions = await questionsRepo.getQuestionsBySet(this.db, this.questionSetId);
@@ -334,10 +340,14 @@ export class GameRoom {
       }
       this.questionPool = [];
     } else {
-      // Casual mode: load a larger pool, select dynamically per round
+      // Casual mode: load 3× the requested count, curate via buildQuestionPool
       const requestedCount = this.configuredTotalQuestions ?? TOTAL_QUESTIONS;
-      // Load 3x the requested count as the pool (or all available)
-      this.questionPool = await questionsRepo.getRandomQuestions(this.db, requestedCount * 3);
+      const rawPool = await questionsRepo.getRandomQuestions(this.db, requestedCount * 3);
+
+      this.questionPool = buildQuestionPool(rawPool, {
+        nRounds: requestedCount,
+        playerTagScores: this.playerTagScores,
+      });
       // Pre-select first batch for fallback (in case pool is small)
       this.questions = this.questionPool.slice(0, requestedCount);
     }
@@ -346,9 +356,6 @@ export class GameRoom {
     this.currentQuestionIndex = 0;
     this.positionHistory = [];
     this.usedQuestionIds.clear();
-
-    // Load tag scores for all profiled players
-    await this.loadPlayerTagScores();
 
     // Create game session in DB
     this.gameId = crypto.randomUUID();
@@ -476,8 +483,8 @@ export class GameRoom {
   private handleAnswer(ws: ServerWebSocket<WSData>, questionId: string, answer: AnswerKey): void {
     if (this.phase !== 'QUESTION') return;
 
-    const q = this.questions[this.currentQuestionIndex];
-    if (q.id !== questionId) return;
+    const q = this.getCurrentQuestion();
+    if (!q || q.id !== questionId) return;
 
     const playerId = ws.data.playerId;
     if (!playerId || this.answers.has(playerId)) return;
@@ -743,6 +750,8 @@ export class GameRoom {
     return selectNextQuestion(remaining, {
       players,
       playerTagScores: this.playerTagScores,
+      roundIndex: this.currentQuestionIndex,
+      totalRounds: this.totalQuestionCount,
     });
   }
 
