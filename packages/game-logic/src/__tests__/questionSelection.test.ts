@@ -389,11 +389,7 @@ describe('buildQuestionPool', () => {
     ]);
 
     const random = seededRandom(42);
-    const result = buildQuestionPool(
-      questions,
-      { nRounds: 2, playerTagScores },
-      random,
-    );
+    const result = buildQuestionPool(questions, { nRounds: 2, playerTagScores }, random);
     // Target size = min(6, 9) = 6
 
     expect(result).toHaveLength(6);
@@ -449,11 +445,7 @@ describe('buildQuestionPool', () => {
       { nRounds: 3, playerTagScores: new Map() },
       seededRandom(42),
     );
-    const withoutScores = buildQuestionPool(
-      questions,
-      { nRounds: 3 },
-      seededRandom(42),
-    );
+    const withoutScores = buildQuestionPool(questions, { nRounds: 3 }, seededRandom(42));
 
     // Both should produce same result (same cold-start path)
     expect(withEmpty.map((q) => q.id)).toEqual(withoutScores.map((q) => q.id));

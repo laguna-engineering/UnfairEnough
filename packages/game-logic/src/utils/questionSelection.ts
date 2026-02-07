@@ -106,9 +106,7 @@ function selectDiverse<T extends SelectableQuestion>(
     const candidates: number[] = [];
 
     for (let i = 0; i < remaining.length; i++) {
-      const newTags = remaining[i].tags.filter(
-        (t) => !usedTags.has(t.toLowerCase().trim()),
-      ).length;
+      const newTags = remaining[i].tags.filter((t) => !usedTags.has(t.toLowerCase().trim())).length;
       if (newTags > bestNewTags) {
         bestNewTags = newTags;
         candidates.length = 0;
@@ -222,8 +220,7 @@ export function selectNextQuestion<T extends SelectableQuestion>(
 
     // Blend catch-up with randomness based on phase ramp
     const randomScore = random();
-    const blendedScore =
-      catchUpInfluence * catchUpScore + (1 - catchUpInfluence) * randomScore;
+    const blendedScore = catchUpInfluence * catchUpScore + (1 - catchUpInfluence) * randomScore;
 
     return { question: q, score: blendedScore };
   });

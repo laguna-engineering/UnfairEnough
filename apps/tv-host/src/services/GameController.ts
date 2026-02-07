@@ -4,9 +4,9 @@
  */
 
 import {
-  type QuestionWithMeta,
-  playerTagScoresRepo,
   playersRepo,
+  playerTagScoresRepo,
+  type QuestionWithMeta,
   questionsRepo,
 } from '@unfairenough/db';
 import {
@@ -22,12 +22,12 @@ import {
   endGame,
   nextQuestion,
   playersSelectors,
+  type RootState,
   rankPlayers,
   receiveAnswer,
   removePlayer,
-  resolvePlayerDifficulty,
   resetGame,
-  type RootState,
+  resolvePlayerDifficulty,
   selectNextQuestion,
   setServerReady,
   showMediaPreview,
@@ -351,8 +351,7 @@ class GameController implements IGameController {
     for (const player of players) {
       const profile = this.playerProfiles.get(player.id);
       if (profile && q.tags.length > 0) {
-        const tagScores =
-          this.playerTagScores.get(profile.profileId) ?? new Map<string, number>();
+        const tagScores = this.playerTagScores.get(profile.profileId) ?? new Map<string, number>();
         const dynamicDifficulty = computePlayerDifficulty(tagScores, q.tags);
         const effective = resolvePlayerDifficulty(
           player.name,
@@ -568,8 +567,7 @@ class GameController implements IGameController {
           .catch((err) => console.error('Failed to upsert tag score:', err));
 
         // Update in-memory scores for next round's question selection
-        const existing =
-          this.playerTagScores.get(profile.profileId) ?? new Map<string, number>();
+        const existing = this.playerTagScores.get(profile.profileId) ?? new Map<string, number>();
         existing.set(update.tag, (existing.get(update.tag) ?? 0) + update.delta);
         this.playerTagScores.set(profile.profileId, existing);
       }
