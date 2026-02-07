@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Unfair Enough!",
+    "slug": "unfairenough-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to scan QR codes to join games"
+        }
+      ]
+    ],
+    "android": {
+      "package": "com.unfairenough.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a1a2e"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.unfairenough.mobile",
+      "supportsTablet": true
+    }
+  }
+}

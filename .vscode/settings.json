@@ -1,0 +1,5 @@
+{
+  "yaml.schemas": {
+    "./packages/db/question-set.schema.json": "questions/**/*.yaml"
+  }
+}

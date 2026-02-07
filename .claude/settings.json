@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "mcp__plugin_compound-engineering_context7__resolve-library-id",
+      "WebSearch",
+      "mcp__plugin_compound-engineering_context7__query-docs",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(curl:*)",
+      "WebFetch(domain:docs.expo.dev)",
+      "WebFetch(domain:dev.to)",
+      "WebFetch(domain:devportal.noriginmedia.com)",
+      "Bash(yarn install:*)",
+      "Bash(yarn workspaces:*)",
+      "Bash(yarn workspaces list:*)",
+      "Bash(adb logcat:*)",
+      "Bash(adb shell am:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs:*)",
+      "Bash(adb shell:*)",
+      "Bash(adb pull:*)",
+      "Bash(yarn add:*)",
+      "Bash(EXPO_TV=1 npx expo prebuild:*)",
+      "Bash(EXPO_TV=1 npx expo run:android:*)",
+      "Bash(adb reverse:*)",
+      "Bash(echo:*)",
+      "Bash(adb forward:*)",
+      "Bash(yarn start)",
+      "Bash(node:*)",
+      "Bash(timeout 5 bun run:*)",
+      "Bash(grep:*)",
+      "Bash(yarn workspace:*)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}

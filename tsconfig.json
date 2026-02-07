@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@unfairenough/*": ["packages/*/src"]
+    }
+  },
+  "extends": "expo/tsconfig.base",
+  "exclude": ["node_modules", "**/node_modules", "apps/*/android", "apps/*/ios"]
+}

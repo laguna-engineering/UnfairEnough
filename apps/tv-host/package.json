@@ -1,0 +1,55 @@
+{
+  "name": "@unfairenough/tv-host",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "EXPO_TV=1 expo start",
+    "android": "EXPO_TV=1 expo run:android",
+    "ios": "EXPO_TV=1 expo run:ios",
+    "web": "expo start --web",
+    "prebuild": "EXPO_TV=1 expo prebuild --clean"
+  },
+  "dependencies": {
+    "@expo-google-fonts/nunito": "^0.4.2",
+    "@expo-google-fonts/sniglet": "^0.4.1",
+    "@expo/metro-runtime": "~6.1.1",
+    "@reduxjs/toolkit": "^2.3.0",
+    "@unfairenough/db": "*",
+    "@unfairenough/game-logic": "*",
+    "@unfairenough/i18n": "*",
+    "@unfairenough/ui": "*",
+    "@unfairenough/ws-protocol": "*",
+    "buffer": "^6.0.3",
+    "expo": "^54.0.20",
+    "expo-crypto": "^15.0.8",
+    "expo-linear-gradient": "^15.0.8",
+    "expo-localization": "~16.0.0",
+    "expo-network": "^8.0.8",
+    "expo-sqlite": "~15.1.2",
+    "expo-splash-screen": "~31.0.10",
+    "expo-status-bar": "~3.0.8",
+    "i18next": "^24.0.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-i18next": "^15.0.0",
+    "react-native": "npm:react-native-tvos@0.81-stable",
+    "react-native-qrcode-svg": "^6.3.2",
+    "react-native-svg": "^15.9.0",
+    "react-native-tcp-socket": "^6.4.1",
+    "react-native-web": "^0.21.0",
+    "react-redux": "^9.1.0"
+  },
+  "devDependencies": {
+    "@react-native-tvos/config-tv": "^0.1.4",
+    "@types/react": "~19.1.10",
+    "typescript": "~5.9.2"
+  },
+  "expo": {
+    "install": {
+      "exclude": [
+        "react-native"
+      ]
+    }
+  }
+}

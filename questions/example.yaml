@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=../packages/db/question-set.schema.json
+
+name: "Example Quiz"
+author: "Your Name"
+description: "Copy this file as a starting point"
+defaultTimeLimit: 15
+tags: [example]
+
+questions:
+  - id: ex-1
+    text: "What color is the sky on a clear day?"
+    category: science
+    options:
+      - key: A
+        text: "Red"
+      - key: B
+        text: "Blue"
+      - key: C
+        text: "Green"
+      - key: D
+        text: "Yellow"
+    correctAnswer: B
+
+  - id: ex-2
+    text: "How many legs does a spider have?"
+    category: science
+    timeLimit: 10
+    options:
+      - key: A
+        text: "6"
+      - key: B
+        text: "8"
+      - key: C
+        text: "10"
+      - key: D
+        text: "12"
+    correctAnswer: B
+    explanation: "Spiders are arachnids, not insects — they have 8 legs."
+
+  - id: ex-3
+    text: "What is the name of this animal?"
+    category: animals
+    media:
+      type: image
+      url: "https://example.com/cat.jpg"
+      previewDuration: 5
+    options:
+      - key: A
+        text: "Dog"
+      - key: B
+        text: "Cat"
+      - key: C
+        text: "Bird"
+      - key: D
+        text: "Fish"
+    correctAnswer: B

@@ -1,0 +1,9 @@
+{
+  "name": "@unfairenough/ws-protocol",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "echo 'No build needed - TypeScript source consumed directly'"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@unfairenough/i18n",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "echo 'No build needed - TypeScript source consumed directly'"
+  },
+  "dependencies": {
+    "i18next": "^24.0.0",
+    "react-i18next": "^15.0.0",
+    "expo-localization": "~16.0.0"
+  },
+  "peerDependencies": {
+    "react": "*"
+  }
+}

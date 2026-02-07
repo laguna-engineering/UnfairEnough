@@ -1,0 +1,32 @@
+{
+  "name": "unfairenough-monorepo",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "tv": "yarn workspace @unfairenough/tv-host",
+    "mobile": "yarn workspace @unfairenough/mobile",
+    "dev:tv": "EXPO_TV=1 yarn workspace @unfairenough/tv-host start",
+    "dev:mobile": "yarn workspace @unfairenough/mobile start",
+    "prebuild:tv": "EXPO_TV=1 yarn workspace @unfairenough/tv-host expo prebuild --clean",
+    "prebuild:mobile": "yarn workspace @unfairenough/mobile expo prebuild --clean",
+    "build:packages": "yarn workspaces foreach -A --topological run build",
+    "server": "yarn workspace @unfairenough/server",
+    "dev:server": "yarn workspace @unfairenough/server dev",
+    "test:e2e": "npx playwright test",
+    "test:e2e:ui": "npx playwright test --ui"
+  },
+  "resolutions": {
+    "react": "19.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.1",
+    "typescript": "~5.9.2"
+  },
+  "packageManager": "yarn@1.22.22",
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}
