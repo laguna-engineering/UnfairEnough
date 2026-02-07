@@ -77,13 +77,17 @@ export interface PlayerResult {
   answer: AnswerKey | null;
   isCorrect: boolean;
   responseTimeMs: number | null;
+  baseScore: number;
+  difficultyMultiplier: number;
   pointsEarned: number;
   totalScore: number;
+  difficulty?: number;
 }
 
 export interface RoundResult {
   questionId: string;
   correctAnswer: AnswerKey;
+  tags?: string[];
   playerResults: PlayerResult[];
   rankings?: PlayerRanking[];
 }

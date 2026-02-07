@@ -1,5 +1,5 @@
 import type { DbAdapter, QuestionWithMeta } from '@unfairenough/db';
-import { gamesRepo, playersRepo, questionsRepo } from '@unfairenough/db';
+import { gamesRepo, playersRepo, playerTagScoresRepo, questionsRepo } from '@unfairenough/db';
 import type {
   AnswerKey,
   ClientMessage,
@@ -11,7 +11,15 @@ import type {
 } from '@unfairenough/ws-protocol';
 import { generatePlayerId, parseClientMessage } from '@unfairenough/ws-protocol';
 import type { ServerWebSocket } from 'bun';
+import { selectNextQuestion } from '../../../packages/game-logic/src/utils/questionSelection';
 import { calculateScore, rankPlayers } from '../../../packages/game-logic/src/utils/scoring';
+import {
+  computePlayerDifficulty,
+  computeTagUpdates,
+  decayedScore,
+  difficultyMultiplier,
+  resolvePlayerDifficulty,
+} from '../../../packages/game-logic/src/utils/tagScoring';
 import type { HostMessage, RoomPlayer, WSData } from './types';
 
 const COLORS = [
@@ -63,11 +71,17 @@ export class GameRoom {
 
   // Game state
   private questions: QuestionWithMeta[] = [];
+  private questionPool: QuestionWithMeta[] = [];
+  private usedQuestionIds = new Set<string>();
   private currentQuestionIndex = 0;
   private questionStartTime = 0;
   private answers = new Map<string, PlayerAnswer>();
   private positionHistory: PositionSnapshot[] = [];
   private gameId: string | null = null;
+
+  // Tag-based personalization state
+  private playerTagScores = new Map<string, Map<string, number>>();
+  private currentRoundDifficulties = new Map<string, number>();
 
   // Game configuration
   private gameType: 'casual' | 'configured' = 'casual';
@@ -318,14 +332,23 @@ export class GameRoom {
       if (this.configuredTotalQuestions && this.configuredTotalQuestions < this.questions.length) {
         this.questions = this.questions.slice(0, this.configuredTotalQuestions);
       }
+      this.questionPool = [];
     } else {
-      const count = this.configuredTotalQuestions ?? TOTAL_QUESTIONS;
-      this.questions = await questionsRepo.getRandomQuestions(this.db, count);
+      // Casual mode: load a larger pool, select dynamically per round
+      const requestedCount = this.configuredTotalQuestions ?? TOTAL_QUESTIONS;
+      // Load 3x the requested count as the pool (or all available)
+      this.questionPool = await questionsRepo.getRandomQuestions(this.db, requestedCount * 3);
+      // Pre-select first batch for fallback (in case pool is small)
+      this.questions = this.questionPool.slice(0, requestedCount);
     }
-    if (this.questions.length === 0) return;
+    if (this.questions.length === 0 && this.questionPool.length === 0) return;
 
     this.currentQuestionIndex = 0;
     this.positionHistory = [];
+    this.usedQuestionIds.clear();
+
+    // Load tag scores for all profiled players
+    await this.loadPlayerTagScores();
 
     // Create game session in DB
     this.gameId = crypto.randomUUID();
@@ -336,7 +359,7 @@ export class GameRoom {
         this.roomCode,
         this.gameType,
         this.players.size,
-        this.questions.length,
+        this.totalQuestionCount,
         this.questionSetId ?? undefined,
       )
       .catch((err) => console.error('Failed to create game session:', err));
@@ -358,12 +381,33 @@ export class GameRoom {
   }
 
   private showNextQuestion(): void {
-    if (this.currentQuestionIndex >= this.questions.length) {
+    if (this.currentQuestionIndex >= this.totalQuestionCount) {
       this.endGame();
       return;
     }
 
-    const q = this.questions[this.currentQuestionIndex];
+    let q: QuestionWithMeta;
+
+    if (this.gameType === 'configured' || this.questionPool.length === 0) {
+      // Configured mode: use authored order
+      if (this.currentQuestionIndex >= this.questions.length) {
+        this.endGame();
+        return;
+      }
+      q = this.questions[this.currentQuestionIndex];
+    } else {
+      // Casual mode: dynamically select from remaining pool
+      const remaining = this.questionPool.filter((qn) => !this.usedQuestionIds.has(qn.id));
+      if (remaining.length === 0) {
+        this.endGame();
+        return;
+      }
+      q = this.selectQuestionForRound(remaining);
+      this.usedQuestionIds.add(q.id);
+    }
+
+    // Compute per-player difficulties for this question
+    this.computeRoundDifficulties(q);
 
     // If question has media, show MEDIA_PREVIEW first
     if (q.media) {
@@ -374,7 +418,7 @@ export class GameRoom {
         type: 'MEDIA_PREVIEW',
         payload: {
           questionNumber: this.currentQuestionIndex + 1,
-          totalQuestions: this.questions.length,
+          totalQuestions: this.totalQuestionCount,
           media: { type: q.media.type, url: q.media.url },
           duration: previewDuration,
         },
@@ -404,7 +448,7 @@ export class GameRoom {
       options: q.options,
       timeLimit,
       questionNumber: this.currentQuestionIndex + 1,
-      totalQuestions: this.questions.length,
+      totalQuestions: this.totalQuestionCount,
       serverTimestamp: this.questionStartTime,
       media: q.media
         ? { type: q.media.type, url: q.media.url, previewDuration: q.media.previewDuration }
@@ -465,7 +509,12 @@ export class GameRoom {
   }
 
   private showRoundResults(): void {
-    const q = this.questions[this.currentQuestionIndex];
+    const q = this.getCurrentQuestion();
+    if (!q) {
+      this.endGame();
+      return;
+    }
+
     const correctAnswer = q.correctAnswer as AnswerKey;
     const timeLimit = this.configuredTimeLimit ?? q.timeLimit ?? DEFAULT_QUESTION_TIME_LIMIT;
 
@@ -475,12 +524,17 @@ export class GameRoom {
       const ans = this.answers.get(player.playerId);
       const isCorrect = ans?.answer === correctAnswer;
       let responseTimeMs: number | null = null;
-      let pointsEarned = 0;
+      let baseScore = 0;
 
       if (ans) {
         responseTimeMs = ans.serverReceivedAt - this.questionStartTime;
-        pointsEarned = calculateScore(isCorrect, responseTimeMs, timeLimit);
+        baseScore = calculateScore(isCorrect, responseTimeMs, timeLimit);
       }
+
+      // Apply difficulty multiplier
+      const playerDifficulty = this.currentRoundDifficulties.get(player.playerId) ?? 2.5;
+      const multiplier = difficultyMultiplier(playerDifficulty);
+      const pointsEarned = Math.round(baseScore * multiplier);
 
       if (pointsEarned > 0) {
         player.score += pointsEarned;
@@ -492,8 +546,11 @@ export class GameRoom {
         answer: ans?.answer ?? null,
         isCorrect,
         responseTimeMs,
+        baseScore,
+        difficultyMultiplier: multiplier,
         pointsEarned,
         totalScore: player.score,
+        difficulty: playerDifficulty,
       });
     }
 
@@ -526,16 +583,23 @@ export class GameRoom {
 
     this.broadcast({
       type: 'ROUND_END',
-      payload: { questionId: q.id, correctAnswer, playerResults, rankings },
+      payload: {
+        questionId: q.id,
+        correctAnswer,
+        tags: q.tags.length > 0 ? q.tags : undefined,
+        playerResults,
+        rankings,
+      },
     });
 
-    // Record round results to DB (async, don't block gameplay)
+    // Record round results and update tag scores (async, don't block gameplay)
     if (this.gameId) {
       const gameId = this.gameId;
       const roundNumber = this.currentQuestionIndex + 1;
       const roundResults: Parameters<typeof gamesRepo.insertRoundResults>[2] = playerResults.map(
         (pr) => {
           const playerRanking = rankings.find((r) => r.playerId === pr.playerId);
+          const player = this.players.get(pr.playerId);
           return {
             questionId: q.id,
             roundNumber,
@@ -547,17 +611,23 @@ export class GameRoom {
             pointsEarned: pr.pointsEarned,
             totalScore: pr.totalScore,
             rank: playerRanking?.rank ?? 0,
+            profileId: player?.profileId ?? null,
           };
         },
       );
       gamesRepo
         .insertRoundResults(this.db, gameId, roundResults)
         .catch((err) => console.error('Failed to insert round results:', err));
+
+      // Update tag scores for profiled players (fire-and-forget + update in-memory)
+      this.updateTagScoresAfterRound(q, playerResults).catch((err) =>
+        console.error('Failed to update tag scores:', err),
+      );
     }
 
     this.resultsTimeout = setTimeout(() => {
       this.currentQuestionIndex++;
-      if (this.currentQuestionIndex < this.questions.length) {
+      if (this.currentQuestionIndex < this.totalQuestionCount) {
         this.showNextQuestion();
       } else {
         this.endGame();
@@ -621,6 +691,128 @@ export class GameRoom {
       if (player.playerId === winner.playerId) {
         await playersRepo.incrementWins(this.db, player.profileId);
       }
+      // Increment games_played on all tag scores for decay tracking
+      playerTagScoresRepo
+        .incrementGamesPlayed(this.db, player.profileId)
+        .catch((err) => console.error('Failed to increment tag games played:', err));
+    }
+  }
+
+  // ── Tag-based personalization helpers ─────────────────────────
+
+  private async loadPlayerTagScores(): Promise<void> {
+    this.playerTagScores.clear();
+    const profiledPlayerIds = [...this.players.values()]
+      .filter((p) => p.profileId)
+      .map((p) => p.profileId!);
+
+    if (profiledPlayerIds.length === 0) return;
+
+    try {
+      const allScores = await playerTagScoresRepo.getTagScoresForPlayers(
+        this.db,
+        profiledPlayerIds,
+      );
+      for (const [profileId, tagScores] of allScores) {
+        const scoreMap = new Map<string, number>();
+        // Get the current player's total games for decay calculation
+        for (const ts of tagScores) {
+          scoreMap.set(ts.tag, decayedScore(ts.score, ts.gamesPlayed));
+        }
+        this.playerTagScores.set(profileId, scoreMap);
+      }
+    } catch (err) {
+      console.error('Failed to load player tag scores:', err);
+    }
+  }
+
+  private selectQuestionForRound(remaining: QuestionWithMeta[]): QuestionWithMeta {
+    const players = [...this.players.values()]
+      .filter((p) => p.profileId)
+      .map((p) => ({
+        profileId: p.profileId!,
+        name: p.name,
+        currentScore: p.score,
+      }));
+
+    if (players.length === 0) {
+      // No profiled players — random pick
+      return remaining[Math.floor(Math.random() * remaining.length)];
+    }
+
+    return selectNextQuestion(remaining, {
+      players,
+      playerTagScores: this.playerTagScores,
+    });
+  }
+
+  private computeRoundDifficulties(q: QuestionWithMeta): void {
+    this.currentRoundDifficulties.clear();
+    for (const player of this.players.values()) {
+      if (player.profileId && q.tags.length > 0) {
+        const tagScores = this.playerTagScores.get(player.profileId) ?? new Map<string, number>();
+        const dynamicDifficulty = computePlayerDifficulty(tagScores, q.tags);
+        const effective = resolvePlayerDifficulty(
+          player.name,
+          q.playerDifficulty,
+          dynamicDifficulty,
+        );
+        this.currentRoundDifficulties.set(player.playerId, effective);
+      } else {
+        this.currentRoundDifficulties.set(player.playerId, 2.5);
+      }
+    }
+  }
+
+  private get totalQuestionCount(): number {
+    if (this.gameType === 'configured' || this.questionPool.length === 0) {
+      return this.questions.length;
+    }
+    return this.configuredTotalQuestions ?? TOTAL_QUESTIONS;
+  }
+
+  private getCurrentQuestion(): QuestionWithMeta | null {
+    if (this.gameType === 'configured' || this.questionPool.length === 0) {
+      return this.questions[this.currentQuestionIndex] ?? null;
+    }
+    // Casual mode: the last used question is tracked via usedQuestionIds
+    // Find the question that was selected for this round
+    const usedIds = [...this.usedQuestionIds];
+    const lastUsedId = usedIds[this.currentQuestionIndex];
+    if (!lastUsedId) return null;
+    return this.questionPool.find((q) => q.id === lastUsedId) ?? null;
+  }
+
+  private async updateTagScoresAfterRound(
+    question: QuestionWithMeta,
+    playerResults: PlayerResult[],
+  ): Promise<void> {
+    if (question.tags.length === 0) return;
+
+    for (const result of playerResults) {
+      const player = this.players.get(result.playerId);
+      if (!player?.profileId) continue;
+
+      const updates = computeTagUpdates(question.tags, result.isCorrect, result.baseScore);
+
+      for (const update of updates) {
+        // Update DB (fire-and-forget per tag)
+        playerTagScoresRepo
+          .upsertTagScore(
+            this.db,
+            crypto.randomUUID(),
+            player.profileId,
+            update.tag,
+            update.delta,
+            result.isCorrect,
+          )
+          .catch((err) => console.error('Failed to upsert tag score:', err));
+
+        // Update in-memory scores for next round's question selection
+        const existing = this.playerTagScores.get(player.profileId) ?? new Map<string, number>();
+        existing.set(update.tag, (existing.get(update.tag) ?? 0) + update.delta);
+        this.playerTagScores.set(player.profileId, existing);
+      }
     }
   }
 
@@ -628,6 +820,8 @@ export class GameRoom {
     this.clearAllTimers();
     this.phase = 'LOBBY';
     this.questions = [];
+    this.questionPool = [];
+    this.usedQuestionIds.clear();
     this.currentQuestionIndex = 0;
     this.answers.clear();
     this.positionHistory = [];
@@ -636,6 +830,8 @@ export class GameRoom {
     this.questionSetId = null;
     this.configuredTotalQuestions = null;
     this.configuredTimeLimit = null;
+    this.playerTagScores.clear();
+    this.currentRoundDifficulties.clear();
 
     // Reset scores but keep players
     for (const player of this.players.values()) {
