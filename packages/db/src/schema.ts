@@ -72,6 +72,18 @@ export interface RoundResultRow {
   points_earned: number;
   total_score: number;
   rank: number;
+  profile_id: string | null;
+}
+
+export interface PlayerTagScoreRow {
+  id: string;
+  player_id: string;
+  tag: string;
+  score: number;
+  total_correct: number;
+  total_incorrect: number;
+  games_played: number;
+  last_updated: string;
 }
 
 // ── Domain types (parsed JSON fields) ────────────────────────
@@ -151,4 +163,16 @@ export interface RoundResultEntry {
   pointsEarned: number;
   totalScore: number;
   rank: number;
+  profileId: string | null;
+}
+
+export interface PlayerTagScore {
+  id: string;
+  playerId: string;
+  tag: string;
+  score: number;
+  totalCorrect: number;
+  totalIncorrect: number;
+  gamesPlayed: number;
+  lastUpdated: string;
 }

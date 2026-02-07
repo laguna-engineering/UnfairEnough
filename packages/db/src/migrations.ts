@@ -97,12 +97,37 @@ CREATE INDEX IF NOT EXISTS idx_round_results_player ON round_results(player_id);
 CREATE INDEX IF NOT EXISTS idx_round_results_game_round ON round_results(game_id, round_number);
 `;
 
+const MIGRATION_V2 = `
+-- Per-player, per-tag aggregate scores for difficulty personalization
+CREATE TABLE IF NOT EXISTS player_tag_scores (
+  id TEXT PRIMARY KEY,
+  player_id TEXT NOT NULL,
+  tag TEXT NOT NULL,
+  score REAL NOT NULL DEFAULT 0,
+  total_correct INTEGER NOT NULL DEFAULT 0,
+  total_incorrect INTEGER NOT NULL DEFAULT 0,
+  games_played INTEGER NOT NULL DEFAULT 0,
+  last_updated TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(player_id, tag),
+  FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_player_tag_scores_player ON player_tag_scores(player_id);
+CREATE INDEX IF NOT EXISTS idx_player_tag_scores_tag ON player_tag_scores(tag);
+
+-- Link round results to persistent player profiles
+ALTER TABLE round_results ADD COLUMN profile_id TEXT REFERENCES players(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_round_results_profile ON round_results(profile_id);
+`;
+
 interface Migration {
   version: number;
   sql: string;
 }
 
-const migrations: Migration[] = [{ version: 1, sql: MIGRATION_V1 }];
+const migrations: Migration[] = [
+  { version: 1, sql: MIGRATION_V1 },
+  { version: 2, sql: MIGRATION_V2 },
+];
 
 /**
  * Configure PRAGMAs for optimal performance.

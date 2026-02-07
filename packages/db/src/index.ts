@@ -17,6 +17,7 @@ export { parseQuestionSetYaml } from './import/yaml-parser';
 export { configurePragmas, runMigrations } from './migrations';
 export * as gamesRepo from './repositories/games';
 export * as playersRepo from './repositories/players';
+export * as playerTagScoresRepo from './repositories/playerTagScores';
 // Repositories
 export * as questionsRepo from './repositories/questions';
 // Schema types
@@ -27,6 +28,8 @@ export type {
   MediaType,
   PlayerProfile,
   PlayerRow,
+  PlayerTagScore,
+  PlayerTagScoreRow,
   QuestionRow,
   QuestionSetRow,
   QuestionSetWithMeta,

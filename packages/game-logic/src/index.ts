@@ -44,6 +44,11 @@ export {
   updateScore,
 } from './slices/playersSlice';
 export { type AppDispatch, type AppStore, createStore, type RootState } from './store';
+export {
+  type RoundSelectionContext,
+  type RoundSelectionPlayer,
+  selectNextQuestion,
+} from './utils/questionSelection';
 // Utilities
 export {
   calculateScore,
@@ -52,3 +57,11 @@ export {
   type RankedPlayer,
   rankPlayers,
 } from './utils/scoring';
+export {
+  computePlayerDifficulty,
+  computeTagUpdates,
+  decayedScore,
+  difficultyMultiplier,
+  resolvePlayerDifficulty,
+  type TagScoreUpdate,
+} from './utils/tagScoring';

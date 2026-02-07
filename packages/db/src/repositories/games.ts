@@ -30,6 +30,7 @@ function rowToRoundResult(row: RoundResultRow): RoundResultEntry {
     pointsEarned: row.points_earned,
     totalScore: row.total_score,
     rank: row.rank,
+    profileId: row.profile_id,
   };
 }
 
@@ -74,6 +75,7 @@ export interface RoundResultInsert {
   pointsEarned: number;
   totalScore: number;
   rank: number;
+  profileId?: string | null;
 }
 
 export async function insertRoundResults(
@@ -84,8 +86,8 @@ export async function insertRoundResults(
   for (const r of results) {
     await db.run(
       `INSERT INTO round_results (game_id, question_id, round_number, player_id, player_name,
-        answer, is_correct, response_time_ms, points_earned, total_score, rank)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        answer, is_correct, response_time_ms, points_earned, total_score, rank, profile_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         gameId,
         r.questionId,
@@ -98,6 +100,7 @@ export async function insertRoundResults(
         r.pointsEarned,
         r.totalScore,
         r.rank,
+        r.profileId ?? null,
       ],
     );
   }
