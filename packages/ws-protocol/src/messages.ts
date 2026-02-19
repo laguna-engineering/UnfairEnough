@@ -1,7 +1,11 @@
 // Client -> Server messages
 export type ClientMessage =
-  | { type: 'JOIN'; payload: { name: string; roomCode?: string; deviceId?: string } }
+  | {
+      type: 'JOIN';
+      payload: { name: string; roomCode?: string; deviceId?: string; profileId?: string };
+    }
   | { type: 'IDENTIFY'; payload: { deviceId: string } }
+  | { type: 'UNBIND'; payload: { deviceId: string } }
   | { type: 'RECONNECT'; payload: { playerId: string } }
   | { type: 'ANSWER'; payload: { questionId: string; answer: AnswerKey } }
   | { type: 'LEAVE' }
@@ -43,18 +47,28 @@ export interface WelcomePayload {
   };
 }
 
+export interface ProfileSummary {
+  id: string;
+  displayName: string;
+  avatarColor: string;
+  avatarEmoji: string;
+  totalGames: number;
+}
+
 export interface IdentityPayload {
   profile: {
     displayName: string;
     totalGames: number;
     totalWins: number;
   } | null;
+  availableProfiles?: ProfileSummary[];
 }
 
 export interface PlayerInfo {
   playerId: string;
   name: string;
   color: string;
+  emoji?: string;
 }
 
 export interface QuestionOption {

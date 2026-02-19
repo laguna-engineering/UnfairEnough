@@ -188,8 +188,12 @@ class WebSocketClient {
     this.send({ type: 'IDENTIFY', payload: { deviceId } });
   }
 
-  join(name: string, roomCode?: string, deviceId?: string): void {
-    this.send({ type: 'JOIN', payload: { name, roomCode, deviceId } });
+  join(name: string, roomCode?: string, deviceId?: string, profileId?: string): void {
+    this.send({ type: 'JOIN', payload: { name, roomCode, deviceId, profileId } });
+  }
+
+  unbind(deviceId: string): void {
+    this.send({ type: 'UNBIND', payload: { deviceId } });
   }
 
   sendAnswer(questionId: string, answer: AnswerKey): void {

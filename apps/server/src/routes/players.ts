@@ -1,4 +1,6 @@
 import { gamesRepo, playersRepo, playerTagScoresRepo } from '@unfairenough/db';
+import { AVATAR_COLORS, AVATAR_EMOJIS } from '@unfairenough/shared';
+import { sanitizeName } from '@unfairenough/ws-protocol';
 import { Hono } from 'hono';
 import { getDb } from '../db';
 
@@ -9,6 +11,98 @@ players.get('/', async (c) => {
   const db = getDb();
   const allPlayers = await playersRepo.listPlayers(db);
   return c.json({ players: allPlayers });
+});
+
+// POST /api/players — create admin-managed profile
+players.post('/', async (c) => {
+  const db = getDb();
+  const body = await c.req.json<{
+    displayName?: string;
+    avatarColor?: string;
+    avatarEmoji?: string;
+  }>();
+
+  const displayName = sanitizeName(body.displayName);
+  if (!displayName) {
+    return c.json({ error: 'Missing or empty "displayName"' }, 400);
+  }
+
+  const avatarColor = body.avatarColor;
+  if (!avatarColor || !(AVATAR_COLORS as readonly string[]).includes(avatarColor)) {
+    return c.json({ error: 'Invalid "avatarColor"' }, 400);
+  }
+
+  const avatarEmoji = body.avatarEmoji;
+  if (!avatarEmoji || !(AVATAR_EMOJIS as readonly string[]).includes(avatarEmoji)) {
+    return c.json({ error: 'Invalid "avatarEmoji"' }, 400);
+  }
+
+  const id = crypto.randomUUID();
+  const profile = await playersRepo.createProfile(db, id, displayName, avatarColor, avatarEmoji);
+  return c.json({ player: profile }, 201);
+});
+
+// PUT /api/players/:id — update profile fields
+players.put('/:id', async (c) => {
+  const db = getDb();
+  const id = c.req.param('id');
+  const player = await playersRepo.getPlayer(db, id);
+  if (!player) {
+    return c.json({ error: 'Player not found' }, 404);
+  }
+
+  const body = await c.req.json<{
+    displayName?: string;
+    avatarColor?: string;
+    avatarEmoji?: string;
+  }>();
+
+  const fields: { displayName?: string; avatarColor?: string; avatarEmoji?: string } = {};
+
+  if (body.displayName !== undefined) {
+    const name = sanitizeName(body.displayName);
+    if (!name) return c.json({ error: 'Invalid "displayName"' }, 400);
+    fields.displayName = name;
+  }
+  if (body.avatarColor !== undefined) {
+    if (!(AVATAR_COLORS as readonly string[]).includes(body.avatarColor)) {
+      return c.json({ error: 'Invalid "avatarColor"' }, 400);
+    }
+    fields.avatarColor = body.avatarColor;
+  }
+  if (body.avatarEmoji !== undefined) {
+    if (!(AVATAR_EMOJIS as readonly string[]).includes(body.avatarEmoji)) {
+      return c.json({ error: 'Invalid "avatarEmoji"' }, 400);
+    }
+    fields.avatarEmoji = body.avatarEmoji;
+  }
+
+  await playersRepo.updateProfile(db, id, fields);
+  const updated = await playersRepo.getPlayer(db, id);
+  return c.json({ player: updated });
+});
+
+// PUT /api/players/:id/unbind — remove device binding
+players.put('/:id/unbind', async (c) => {
+  const db = getDb();
+  const id = c.req.param('id');
+  const player = await playersRepo.getPlayer(db, id);
+  if (!player) {
+    return c.json({ error: 'Player not found' }, 404);
+  }
+  await playersRepo.unbindDevice(db, id);
+  return c.json({ message: 'Device unbound' });
+});
+
+// DELETE /api/players/:id — delete profile
+players.delete('/:id', async (c) => {
+  const db = getDb();
+  const id = c.req.param('id');
+  const deleted = await playersRepo.deleteProfile(db, id);
+  if (!deleted) {
+    return c.json({ error: 'Player not found' }, 404);
+  }
+  return c.json({ message: 'Player deleted' });
 });
 
 // GET /api/players/:id/stats — player stats + recent games

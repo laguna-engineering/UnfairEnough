@@ -10,11 +10,106 @@
 <body>
   <main>
     <h1>Players</h1>
+
+    <div class="card" id="create-profile-section">
+      <h3 style="margin:0 0 0.75rem;">Create Profile</h3>
+      <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:0.5rem;">
+        <input type="text" id="new-name" placeholder="Display name" maxlength="20"
+          style="padding:0.4rem 0.6rem;border:1px solid #ddd;border-radius:4px;font-size:0.9rem;width:180px;">
+        <button id="create-btn">Create</button>
+        <span id="create-status" style="font-size:0.85rem;"></span>
+      </div>
+      <div style="margin-bottom:0.5rem;">
+        <span style="font-size:0.8rem;color:#555;font-weight:600;">Color:</span>
+        <div id="color-picker" style="display:inline-flex;gap:4px;margin-left:0.5rem;vertical-align:middle;"></div>
+      </div>
+      <div>
+        <span style="font-size:0.8rem;color:#555;font-weight:600;">Avatar:</span>
+        <div id="emoji-picker" style="display:inline-flex;gap:4px;margin-left:0.5rem;flex-wrap:wrap;vertical-align:middle;"></div>
+      </div>
+    </div>
+
     <div id="content"></div>
   </main>
 
   <script>
+    const COLORS = ['#FF6B9D','#4ECDC4','#FFE66D','#95E1D3','#F38181','#AA96DA','#FCBAD3','#A8D8EA','#FF9F43','#6C5CE7','#00B894','#FD79A8'];
+    const EMOJIS = ['🐱','🐶','🦊','🐼','🐰','🦁','🐸','🦄','🐙','🎮','🌟','⚡','🔥','❄️','🎯','🎪','🎨','🎵','🍕','🚀'];
+
+    let selectedColor = COLORS[0];
+    let selectedEmoji = EMOJIS[0];
+
     const content = document.getElementById("content");
+    const createBtn = document.getElementById("create-btn");
+    const createStatus = document.getElementById("create-status");
+    const newNameInput = document.getElementById("new-name");
+
+    function buildPickers() {
+      const colorPicker = document.getElementById("color-picker");
+      for (const c of COLORS) {
+        const btn = document.createElement("button");
+        btn.className = "color-swatch" + (c === selectedColor ? " selected" : "");
+        btn.style.cssText = `background:${c};width:24px;height:24px;border-radius:50%;border:2px solid ${c === selectedColor ? '#333' : 'transparent'};cursor:pointer;padding:0;`;
+        btn.onclick = () => {
+          selectedColor = c;
+          for (const el of colorPicker.children) {
+            el.style.borderColor = "transparent";
+            el.classList.remove("selected");
+          }
+          btn.style.borderColor = "#333";
+          btn.classList.add("selected");
+        };
+        colorPicker.appendChild(btn);
+      }
+
+      const emojiPicker = document.getElementById("emoji-picker");
+      for (const e of EMOJIS) {
+        const btn = document.createElement("button");
+        btn.className = "emoji-btn" + (e === selectedEmoji ? " selected" : "");
+        btn.style.cssText = `font-size:1.2rem;padding:2px 4px;border:2px solid ${e === selectedEmoji ? '#333' : 'transparent'};border-radius:4px;cursor:pointer;background:none;line-height:1;`;
+        btn.textContent = e;
+        btn.onclick = () => {
+          selectedEmoji = e;
+          for (const el of emojiPicker.children) {
+            el.style.borderColor = "transparent";
+            el.classList.remove("selected");
+          }
+          btn.style.borderColor = "#333";
+          btn.classList.add("selected");
+        };
+        emojiPicker.appendChild(btn);
+      }
+    }
+
+    createBtn.addEventListener("click", async () => {
+      const displayName = newNameInput.value.trim();
+      if (!displayName) { createStatus.textContent = "Enter a name."; createStatus.style.color = "#dc2626"; return; }
+
+      createBtn.disabled = true;
+      createStatus.textContent = "";
+      try {
+        const res = await fetch("/api/players", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ displayName, avatarColor: selectedColor, avatarEmoji: selectedEmoji }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          createStatus.textContent = data.error || "Failed";
+          createStatus.style.color = "#dc2626";
+          return;
+        }
+        createStatus.textContent = `Created "${displayName}"`;
+        createStatus.style.color = "#16a34a";
+        newNameInput.value = "";
+        load();
+      } catch (err) {
+        createStatus.textContent = err.message;
+        createStatus.style.color = "#dc2626";
+      } finally {
+        createBtn.disabled = false;
+      }
+    });
 
     async function load() {
       showLoading(content);
@@ -22,20 +117,52 @@
         const data = await fetchJson("/api/players");
         const players = data.players || [];
 
-        renderTable(content, ["Name", "Games", "Wins", "Total Score"], players.map(p => ({
-          cells: [
-            link(`player.html?id=${encodeURIComponent(p.id)}`, p.displayName || p.id),
-            fmtNum(p.totalGames ?? 0),
-            fmtNum(p.totalWins ?? 0),
-            fmtNum(p.totalScore ?? 0),
-          ],
-        })));
+        renderTable(content, ["", "Name", "Source", "Status", "Games", "Wins", "Score"], players.map(p => {
+          // Avatar column: emoji in colored circle
+          const avatar = document.createElement("span");
+          avatar.style.cssText = `display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:${p.avatarColor || '#ccc'};font-size:0.9rem;`;
+          avatar.textContent = p.avatarEmoji || p.displayName.charAt(0).toUpperCase();
+
+          // Source badge
+          const srcBadge = document.createElement("span");
+          srcBadge.className = "badge";
+          if (p.source === "admin") {
+            srcBadge.style.cssText = "background:#dbeafe;color:#1e40af;";
+            srcBadge.textContent = "Admin";
+          } else {
+            srcBadge.style.cssText = "background:#f3f4f6;color:#6b7280;";
+            srcBadge.textContent = "Auto";
+          }
+
+          // Status badge
+          const statusBadge = document.createElement("span");
+          statusBadge.className = "badge";
+          if (p.deviceId) {
+            statusBadge.style.cssText = "background:#dcfce7;color:#166534;";
+            statusBadge.textContent = "Bound";
+          } else {
+            statusBadge.style.cssText = "background:#fef3c7;color:#92400e;";
+            statusBadge.textContent = "Unbound";
+          }
+
+          return {
+            cells: [
+              avatar,
+              link(`player.html?id=${encodeURIComponent(p.id)}`, p.displayName || p.id),
+              srcBadge,
+              statusBadge,
+              fmtNum(p.totalGames ?? 0),
+              fmtNum(p.totalWins ?? 0),
+              fmtNum(p.totalScore ?? 0),
+            ],
+          };
+        }));
       } catch (err) {
         showError(content, err.message);
       }
     }
 
-    document.addEventListener("DOMContentLoaded", load);
+    document.addEventListener("DOMContentLoaded", () => { buildPickers(); load(); });
   </script>
 </body>
 </html>

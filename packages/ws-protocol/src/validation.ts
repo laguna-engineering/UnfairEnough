@@ -44,19 +44,27 @@ export function parseClientMessage(data: unknown): ClientMessage {
       if (!payload || typeof payload !== 'object') {
         throw new Error('JOIN requires payload');
       }
-      const p = payload as { name?: unknown; roomCode?: unknown; deviceId?: unknown };
+      const p = payload as {
+        name?: unknown;
+        roomCode?: unknown;
+        deviceId?: unknown;
+        profileId?: unknown;
+      };
       const name = sanitizeName(p.name);
       if (!name) {
         throw new Error('Name is required');
       }
       const deviceId =
         typeof p.deviceId === 'string' && isValidUUID(p.deviceId) ? p.deviceId : undefined;
+      const profileId =
+        typeof p.profileId === 'string' && isValidUUID(p.profileId) ? p.profileId : undefined;
       return {
         type: 'JOIN',
         payload: {
           name,
           roomCode: typeof p.roomCode === 'string' ? p.roomCode.toUpperCase() : undefined,
           deviceId,
+          profileId,
         },
       };
     }
@@ -71,6 +79,20 @@ export function parseClientMessage(data: unknown): ClientMessage {
       }
       return {
         type: 'IDENTIFY',
+        payload: { deviceId: p.deviceId },
+      };
+    }
+
+    case 'UNBIND': {
+      if (!payload || typeof payload !== 'object') {
+        throw new Error('UNBIND requires payload');
+      }
+      const p = payload as { deviceId?: unknown };
+      if (typeof p.deviceId !== 'string' || !isValidUUID(p.deviceId)) {
+        throw new Error('Valid deviceId is required');
+      }
+      return {
+        type: 'UNBIND',
         payload: { deviceId: p.deviceId },
       };
     }

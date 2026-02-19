@@ -248,18 +248,18 @@ All from Unicode 12.0 or earlier — safe on iOS 14+, Android 10+, modern browse
 
 ## Acceptance Criteria
 
-- [ ] Admin can create a profile (name + color + emoji) from the dashboard
-- [ ] Admin can edit a profile's name, color, and emoji
-- [ ] Admin can unbind a device from a profile
-- [ ] Admin can delete a profile
-- [ ] New device sees profile picker with available (admin-created, unbound) profiles
-- [ ] Tapping a profile claims it and joins the game with that identity
-- [ ] Claimed profile auto-selects on future connections (WelcomeBack flow)
-- [ ] "Not me" unbinds the profile server-side and shows the picker
-- [ ] Simultaneous claim race condition handled gracefully (error + refresh)
-- [ ] Fallback to name-entry when no profiles are available
-- [ ] TV host lobby displays player emoji alongside name and color
-- [ ] Profile colors are used instead of round-robin assignment for profiled players
+- [x] Admin can create a profile (name + color + emoji) from the dashboard
+- [x] Admin can edit a profile's name, color, and emoji
+- [x] Admin can unbind a device from a profile
+- [x] Admin can delete a profile
+- [x] New device sees profile picker with available (admin-created, unbound) profiles
+- [x] Tapping a profile claims it and joins the game with that identity
+- [x] Claimed profile auto-selects on future connections (WelcomeBack flow)
+- [x] "Not me" unbinds the profile server-side and shows the picker
+- [x] Simultaneous claim race condition handled gracefully (error + refresh)
+- [x] Fallback to name-entry when no profiles are available
+- [x] TV host lobby displays player emoji alongside name and color
+- [x] Profile colors are used instead of round-round assignment for profiled players
 
 ## Scoping Notes
 

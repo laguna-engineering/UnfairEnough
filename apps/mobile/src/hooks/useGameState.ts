@@ -5,18 +5,20 @@ import type {
   GameResult,
   IdentityPayload,
   MediaPreviewPayload,
+  ProfileSummary,
   Question,
   RoundResult,
   WelcomePayload,
 } from '@unfairenough/ws-protocol';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { clearDeviceId, getDeviceId } from '../services/deviceId';
+import { getDeviceId } from '../services/deviceId';
 import { wsClient } from '../services/WebSocketClient';
 
 export type MobileGamePhase =
   | 'SCAN'
   | 'IDENTIFYING'
   | 'WELCOME_BACK'
+  | 'PICK_PROFILE'
   | 'JOIN'
   | 'WAITING'
   | 'COUNTDOWN'
@@ -45,6 +47,7 @@ export function useGameState() {
   const [identifiedProfile, setIdentifiedProfile] = useState<IdentityPayload['profile'] | null>(
     null,
   );
+  const [availableProfiles, setAvailableProfiles] = useState<ProfileSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const languageOverridden = useRef(false);
 
@@ -54,9 +57,15 @@ export function useGameState() {
       onIdentity: (data) => {
         if (data.profile) {
           setIdentifiedProfile(data.profile);
+          setAvailableProfiles([]);
           setPhase('WELCOME_BACK');
+        } else if (data.availableProfiles && data.availableProfiles.length > 0) {
+          setIdentifiedProfile(null);
+          setAvailableProfiles(data.availableProfiles);
+          setPhase('PICK_PROFILE');
         } else {
           setIdentifiedProfile(null);
+          setAvailableProfiles([]);
           setPhase('JOIN');
         }
       },
@@ -125,10 +134,20 @@ export function useGameState() {
     wsClient.join(identifiedProfile.displayName, undefined, deviceId);
   }, [identifiedProfile]);
 
-  const rejectIdentity = useCallback(async () => {
-    await clearDeviceId();
-    setIdentifiedProfile(null);
-    setPhase('JOIN');
+  const claimProfile = useCallback((profileId: string, displayName: string) => {
+    const deviceId = getDeviceId() ?? undefined;
+    wsClient.join(displayName, undefined, deviceId, profileId);
+  }, []);
+
+  const rejectIdentity = useCallback(() => {
+    const deviceId = getDeviceId();
+    if (deviceId) {
+      // Ask server to unbind the profile — server will respond with fresh IDENTITY
+      wsClient.unbind(deviceId);
+    } else {
+      setIdentifiedProfile(null);
+      setPhase('JOIN');
+    }
   }, []);
 
   const submitAnswer = useCallback(
@@ -141,11 +160,17 @@ export function useGameState() {
     [confirmedAnswer, currentQuestion],
   );
 
+  const goToJoin = useCallback(() => {
+    setAvailableProfiles([]);
+    setPhase('JOIN');
+  }, []);
+
   const reset = useCallback(() => {
     wsClient.disconnect();
     setPhase('SCAN');
     setPlayerInfo(null);
     setIdentifiedProfile(null);
+    setAvailableProfiles([]);
     setCurrentQuestion(null);
     setSelectedAnswer(null);
     setConfirmedAnswer(null);
@@ -166,6 +191,7 @@ export function useGameState() {
     connectionState,
     playerInfo,
     identifiedProfile,
+    availableProfiles,
     countdown,
     currentQuestion,
     timeRemaining,
@@ -178,7 +204,9 @@ export function useGameState() {
     connect,
     join,
     confirmIdentity,
+    claimProfile,
     rejectIdentity,
+    goToJoin,
     submitAnswer,
     reset,
     setLanguageOverride,

@@ -12,6 +12,29 @@
     <h1 id="player-name">Player</h1>
     <div class="stat-grid" id="stats"></div>
 
+    <div class="card" id="profile-actions" style="display:none;">
+      <h3 style="margin:0 0 0.75rem;">Profile</h3>
+      <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:0.5rem;">
+        <input type="text" id="edit-name" placeholder="Display name" maxlength="20"
+          style="padding:0.4rem 0.6rem;border:1px solid #ddd;border-radius:4px;font-size:0.9rem;width:180px;">
+        <button id="save-profile-btn">Save</button>
+        <span id="profile-status" style="font-size:0.85rem;"></span>
+      </div>
+      <div style="margin-bottom:0.5rem;">
+        <span style="font-size:0.8rem;color:#555;font-weight:600;">Color:</span>
+        <div id="edit-color-picker" style="display:inline-flex;gap:4px;margin-left:0.5rem;vertical-align:middle;"></div>
+      </div>
+      <div style="margin-bottom:0.75rem;">
+        <span style="font-size:0.8rem;color:#555;font-weight:600;">Avatar:</span>
+        <div id="edit-emoji-picker" style="display:inline-flex;gap:4px;margin-left:0.5rem;flex-wrap:wrap;vertical-align:middle;"></div>
+      </div>
+      <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+        <span id="device-info" style="font-size:0.85rem;color:#555;"></span>
+        <button id="unbind-btn" class="toggle-btn" style="display:none;">Unbind Device</button>
+        <button id="delete-btn" class="danger" style="font-size:0.8rem;">Delete Profile</button>
+      </div>
+    </div>
+
     <h2>Tag Scores</h2>
     <div class="card" style="margin-bottom:1rem;">
       <details>
@@ -57,6 +80,9 @@
   </main>
 
   <script>
+    const COLORS = ['#FF6B9D','#4ECDC4','#FFE66D','#95E1D3','#F38181','#AA96DA','#FCBAD3','#A8D8EA','#FF9F43','#6C5CE7','#00B894','#FD79A8'];
+    const EMOJIS = ['🐱','🐶','🦊','🐼','🐰','🦁','🐸','🦄','🐙','🎮','🌟','⚡','🔥','❄️','🎯','🎪','🎨','🎵','🍕','🚀'];
+
     const params = new URLSearchParams(window.location.search);
     const playerId = params.get("id");
 
@@ -64,6 +90,88 @@
     const scoreInput = document.getElementById("score-input");
     const addTagBtn = document.getElementById("add-tag-btn");
     const tagStatus = document.getElementById("tag-status");
+
+    let editColor = COLORS[0];
+    let editEmoji = EMOJIS[0];
+
+    function buildEditPickers(currentColor, currentEmoji) {
+      editColor = currentColor || COLORS[0];
+      editEmoji = currentEmoji || EMOJIS[0];
+
+      const colorPicker = document.getElementById("edit-color-picker");
+      colorPicker.innerHTML = "";
+      for (const c of COLORS) {
+        const btn = document.createElement("button");
+        btn.style.cssText = `background:${c};width:24px;height:24px;border-radius:50%;border:2px solid ${c === editColor ? '#333' : 'transparent'};cursor:pointer;padding:0;`;
+        btn.onclick = () => {
+          editColor = c;
+          for (const el of colorPicker.children) el.style.borderColor = "transparent";
+          btn.style.borderColor = "#333";
+        };
+        colorPicker.appendChild(btn);
+      }
+
+      const emojiPicker = document.getElementById("edit-emoji-picker");
+      emojiPicker.innerHTML = "";
+      for (const e of EMOJIS) {
+        const btn = document.createElement("button");
+        btn.style.cssText = `font-size:1.2rem;padding:2px 4px;border:2px solid ${e === editEmoji ? '#333' : 'transparent'};border-radius:4px;cursor:pointer;background:none;line-height:1;`;
+        btn.textContent = e;
+        btn.onclick = () => {
+          editEmoji = e;
+          for (const el of emojiPicker.children) el.style.borderColor = "transparent";
+          btn.style.borderColor = "#333";
+        };
+        emojiPicker.appendChild(btn);
+      }
+    }
+
+    // Save profile
+    document.getElementById("save-profile-btn").addEventListener("click", async () => {
+      const displayName = document.getElementById("edit-name").value.trim();
+      if (!displayName) return;
+
+      const profileStatus = document.getElementById("profile-status");
+      try {
+        const res = await fetch(`/api/players/${encodeURIComponent(playerId)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ displayName, avatarColor: editColor, avatarEmoji: editEmoji }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          profileStatus.textContent = data.error || "Failed";
+          profileStatus.style.color = "#dc2626";
+          return;
+        }
+        profileStatus.textContent = "Saved";
+        profileStatus.style.color = "#16a34a";
+        load();
+      } catch (err) {
+        profileStatus.textContent = err.message;
+        profileStatus.style.color = "#dc2626";
+      }
+    });
+
+    // Unbind device
+    document.getElementById("unbind-btn").addEventListener("click", async () => {
+      if (!confirm("Unbind device from this profile?")) return;
+      try {
+        const res = await fetch(`/api/players/${encodeURIComponent(playerId)}/unbind`, { method: "PUT" });
+        if (!res.ok) { alert("Unbind failed"); return; }
+        load();
+      } catch (err) { alert(err.message); }
+    });
+
+    // Delete profile
+    document.getElementById("delete-btn").addEventListener("click", async () => {
+      if (!confirm("Delete this profile? This cannot be undone.")) return;
+      try {
+        const res = await fetch(`/api/players/${encodeURIComponent(playerId)}`, { method: "DELETE" });
+        if (!res.ok) { alert("Delete failed"); return; }
+        window.location.href = "/admin/";
+      } catch (err) { alert(err.message); }
+    });
 
     // Load available tags for autocomplete
     async function loadTagSuggestions() {
@@ -152,7 +260,8 @@
         const recentGames = data.recentGames || [];
 
         // Header
-        document.getElementById("player-name").textContent = player.displayName || player.id;
+        const headerText = (player.avatarEmoji || "") + " " + (player.displayName || player.id);
+        document.getElementById("player-name").textContent = headerText.trim();
         document.title = `${player.displayName || player.id} — Admin`;
 
         // Stats grid
@@ -165,6 +274,22 @@
         statsEl.innerHTML = statsData.map(s =>
           `<div class="stat-box"><div class="value">${fmtNum(s.value)}</div><div class="label">${s.label}</div></div>`
         ).join("");
+
+        // Profile actions
+        const actionsEl = document.getElementById("profile-actions");
+        actionsEl.style.display = "block";
+        document.getElementById("edit-name").value = player.displayName || "";
+        buildEditPickers(player.avatarColor, player.avatarEmoji);
+
+        const deviceInfo = document.getElementById("device-info");
+        const unbindBtn = document.getElementById("unbind-btn");
+        if (player.deviceId) {
+          deviceInfo.textContent = `Device: ${player.deviceId.substring(0, 8)}...`;
+          unbindBtn.style.display = "inline-block";
+        } else {
+          deviceInfo.textContent = "No device bound";
+          unbindBtn.style.display = "none";
+        }
 
         // Tag scores table with edit/delete actions
         const tagContainer = document.getElementById("tag-scores");

@@ -123,6 +123,11 @@ const MIGRATION_V3 = `
 UPDATE player_tag_scores SET score = 1500 WHERE score <> 1500;
 `;
 
+const MIGRATION_V4 = `
+ALTER TABLE players ADD COLUMN avatar_emoji TEXT DEFAULT NULL;
+ALTER TABLE players ADD COLUMN source TEXT NOT NULL DEFAULT 'auto';
+`;
+
 interface Migration {
   version: number;
   sql: string;
@@ -132,6 +137,7 @@ const migrations: Migration[] = [
   { version: 1, sql: MIGRATION_V1 },
   { version: 2, sql: MIGRATION_V2 },
   { version: 3, sql: MIGRATION_V3 },
+  { version: 4, sql: MIGRATION_V4 },
 ];
 
 /**

@@ -89,7 +89,10 @@
     "wins": "{{count}} vittorie",
     "firstTime": "Prima partita — divertiti!",
     "joinAs": "Entra come {{name}}",
-    "notMe": "Non sono io"
+    "notMe": "Non sono io",
+    "pickProfile": "Chi gioca?",
+    "playAsGuest": "Gioca come ospite",
+    "profileClaimed": "Quel profilo è stato appena preso. Scegline un altro!"
   },
   "mode": {
     "title": "Scegli Modalità",

@@ -9,6 +9,7 @@ import { GameOverScreen } from './GameOverScreen';
 import { JoinScreen } from './JoinScreen';
 import { MediaPreviewScreen } from './MediaPreviewScreen';
 import { PlayScreen } from './PlayScreen';
+import { ProfilePickerScreen } from './ProfilePickerScreen';
 import { ResultScreen } from './ResultScreen';
 import { ScanScreen } from './ScanScreen';
 import { WaitingScreen } from './WaitingScreen';
@@ -20,6 +21,7 @@ export const GameScreen: React.FC = () => {
     connectionState,
     playerInfo,
     identifiedProfile,
+    availableProfiles,
     countdown,
     currentQuestion,
     timeRemaining,
@@ -31,7 +33,9 @@ export const GameScreen: React.FC = () => {
     connect,
     join,
     confirmIdentity,
+    claimProfile,
     rejectIdentity,
+    goToJoin,
     submitAnswer,
     reset,
     setLanguageOverride,
@@ -65,6 +69,16 @@ export const GameScreen: React.FC = () => {
           profile={identifiedProfile}
           onConfirm={confirmIdentity}
           onReject={rejectIdentity}
+        />
+      );
+
+    case 'PICK_PROFILE':
+      return (
+        <ProfilePickerScreen
+          profiles={availableProfiles}
+          onPickProfile={claimProfile}
+          onPlayAsGuest={goToJoin}
+          error={error}
         />
       );
 

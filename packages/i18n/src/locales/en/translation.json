@@ -89,7 +89,10 @@
     "wins": "{{count}} wins",
     "firstTime": "First game — have fun!",
     "joinAs": "Join as {{name}}",
-    "notMe": "Not me"
+    "notMe": "Not me",
+    "pickProfile": "Who's playing?",
+    "playAsGuest": "Play as guest",
+    "profileClaimed": "That profile was just taken. Pick another!"
   },
   "mode": {
     "title": "Choose Game Mode",

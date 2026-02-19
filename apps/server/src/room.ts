@@ -122,6 +122,7 @@ export class GameRoom {
     ws: ServerWebSocket<WSData>,
     name: string,
     deviceId?: string,
+    claimProfileId?: string,
   ): Promise<string | null> {
     if (this.players.size >= MAX_PLAYERS) {
       this.sendTo(ws, {
@@ -140,37 +141,54 @@ export class GameRoom {
     }
 
     const playerId = generatePlayerId();
-    const color = COLORS[this.colorIndex++ % COLORS.length];
 
     // Look up or create player profile
     let profileId: string | undefined;
-    const welcomePayload: WelcomePayload = {
-      playerId,
-      playerColor: color,
-      roomCode: this.roomCode,
-      language: this.language,
-    };
+    let playerName = name;
+    let playerColor: string | undefined;
+    let playerEmoji: string | undefined;
 
-    if (deviceId) {
+    if (claimProfileId && deviceId) {
+      // Claiming a pre-created profile
+      try {
+        const claimed = await playersRepo.claimProfile(this.db, claimProfileId, deviceId);
+        if (!claimed) {
+          this.sendTo(ws, {
+            type: 'ERROR',
+            payload: { code: 'PROFILE_ALREADY_CLAIMED', message: 'Profile was already claimed' },
+          });
+          return null;
+        }
+        const profile = await playersRepo.getPlayer(this.db, claimProfileId);
+        if (profile) {
+          profileId = profile.id;
+          playerName = profile.displayName;
+          playerColor = profile.avatarColor;
+          playerEmoji = profile.avatarEmoji ?? undefined;
+          await playersRepo.updateLastSeen(this.db, profile.id);
+        }
+      } catch (err) {
+        console.error('Profile claim failed:', err);
+      }
+    } else if (deviceId) {
       try {
         const existingProfile = await playersRepo.findByDeviceId(this.db, deviceId);
         if (existingProfile) {
           profileId = existingProfile.id;
+          playerColor = existingProfile.avatarColor;
+          playerEmoji = existingProfile.avatarEmoji ?? undefined;
           // Update name if changed, and touch last_seen_at
           if (existingProfile.displayName !== name) {
             await playersRepo.updateDisplayName(this.db, existingProfile.id, name);
           } else {
             await playersRepo.updateLastSeen(this.db, existingProfile.id);
           }
-          welcomePayload.profile = {
-            displayName: existingProfile.displayName,
-            totalGames: existingProfile.totalGames,
-            totalWins: existingProfile.totalWins,
-          };
         } else {
-          // Create new profile
+          // Create new auto-profile
           profileId = crypto.randomUUID();
-          await playersRepo.createPlayer(this.db, profileId, name, color, deviceId);
+          const autoColor = COLORS[this.colorIndex++ % COLORS.length];
+          await playersRepo.createPlayer(this.db, profileId, name, autoColor, deviceId);
+          playerColor = autoColor;
         }
       } catch (err) {
         // Don't block joining if DB fails — play as anonymous
@@ -178,9 +196,34 @@ export class GameRoom {
       }
     }
 
+    // Use profile color if available, otherwise assign from palette
+    const color = playerColor ?? COLORS[this.colorIndex++ % COLORS.length];
+
+    const welcomePayload: WelcomePayload = {
+      playerId,
+      playerColor: color,
+      roomCode: this.roomCode,
+      language: this.language,
+    };
+
+    if (profileId) {
+      try {
+        const profile = await playersRepo.getPlayer(this.db, profileId);
+        if (profile) {
+          welcomePayload.profile = {
+            displayName: profile.displayName,
+            totalGames: profile.totalGames,
+            totalWins: profile.totalWins,
+          };
+        }
+      } catch {
+        // Non-critical — continue without profile in welcome
+      }
+    }
+
     this.players.set(playerId, {
       playerId,
-      name,
+      name: playerName,
       color,
       score: 0,
       ws,
@@ -198,7 +241,7 @@ export class GameRoom {
     // Broadcast PLAYER_JOINED to everyone (including host)
     this.broadcast({
       type: 'PLAYER_JOINED',
-      payload: { playerId, name, color },
+      payload: { playerId, name: playerName, color, emoji: playerEmoji },
     });
 
     return playerId;
@@ -275,7 +318,16 @@ export class GameRoom {
         break;
       }
       case 'JOIN': {
-        this.addPlayer(ws, message.payload.name, message.payload.deviceId);
+        this.addPlayer(
+          ws,
+          message.payload.name,
+          message.payload.deviceId,
+          message.payload.profileId,
+        );
+        break;
+      }
+      case 'UNBIND': {
+        this.handleUnbind(ws, message.payload.deviceId);
         break;
       }
       case 'ANSWER': {
@@ -644,11 +696,37 @@ export class GameRoom {
             totalWins: existing.totalWins,
           },
         };
+      } else {
+        // No bound profile — include available admin-created profiles
+        const available = await playersRepo.listAvailableProfiles(this.db);
+        if (available.length > 0) {
+          payload.availableProfiles = available.map((p) => ({
+            id: p.id,
+            displayName: p.displayName,
+            avatarColor: p.avatarColor,
+            avatarEmoji: p.avatarEmoji ?? '',
+            totalGames: p.totalGames,
+          }));
+        }
       }
     } catch (err) {
       console.error('IDENTIFY lookup failed:', err);
     }
     this.sendTo(ws, { type: 'IDENTITY', payload });
+  }
+
+  private async handleUnbind(ws: ServerWebSocket<WSData>, deviceId: string): Promise<void> {
+    try {
+      // Find the profile bound to this device and unbind it
+      const existing = await playersRepo.findByDeviceId(this.db, deviceId);
+      if (existing) {
+        await playersRepo.unbindDevice(this.db, existing.id);
+      }
+    } catch (err) {
+      console.error('UNBIND failed:', err);
+    }
+    // After unbinding, send a fresh identity response (will include available profiles)
+    await this.handleIdentify(ws, deviceId);
   }
 
   private handleAnswer(ws: ServerWebSocket<WSData>, questionId: string, answer: AnswerKey): void {

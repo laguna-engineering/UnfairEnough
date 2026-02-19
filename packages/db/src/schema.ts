@@ -39,6 +39,8 @@ export interface PlayerRow {
   device_id: string | null;
   display_name: string;
   avatar_color: string;
+  avatar_emoji: string | null;
+  source: 'admin' | 'auto';
   created_at: string;
   last_seen_at: string;
   total_games: number;
@@ -130,6 +132,8 @@ export interface PlayerProfile {
   deviceId: string | null;
   displayName: string;
   avatarColor: string;
+  avatarEmoji: string | null;
+  source: 'admin' | 'auto';
   createdAt: string;
   lastSeenAt: string;
   totalGames: number;
