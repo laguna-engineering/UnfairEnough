@@ -57,6 +57,7 @@ export async function upsertTagScore(
   tag: string,
   delta: number,
   isCorrect: boolean,
+  initialScore = 0,
 ): Promise<void> {
   await db.run(
     `INSERT INTO player_tag_scores (id, player_id, tag, score, total_correct, total_incorrect, last_updated)
@@ -70,7 +71,7 @@ export async function upsertTagScore(
       id,
       playerId,
       tag,
-      delta,
+      initialScore + delta,
       isCorrect ? 1 : 0,
       isCorrect ? 0 : 1,
       delta,

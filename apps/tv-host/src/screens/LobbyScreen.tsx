@@ -31,8 +31,18 @@ const LANGUAGES: { code: SupportedLanguage; label: string }[] = [
 
 export const LobbyScreen: React.FC = () => {
   const { t, i18n } = useTranslation();
-  const { state, startGame, configureGame, setLanguage, roomCode, qrUrl, gameConfig, mode } =
-    useGameController();
+  const {
+    state,
+    startGame,
+    configureGame,
+    setLanguage,
+    roomCode,
+    qrUrl,
+    gameConfig,
+    mode,
+    serverPort,
+    localIp,
+  } = useGameController();
   const [selectedMode, setSelectedMode] = useState<'casual' | 'configured'>(
     gameConfig.gameType ?? 'casual',
   );
@@ -126,6 +136,11 @@ export const LobbyScreen: React.FC = () => {
                     {t('lobby.orEnterCode', { code: '' }).replace(': ', '')}
                   </Text>
                   <Text style={styles.roomCode}>{roomCode}</Text>
+                  {mode === 'local' && localIp && serverPort ? (
+                    <Text style={styles.addressText}>
+                      {localIp}:{serverPort}
+                    </Text>
+                  ) : null}
                 </View>
               </>
             ) : (
@@ -353,6 +368,12 @@ const styles = StyleSheet.create({
     ...typography.h2,
     color: colors.accentYellow,
     letterSpacing: 4,
+  },
+  addressText: {
+    ...typography.label,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    fontFamily: 'monospace',
   },
   loadingContainer: {
     width: QR_SIZE,

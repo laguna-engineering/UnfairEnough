@@ -19,6 +19,7 @@ import {
   createStore,
   decayedScore,
   difficultyMultiplier,
+  ELO_BASELINE,
   endGame,
   nextQuestion,
   playersSelectors,
@@ -29,6 +30,7 @@ import {
   resetGame,
   resolvePlayerDifficulty,
   selectNextQuestion,
+  setPlayerConnected,
   setServerReady,
   showMediaPreview,
   showQuestion,
@@ -93,7 +95,14 @@ class GameController implements IGameController {
           this.resolvePlayerProfile(data.playerId, data.name, data.deviceId);
         }
       },
+      onPlayerDisconnected: (data) => {
+        this.store.dispatch(setPlayerConnected({ id: data.playerId, isConnected: false }));
+      },
+      onPlayerReconnected: (data) => {
+        this.store.dispatch(setPlayerConnected({ id: data.playerId, isConnected: true }));
+      },
       onPlayerLeft: (data) => {
+        // Timer expired or intentional LEAVE — full removal
         this.store.dispatch(removePlayer(data.playerId));
         this.playerProfiles.delete(data.playerId);
       },
@@ -396,10 +405,12 @@ class GameController implements IGameController {
       if (newState.game.countdown <= 0) {
         this.endQuestion();
       } else {
-        // Check if all players answered
-        const totalPlayers = playersSelectors.selectTotal(newState.players);
+        // Check if all connected players answered
+        const connectedPlayers = playersSelectors
+          .selectAll(newState.players)
+          .filter((p) => p.isConnected);
         const answeredCount = Object.keys(newState.game.answers).length;
-        if (answeredCount >= totalPlayers && totalPlayers > 0) {
+        if (answeredCount >= connectedPlayers.length && connectedPlayers.length > 0) {
           this.endQuestion();
         }
       }
@@ -557,18 +568,27 @@ class GameController implements IGameController {
       const profile = this.playerProfiles.get(result.playerId);
       if (!profile) continue;
 
-      const updates = computeTagUpdates(question.tags, result.isCorrect, result.baseScore);
+      const playerScores = this.playerTagScores.get(profile.profileId) ?? new Map<string, number>();
+      const updates = computeTagUpdates(question.tags, result.isCorrect, playerScores);
 
       for (const update of updates) {
         // Persist to local DB
         const id = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         playerTagScoresRepo
-          .upsertTagScore(db, id, profile.profileId, update.tag, update.delta, result.isCorrect)
+          .upsertTagScore(
+            db,
+            id,
+            profile.profileId,
+            update.tag,
+            update.delta,
+            result.isCorrect,
+            ELO_BASELINE,
+          )
           .catch((err) => console.error('Failed to upsert tag score:', err));
 
         // Update in-memory scores for next round's question selection
         const existing = this.playerTagScores.get(profile.profileId) ?? new Map<string, number>();
-        existing.set(update.tag, (existing.get(update.tag) ?? 0) + update.delta);
+        existing.set(update.tag, (existing.get(update.tag) ?? ELO_BASELINE) + update.delta);
         this.playerTagScores.set(profile.profileId, existing);
       }
     }

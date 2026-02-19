@@ -92,6 +92,9 @@ export function parseClientMessage(data: unknown): ClientMessage {
       };
     }
 
+    case 'LEAVE':
+      return { type: 'LEAVE' };
+
     case 'PING':
       return { type: 'PING' };
 

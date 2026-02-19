@@ -3,6 +3,7 @@ export type ClientMessage =
   | { type: 'JOIN'; payload: { name: string; roomCode?: string; deviceId?: string } }
   | { type: 'RECONNECT'; payload: { playerId: string } }
   | { type: 'ANSWER'; payload: { questionId: string; answer: AnswerKey } }
+  | { type: 'LEAVE' }
   | { type: 'PING' };
 
 // Server -> Client messages
@@ -11,6 +12,8 @@ export type ServerMessage =
   | { type: 'ROOM_CREATED'; payload: { roomCode: string } }
   | { type: 'PLAYER_JOINED'; payload: PlayerInfo }
   | { type: 'PLAYER_LEFT'; payload: { playerId: string } }
+  | { type: 'PLAYER_DISCONNECTED'; payload: { playerId: string } }
+  | { type: 'PLAYER_RECONNECTED'; payload: { playerId: string } }
   | { type: 'GAME_STARTING'; payload: { countdown: number } }
   | { type: 'QUESTION'; payload: Question & { serverTimestamp: number } }
   | { type: 'TICK'; payload: { remaining: number } }
@@ -129,6 +132,8 @@ export type BridgeMessage =
   | { type: 'SERVER_READY'; port: number; localIp: string; roomCode: string }
   | { type: 'PLAYER_JOINED'; playerId: string; name: string; color: string }
   | { type: 'PLAYER_LEFT'; playerId: string }
+  | { type: 'PLAYER_DISCONNECTED'; playerId: string }
+  | { type: 'PLAYER_RECONNECTED'; playerId: string }
   | {
       type: 'ANSWER';
       playerId: string;

@@ -21,6 +21,7 @@ import {
   computeTagUpdates,
   decayedScore,
   difficultyMultiplier,
+  ELO_BASELINE,
   resolvePlayerDifficulty,
 } from '../../../packages/game-logic/src/utils/tagScoring';
 import type { HostMessage, RoomPlayer, WSData } from './types';
@@ -176,7 +177,16 @@ export class GameRoom {
       }
     }
 
-    this.players.set(playerId, { playerId, name, color, score: 0, ws, deviceId, profileId });
+    this.players.set(playerId, {
+      playerId,
+      name,
+      color,
+      score: 0,
+      ws,
+      deviceId,
+      profileId,
+      isConnected: true,
+    });
 
     // Update the ws data so we can identify this connection later
     ws.data.playerId = playerId;
@@ -194,8 +204,34 @@ export class GameRoom {
   }
 
   removePlayer(playerId: string): void {
+    const player = this.players.get(playerId);
+    if (player?.disconnectTimer) {
+      clearTimeout(player.disconnectTimer);
+    }
     this.players.delete(playerId);
     this.broadcast({ type: 'PLAYER_LEFT', payload: { playerId } });
+  }
+
+  /** Mark player as disconnected with a 30s grace period before full removal. */
+  handlePlayerDisconnect(playerId: string): void {
+    const player = this.players.get(playerId);
+    if (!player) return;
+
+    player.ws = null;
+    player.isConnected = false;
+
+    this.broadcast({ type: 'PLAYER_DISCONNECTED', payload: { playerId } });
+
+    // Start 30-second grace period
+    player.disconnectTimer = setTimeout(() => {
+      player.disconnectTimer = undefined;
+      this.removePlayer(playerId);
+    }, 30_000);
+  }
+
+  /** Intentional leave — skip grace period, remove immediately. */
+  handlePlayerLeave(playerId: string): void {
+    this.removePlayer(playerId);
   }
 
   get playerCount(): number {
@@ -208,6 +244,14 @@ export class GameRoom {
 
   get isEmpty(): boolean {
     return this.players.size === 0 && this.hostWs === null;
+  }
+
+  private get connectedPlayerCount(): number {
+    let count = 0;
+    for (const p of this.players.values()) {
+      if (p.isConnected) count++;
+    }
+    return count;
   }
 
   // ── Message handling ─────────────────────────────────────────
@@ -238,7 +282,40 @@ export class GameRoom {
         break;
       }
       case 'RECONNECT': {
-        // TODO: reconnection support
+        const { playerId } = message.payload;
+        const player = this.players.get(playerId);
+
+        if (!player) {
+          this.sendTo(ws, {
+            type: 'ERROR',
+            payload: { code: 'SESSION_EXPIRED', message: 'Session expired. Please rejoin.' },
+          });
+          return;
+        }
+
+        // Clear the removal timer
+        if (player.disconnectTimer) {
+          clearTimeout(player.disconnectTimer);
+          player.disconnectTimer = undefined;
+        }
+
+        // Swap the WebSocket
+        player.ws = ws;
+        player.isConnected = true;
+        ws.data.playerId = playerId;
+
+        // Send current game state to the reconnected player
+        this.sendGameStateToPlayer(player);
+
+        // Notify everyone
+        this.broadcast({ type: 'PLAYER_RECONNECTED', payload: { playerId } });
+        break;
+      }
+      case 'LEAVE': {
+        const playerId = ws.data.playerId;
+        if (playerId) {
+          this.handlePlayerLeave(playerId);
+        }
         break;
       }
     }
@@ -267,6 +344,71 @@ export class GameRoom {
       case 'CONFIGURE_GAME':
         this.configureGame(message.payload);
         break;
+    }
+  }
+
+  // ── Reconnection state sync ─────────────────────────────────
+
+  /** Send enough state for a reconnected player to catch up. */
+  private sendGameStateToPlayer(player: RoomPlayer): void {
+    if (!player.ws) return;
+
+    // Always re-send WELCOME so the client knows it's restored
+    this.sendTo(player.ws, {
+      type: 'WELCOME',
+      payload: {
+        playerId: player.playerId,
+        playerColor: player.color,
+        roomCode: this.roomCode,
+        language: this.language,
+      },
+    });
+
+    // Send current phase-specific state
+    switch (this.phase) {
+      case 'QUESTION': {
+        const q = this.getCurrentQuestion();
+        if (q && !this.answers.has(player.playerId)) {
+          const timeLimit = this.configuredTimeLimit ?? q.timeLimit ?? DEFAULT_QUESTION_TIME_LIMIT;
+          const elapsed = Math.floor((Date.now() - this.questionStartTime) / 1000);
+          const remaining = Math.max(0, timeLimit - elapsed);
+
+          this.sendTo(player.ws, {
+            type: 'QUESTION',
+            payload: {
+              id: q.id,
+              text: q.text,
+              type: q.type,
+              options: q.options,
+              timeLimit: remaining,
+              questionNumber: this.currentQuestionIndex + 1,
+              totalQuestions: this.totalQuestionCount,
+              serverTimestamp: this.questionStartTime,
+              media: q.media
+                ? { type: q.media.type, url: q.media.url, previewDuration: q.media.previewDuration }
+                : undefined,
+            },
+          });
+        }
+        break;
+      }
+      case 'REVEALING':
+        this.sendTo(player.ws, { type: 'REVEALING' });
+        break;
+      case 'GAME_OVER': {
+        const rankings = this.buildRankings();
+        const winner = rankings[0] ?? { playerId: '', name: '', score: 0 };
+        this.sendTo(player.ws, {
+          type: 'GAME_OVER',
+          payload: {
+            rankings,
+            winner: { playerId: winner.playerId, name: winner.name, score: winner.score },
+            positionHistory: this.positionHistory,
+          },
+        });
+        break;
+      }
+      // LOBBY, COUNTDOWN, MEDIA_PREVIEW, RESULTS — no special state needed beyond WELCOME
     }
   }
 
@@ -472,12 +614,17 @@ export class GameRoom {
       if (remaining <= 0) {
         this.endQuestion();
       } else {
-        // Check if all players answered
-        if (this.answers.size >= this.players.size && this.players.size > 0) {
+        // Check if all connected players answered
+        if (this.allConnectedPlayersAnswered()) {
           this.endQuestion();
         }
       }
     }, 1000);
+  }
+
+  private allConnectedPlayersAnswered(): boolean {
+    const connected = this.connectedPlayerCount;
+    return connected > 0 && this.answers.size >= connected;
   }
 
   private handleAnswer(ws: ServerWebSocket<WSData>, questionId: string, answer: AnswerKey): void {
@@ -497,8 +644,8 @@ export class GameRoom {
       payload: { questionId, serverReceivedAt },
     });
 
-    // Check if all players answered
-    if (this.answers.size >= this.players.size && this.players.size > 0) {
+    // Check if all connected players answered
+    if (this.allConnectedPlayersAnswered()) {
       this.endQuestion();
     }
   }
@@ -562,18 +709,7 @@ export class GameRoom {
     }
 
     // Compute rankings for this round
-    const rankings: PlayerRanking[] = rankPlayers(
-      [...this.players.values()].map((p) => ({
-        id: p.playerId,
-        name: p.name,
-        score: p.score,
-      })),
-    ).map((r) => ({
-      playerId: r.id,
-      name: r.name,
-      score: r.score,
-      rank: r.rank,
-    }));
+    const rankings = this.buildRankings();
 
     // Track position history
     this.positionHistory.push({
@@ -642,10 +778,8 @@ export class GameRoom {
     }, RESULTS_DELAY_MS);
   }
 
-  private endGame(): void {
-    this.phase = 'GAME_OVER';
-
-    const rankings: PlayerRanking[] = rankPlayers(
+  private buildRankings(): PlayerRanking[] {
+    return rankPlayers(
       [...this.players.values()].map((p) => ({
         id: p.playerId,
         name: p.name,
@@ -657,6 +791,12 @@ export class GameRoom {
       score: r.score,
       rank: r.rank,
     }));
+  }
+
+  private endGame(): void {
+    this.phase = 'GAME_OVER';
+
+    const rankings = this.buildRankings();
 
     const winner = rankings[0] ?? { playerId: '', name: '', score: 0 };
 
@@ -802,7 +942,8 @@ export class GameRoom {
       const player = this.players.get(result.playerId);
       if (!player?.profileId) continue;
 
-      const updates = computeTagUpdates(question.tags, result.isCorrect, result.baseScore);
+      const playerScores = this.playerTagScores.get(player.profileId) ?? new Map<string, number>();
+      const updates = computeTagUpdates(question.tags, result.isCorrect, playerScores);
 
       for (const update of updates) {
         // Update DB (fire-and-forget per tag)
@@ -814,12 +955,13 @@ export class GameRoom {
             update.tag,
             update.delta,
             result.isCorrect,
+            ELO_BASELINE,
           )
           .catch((err) => console.error('Failed to upsert tag score:', err));
 
         // Update in-memory scores for next round's question selection
         const existing = this.playerTagScores.get(player.profileId) ?? new Map<string, number>();
-        existing.set(update.tag, (existing.get(update.tag) ?? 0) + update.delta);
+        existing.set(update.tag, (existing.get(update.tag) ?? ELO_BASELINE) + update.delta);
         this.playerTagScores.set(player.profileId, existing);
       }
     }
@@ -842,9 +984,13 @@ export class GameRoom {
     this.playerTagScores.clear();
     this.currentRoundDifficulties.clear();
 
-    // Reset scores but keep players
+    // Reset scores and clear disconnect timers, but keep players
     for (const player of this.players.values()) {
       player.score = 0;
+      if (player.disconnectTimer) {
+        clearTimeout(player.disconnectTimer);
+        player.disconnectTimer = undefined;
+      }
     }
   }
 
@@ -862,9 +1008,9 @@ export class GameRoom {
 
   private broadcast(message: ServerMessage): void {
     const data = JSON.stringify(message);
-    // Send to all players
+    // Send to all connected players
     for (const player of this.players.values()) {
-      player.ws.send(data);
+      player.ws?.send(data);
     }
     // Send to host
     this.hostWs?.send(data);
@@ -902,6 +1048,11 @@ export class GameRoom {
 
   cleanup(): void {
     this.clearAllTimers();
+    for (const player of this.players.values()) {
+      if (player.disconnectTimer) {
+        clearTimeout(player.disconnectTimer);
+      }
+    }
     this.players.clear();
     this.hostWs = null;
   }

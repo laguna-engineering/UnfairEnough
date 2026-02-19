@@ -119,6 +119,10 @@ ALTER TABLE round_results ADD COLUMN profile_id TEXT REFERENCES players(id) ON D
 CREATE INDEX IF NOT EXISTS idx_round_results_profile ON round_results(profile_id);
 `;
 
+const MIGRATION_V3 = `
+UPDATE player_tag_scores SET score = 1500 WHERE score <> 1500;
+`;
+
 interface Migration {
   version: number;
   sql: string;
@@ -127,6 +131,7 @@ interface Migration {
 const migrations: Migration[] = [
   { version: 1, sql: MIGRATION_V1 },
   { version: 2, sql: MIGRATION_V2 },
+  { version: 3, sql: MIGRATION_V3 },
 ];
 
 /**

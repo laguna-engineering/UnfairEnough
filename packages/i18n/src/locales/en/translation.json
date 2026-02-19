@@ -15,8 +15,8 @@
   "scan": {
     "joinGameOnTv": "Join the game on TV",
     "enterRoomCode": "Enter room code:",
-    "enterTvIp": "Enter TV IP address:",
-    "ipPlaceholder": "localhost or 192.168.x.x",
+    "enterTvIp": "Enter TV address (shown on TV):",
+    "ipPlaceholder": "192.168.x.x:port",
     "invalidQrCode": "Invalid QR Code",
     "invalidQrMessage": "Please scan the QR code shown on the TV.",
     "invalidCode": "Invalid Code",

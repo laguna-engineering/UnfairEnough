@@ -65,6 +65,9 @@ export {
   computeTagUpdates,
   decayedScore,
   difficultyMultiplier,
+  ELO_BASELINE,
+  ELO_K,
+  ELO_SCALE,
   resolvePlayerDifficulty,
   type TagScoreUpdate,
 } from './utils/tagScoring';

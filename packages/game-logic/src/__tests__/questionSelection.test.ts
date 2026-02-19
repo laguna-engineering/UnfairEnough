@@ -94,8 +94,8 @@ describe('selectNextQuestion', () => {
         { profileId: 'bob', name: 'Bob', currentScore: 800 },
       ],
       playerTagScores: new Map([
-        ['alice', new Map([['gaming', 5000]])],
-        ['bob', new Map([['science', 5000]])],
+        ['alice', new Map([['gaming', 1800]])],
+        ['bob', new Map([['science', 1800]])],
       ]),
     };
 
@@ -121,8 +121,8 @@ describe('selectNextQuestion', () => {
         { profileId: 'bob', name: 'Bob', currentScore: 800 },
       ],
       playerTagScores: new Map([
-        ['alice', new Map([['gaming', 5000]])],
-        ['bob', new Map([['gaming', 5000]])],
+        ['alice', new Map([['gaming', 1800]])],
+        ['bob', new Map([['gaming', 1800]])],
       ]),
     };
 
@@ -162,7 +162,7 @@ describe('selectNextQuestion', () => {
         { profileId: 'alice', name: 'Alice', currentScore: 200 },
         { profileId: 'bob', name: 'Bob', currentScore: 800 },
       ],
-      playerTagScores: new Map([['alice', new Map([['gaming', 5000]])]]),
+      playerTagScores: new Map([['alice', new Map([['gaming', 1800]])]]),
     };
 
     const counts = new Map<string, number>();
@@ -203,8 +203,8 @@ describe('selectNextQuestion', () => {
         { profileId: 'bob', name: 'Bob', currentScore: 800 },
       ],
       playerTagScores: new Map([
-        ['alice', new Map([['gaming', 5000]])],
-        ['bob', new Map([['science', 5000]])],
+        ['alice', new Map([['gaming', 1800]])],
+        ['bob', new Map([['science', 1800]])],
       ]),
       roundIndex: 0,
       totalRounds: 10,
@@ -227,7 +227,7 @@ describe('selectNextQuestion', () => {
         { profileId: 'alice', name: 'Alice', currentScore: 200 },
         { profileId: 'bob', name: 'Bob', currentScore: 800 },
       ],
-      playerTagScores: new Map([['alice', new Map([['gaming', 5000]])]]),
+      playerTagScores: new Map([['alice', new Map([['gaming', 1800]])]]),
       roundIndex: 5,
       totalRounds: 10,
     };
@@ -249,8 +249,8 @@ describe('selectNextQuestion', () => {
         { profileId: 'bob', name: 'Bob', currentScore: 800 },
       ],
       playerTagScores: new Map([
-        ['alice', new Map([['gaming', 5000]])],
-        ['bob', new Map([['science', 5000]])],
+        ['alice', new Map([['gaming', 1800]])],
+        ['bob', new Map([['science', 1800]])],
       ]),
     };
 
@@ -284,7 +284,7 @@ describe('selectNextQuestion', () => {
     const questions = [makeQuestion('q1', ['gaming']), makeQuestion('q2', ['science'])];
     const context: RoundSelectionContext = {
       players: [{ profileId: 'p1', name: 'Alice', currentScore: 100 }],
-      playerTagScores: new Map([['p1', new Map([['gaming', 5000]])]]),
+      playerTagScores: new Map([['p1', new Map([['gaming', 1800]])]]),
       roundIndex: 5,
       totalRounds: 10,
     };
@@ -385,7 +385,7 @@ describe('buildQuestionPool', () => {
     ];
 
     const playerTagScores = new Map([
-      ['player1', new Map([['gaming', 5000]])], // Strong at gaming
+      ['player1', new Map([['gaming', 1800]])], // Strong at gaming
     ]);
 
     const random = seededRandom(42);

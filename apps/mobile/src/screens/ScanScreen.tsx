@@ -83,9 +83,9 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
   };
 
   const handleIpConnect = () => {
-    const ip = manualIp.trim() || 'localhost';
-    const url = `ws://${ip}:8080`;
-    onConnect(url);
+    const input = manualIp.trim() || 'localhost:3000';
+    const code = manualCode.toUpperCase().trim();
+    onConnect(`ws://${input}/ws?role=player&roomCode=${code}`);
   };
 
   // Web version - no camera

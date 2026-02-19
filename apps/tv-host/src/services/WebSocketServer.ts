@@ -9,7 +9,6 @@ import * as Crypto from 'expo-crypto';
 import * as Network from 'expo-network';
 import TcpSocket from 'react-native-tcp-socket';
 
-const PORT = 8080;
 const COLORS = [
   '#FF6B9D',
   '#4ECDC4',
@@ -34,6 +33,8 @@ type PlayerJoinedCallback = (data: {
   deviceId?: string;
 }) => void;
 type PlayerLeftCallback = (data: { playerId: string }) => void;
+type PlayerDisconnectedCallback = (data: { playerId: string }) => void;
+type PlayerReconnectedCallback = (data: { playerId: string }) => void;
 type AnswerReceivedCallback = (data: {
   playerId: string;
   questionId: string;
@@ -45,12 +46,23 @@ interface Callbacks {
   onServerReady?: ServerReadyCallback;
   onPlayerJoined?: PlayerJoinedCallback;
   onPlayerLeft?: PlayerLeftCallback;
+  onPlayerDisconnected?: PlayerDisconnectedCallback;
+  onPlayerReconnected?: PlayerReconnectedCallback;
   onAnswerReceived?: AnswerReceivedCallback;
+}
+
+interface GraveyardEntry {
+  playerId: string;
+  name: string;
+  color: string;
+  timer: ReturnType<typeof setTimeout>;
 }
 
 interface Client {
   socket: TcpSocket.Socket;
   playerId: string | null;
+  playerName: string;
+  playerColor: string;
   buffer: Buffer;
   upgraded: boolean;
 }
@@ -140,6 +152,7 @@ class WebSocketServerService {
   private callbacks: Callbacks = {};
   private server: TcpSocket.Server | null = null;
   private clients: Set<Client> = new Set();
+  private graveyard = new Map<string, GraveyardEntry>();
   private colorIndex = 0;
   private roomCode: string = '';
   private localIp: string = '';
@@ -154,6 +167,8 @@ class WebSocketServerService {
       const client: Client = {
         socket,
         playerId: null,
+        playerName: '',
+        playerColor: '',
         buffer: Buffer.alloc(0),
         upgraded: false,
       };
@@ -173,22 +188,29 @@ class WebSocketServerService {
       socket.on('close', () => {
         this.clients.delete(client);
         if (client.playerId) {
-          this.callbacks.onPlayerLeft?.({ playerId: client.playerId });
-          this.broadcast({ type: 'PLAYER_LEFT', payload: { playerId: client.playerId } });
+          this.startGracePeriod(client.playerId, client.playerName, client.playerColor);
         }
       });
 
       socket.on('error', () => {
         this.clients.delete(client);
+        if (client.playerId) {
+          this.startGracePeriod(client.playerId, client.playerName, client.playerColor);
+        }
       });
     });
 
-    this.server.listen({ port: PORT, host: '0.0.0.0' }, async () => {
+    this.server.listen({ port: 0, host: '0.0.0.0' }, async () => {
+      const assignedPort = this.server.address()?.port;
+      if (!assignedPort) {
+        console.error('Failed to get assigned port');
+        return;
+      }
       this.localIp = await this.getLocalIp();
-      console.log(`WebSocket server listening on ${this.localIp}:${PORT}`);
+      console.log(`WebSocket server listening on ${this.localIp}:${assignedPort}`);
 
       this.callbacks.onServerReady?.({
-        port: PORT,
+        port: assignedPort,
         localIp: this.localIp,
         roomCode: this.roomCode,
       });
@@ -202,7 +224,7 @@ class WebSocketServerService {
       if (ip && ip !== '0.0.0.0' && ip !== '127.0.0.1') {
         return ip;
       }
-      // On emulator, use localhost (requires: adb forward tcp:8080 tcp:8080)
+      // On emulator, use localhost (requires adb forward for the assigned port)
       console.log('No valid IP found, using localhost (emulator mode)');
       return 'localhost';
     } catch (error) {
@@ -265,6 +287,8 @@ class WebSocketServerService {
           const playerData = { playerId, name: message.payload.name, color };
 
           client.playerId = playerId;
+          client.playerName = message.payload.name;
+          client.playerColor = color;
 
           this.sendToClient(client, {
             type: 'WELCOME',
@@ -288,6 +312,56 @@ class WebSocketServerService {
               answer: message.payload.answer,
               serverReceivedAt,
             });
+          }
+          break;
+        }
+
+        case 'RECONNECT': {
+          const entry = this.graveyard.get(message.payload.playerId);
+          if (!entry) {
+            this.sendToClient(client, {
+              type: 'ERROR',
+              payload: { code: 'SESSION_EXPIRED', message: 'Session expired. Please rejoin.' },
+            });
+            break;
+          }
+
+          // Restore the player
+          clearTimeout(entry.timer);
+          this.graveyard.delete(entry.playerId);
+          client.playerId = entry.playerId;
+
+          // Re-send WELCOME
+          this.sendToClient(client, {
+            type: 'WELCOME',
+            payload: {
+              playerId: entry.playerId,
+              playerColor: entry.color,
+              roomCode: this.roomCode,
+              language: this.language,
+            },
+          });
+
+          this.callbacks.onPlayerReconnected?.({ playerId: entry.playerId });
+          this.broadcast({
+            type: 'PLAYER_RECONNECTED',
+            payload: { playerId: entry.playerId },
+          });
+          break;
+        }
+
+        case 'LEAVE': {
+          if (client.playerId) {
+            const playerId = client.playerId;
+            // Remove from graveyard if somehow there
+            const entry = this.graveyard.get(playerId);
+            if (entry) {
+              clearTimeout(entry.timer);
+              this.graveyard.delete(playerId);
+            }
+            client.playerId = null;
+            this.callbacks.onPlayerLeft?.({ playerId });
+            this.broadcast({ type: 'PLAYER_LEFT', payload: { playerId } });
           }
           break;
         }
@@ -337,11 +411,32 @@ class WebSocketServerService {
     this.language = language;
   }
 
+  /** Move a disconnected player to the graveyard with a 30s grace period. */
+  private startGracePeriod(playerId: string, name: string, color: string): void {
+    // If already in graveyard, skip (avoid duplicate timers)
+    if (this.graveyard.has(playerId)) return;
+
+    const timer = setTimeout(() => {
+      this.graveyard.delete(playerId);
+      this.callbacks.onPlayerLeft?.({ playerId });
+      this.broadcast({ type: 'PLAYER_LEFT', payload: { playerId } });
+    }, 30_000);
+
+    this.graveyard.set(playerId, { playerId, name, color, timer });
+
+    this.callbacks.onPlayerDisconnected?.({ playerId });
+    this.broadcast({ type: 'PLAYER_DISCONNECTED', payload: { playerId } });
+  }
+
   stop(): void {
     for (const client of this.clients) {
       client.socket.destroy();
     }
     this.clients.clear();
+    for (const entry of this.graveyard.values()) {
+      clearTimeout(entry.timer);
+    }
+    this.graveyard.clear();
     this.server?.close();
     this.server = null;
   }

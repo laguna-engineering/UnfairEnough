@@ -1,3 +1,4 @@
+import { networkInterfaces } from 'node:os';
 import { Hono } from 'hono';
 import { serveStatic, upgradeWebSocket, websocket } from 'hono/bun';
 import { initDatabase } from './db';
@@ -95,10 +96,11 @@ app.get(
         if (data.role === 'host') {
           room.removeHost();
         } else if (data.playerId) {
-          room.removePlayer(data.playerId);
+          // Network drop — start grace period instead of immediate removal
+          room.handlePlayerDisconnect(data.playerId);
         }
 
-        // Clean up empty rooms
+        // Only destroy room if truly empty (no players at all, not just disconnected)
         if (room.isEmpty) {
           destroyRoom(data.roomCode);
         }
@@ -123,4 +125,11 @@ export default {
   websocket,
 };
 
+const localIp = Object.values(networkInterfaces())
+  .flat()
+  .find((i) => i?.family === 'IPv4' && !i.internal)?.address;
+
 console.log(`Server listening on http://localhost:${port}`);
+if (localIp) {
+  console.log(`  LAN: http://${localIp}:${port}`);
+}

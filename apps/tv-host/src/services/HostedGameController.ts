@@ -13,6 +13,7 @@ import {
   resetGame,
   resetScores,
   setCountdown,
+  setPlayerConnected,
   setServerReady,
   showMediaPreview,
   showQuestion,
@@ -167,6 +168,18 @@ export class HostedGameController implements IGameController {
 
       case 'PLAYER_LEFT':
         this.store.dispatch(removePlayer(message.payload.playerId));
+        break;
+
+      case 'PLAYER_DISCONNECTED':
+        this.store.dispatch(
+          setPlayerConnected({ id: message.payload.playerId, isConnected: false }),
+        );
+        break;
+
+      case 'PLAYER_RECONNECTED':
+        this.store.dispatch(
+          setPlayerConnected({ id: message.payload.playerId, isConnected: true }),
+        );
         break;
 
       case 'GAME_STARTING': {

@@ -75,7 +75,7 @@ async function setupMockWs(page: Page) {
   const clientMessages: Array<{ type: string; payload?: unknown }> = [];
   let wsRoute: WebSocketRoute | null = null;
 
-  await page.routeWebSocket(/ws:\/\/localhost:8080/, (ws) => {
+  await page.routeWebSocket(/ws:\/\/localhost(:\d+)?/, (ws) => {
     wsRoute = ws;
     ws.onMessage((raw) => {
       const msg = JSON.parse(raw as string);

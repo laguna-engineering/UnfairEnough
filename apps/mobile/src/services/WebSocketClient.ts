@@ -21,6 +21,8 @@ interface Callbacks {
   onWelcome?: (data: WelcomePayload) => void;
   onPlayerJoined?: (data: { playerId: string; name: string; color: string }) => void;
   onPlayerLeft?: (data: { playerId: string }) => void;
+  onPlayerDisconnected?: (data: { playerId: string }) => void;
+  onPlayerReconnected?: (data: { playerId: string }) => void;
   onGameStarting?: (countdown: number) => void;
   onMediaPreview?: (data: MediaPreviewPayload) => void;
   onQuestion?: (question: Question & { serverTimestamp: number }) => void;
@@ -108,6 +110,14 @@ class WebSocketClient {
           this.callbacks.onPlayerLeft?.(message.payload);
           break;
 
+        case 'PLAYER_DISCONNECTED':
+          this.callbacks.onPlayerDisconnected?.(message.payload);
+          break;
+
+        case 'PLAYER_RECONNECTED':
+          this.callbacks.onPlayerReconnected?.(message.payload);
+          break;
+
         case 'GAME_STARTING':
           this.callbacks.onGameStarting?.(message.payload.countdown);
           break;
@@ -140,6 +150,10 @@ class WebSocketClient {
           break;
 
         case 'ERROR':
+          // If session expired, clear playerId so client re-joins fresh
+          if (message.payload.code === 'SESSION_EXPIRED') {
+            this.playerId = null;
+          }
           this.callbacks.onError?.(message.payload);
           break;
 
@@ -213,6 +227,9 @@ class WebSocketClient {
       this.reconnectTimeout = null;
     }
     this.stopPingInterval();
+    // Send LEAVE so the server skips the grace period
+    this.send({ type: 'LEAVE' });
+    this.playerId = null;
     this.ws?.close();
     this.ws = null;
     this.setConnectionState('disconnected');

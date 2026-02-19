@@ -16,7 +16,9 @@ export interface RoomPlayer {
   name: string;
   color: string;
   score: number;
-  ws: ServerWebSocket<WSData>;
+  ws: ServerWebSocket<WSData> | null;
   deviceId?: string;
   profileId?: string;
+  isConnected: boolean;
+  disconnectTimer?: Timer;
 }
