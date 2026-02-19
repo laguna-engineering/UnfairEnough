@@ -26,7 +26,8 @@
     "grantPermission": "Concedi Permesso",
     "scanQrOnTv": "Scansiona il codice QR sulla TV",
     "orEnterRoomCode": "Oppure inserisci il codice:",
-    "loadingCamera": "Caricamento fotocamera..."
+    "loadingCamera": "Caricamento fotocamera...",
+    "recentServers": "Server recenti"
   },
   "lobby": {
     "title": "Unfair Enough!",
@@ -86,7 +87,9 @@
     "welcomeBack": "Bentornato, {{name}}!",
     "gamesPlayed": "{{count}} partite giocate",
     "wins": "{{count}} vittorie",
-    "firstTime": "Prima partita — divertiti!"
+    "firstTime": "Prima partita — divertiti!",
+    "joinAs": "Entra come {{name}}",
+    "notMe": "Non sono io"
   },
   "mode": {
     "title": "Scegli Modalità",
@@ -103,7 +106,8 @@
     "connected": "Connesso!",
     "connectionFailed": "Connessione fallita",
     "retry": "Riprova",
-    "back": "Indietro"
+    "back": "Indietro",
+    "recentServers": "Server recenti"
   },
   "game": {
     "getReady": "Preparati!",
@@ -121,7 +125,7 @@
     "fastestAnswer": "Più veloce: {{name}} ({{time}}s)",
     "allAnswered": "Tutti hanno risposto!",
     "timeUp": "Tempo scaduto!",
-    "lookAtTv": "Guarda la TV",
+    "lookAtTv": "Guarda la TV! 📺",
     "waitingForNextQuestion": "In attesa della prossima domanda...",
     "correctAnswerLabel": "Risposta Corretta",
     "correctAnswerIs": "Risposta corretta:",

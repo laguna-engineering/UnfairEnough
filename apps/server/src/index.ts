@@ -109,6 +109,10 @@ app.get(
   }),
 );
 
+// ── Admin dashboard ──────────────────────────────────────────
+app.get('/admin', (c) => c.redirect('/admin/'));
+app.use('/admin/*', serveStatic({ root: './' }));
+
 // ── Static files (TV host web build) ──────────────────────────
 const staticDir = process.env.STATIC_DIR ?? './public';
 app.use('/*', serveStatic({ root: staticDir }));

@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Question Sets — Admin</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="admin.js"></script>
+</head>
+<body>
+  <main>
+    <h1>Question Sets</h1>
+
+    <div class="card">
+      <h2 style="margin-top:0">Upload YAML</h2>
+      <div class="upload-form">
+        <input type="file" id="file-input" accept=".yaml,.yml">
+        <button id="upload-btn" disabled>Upload</button>
+      </div>
+      <div id="upload-status"></div>
+
+      <details style="margin-top:1rem;">
+        <summary style="cursor:pointer;font-weight:600;font-size:0.9rem;color:#555;">YAML schema reference</summary>
+        <div style="margin-top:0.75rem;font-size:0.85rem;line-height:1.6;">
+          <h3 style="margin:0 0 0.5rem;font-size:0.95rem;">Set-level fields</h3>
+          <table style="font-size:0.85rem;margin-bottom:1rem;">
+            <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>name</code></td><td>string</td><td>Yes</td><td>Display name for the question set</td></tr>
+              <tr><td><code>author</code></td><td>string</td><td>No</td><td>Author name</td></tr>
+              <tr><td><code>description</code></td><td>string</td><td>No</td><td>Short description</td></tr>
+              <tr><td><code>defaultTimeLimit</code></td><td>number</td><td>No</td><td>Seconds per question (default: 10)</td></tr>
+              <tr><td><code>tags</code></td><td>string[]</td><td>No</td><td>Set-level tags</td></tr>
+              <tr><td><code>questions</code></td><td>array</td><td>Yes</td><td>List of questions (at least 1)</td></tr>
+            </tbody>
+          </table>
+
+          <h3 style="margin:0 0 0.5rem;font-size:0.95rem;">Question fields</h3>
+          <table style="font-size:0.85rem;margin-bottom:1rem;">
+            <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>id</code></td><td>string</td><td>No</td><td>Unique ID within the set (auto-generated if omitted)</td></tr>
+              <tr><td><code>text</code></td><td>string</td><td>Yes</td><td>The question text</td></tr>
+              <tr><td><code>type</code></td><td>string</td><td>No</td><td><code>multiple_choice</code> (default) or <code>true_false</code></td></tr>
+              <tr><td><code>category</code></td><td>string</td><td>No</td><td>Topic category</td></tr>
+              <tr><td><code>tags</code></td><td>string[]</td><td>No</td><td>Tags for scoring engine (max 10, auto-lowercased)</td></tr>
+              <tr><td><code>timeLimit</code></td><td>number</td><td>No</td><td>Override per question (1–120 seconds)</td></tr>
+              <tr><td><code>options</code></td><td>array</td><td>Yes</td><td>2–4 options, each with <code>key</code> (A/B/C/D) and <code>text</code></td></tr>
+              <tr><td><code>correctAnswer</code></td><td>string</td><td>Yes</td><td>Key of the correct option (A/B/C/D, or true/false)</td></tr>
+              <tr><td><code>explanation</code></td><td>string</td><td>No</td><td>Shown after answering</td></tr>
+              <tr><td><code>media</code></td><td>object</td><td>No</td><td>Media attachment (see below)</td></tr>
+              <tr><td><code>playerDifficulty</code></td><td>object</td><td>No</td><td>Static per-player difficulty overrides on a <strong>1–5 scale</strong> (1&nbsp;=&nbsp;easy, 3&nbsp;=&nbsp;neutral, 5&nbsp;=&nbsp;hard). Keyed by player name, with optional <code>"default"</code> fallback. Overrides the dynamic tag-based difficulty when set. E.g. <code>{"Alice": 5, "default": 3}</code></td></tr>
+            </tbody>
+          </table>
+
+          <h3 style="margin:0 0 0.5rem;font-size:0.95rem;">Media fields</h3>
+          <table style="font-size:0.85rem;margin-bottom:1rem;">
+            <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>type</code></td><td>string</td><td>Yes</td><td><code>image</code>, <code>audio</code>, or <code>video</code></td></tr>
+              <tr><td><code>url</code></td><td>string</td><td>Yes</td><td>URL of the media file</td></tr>
+              <tr><td><code>previewDuration</code></td><td>number</td><td>No</td><td>Seconds to show before options appear (default: 5)</td></tr>
+            </tbody>
+          </table>
+
+          <h3 style="margin:0 0 0.5rem;font-size:0.95rem;">Example</h3>
+          <pre style="background:#f5f5f5;padding:0.75rem;border-radius:4px;overflow-x:auto;font-size:0.8rem;line-height:1.5;margin:0;">name: "Example Quiz"
+author: "Your Name"
+description: "A sample question set"
+defaultTimeLimit: 15
+tags: [example]
+
+questions:
+  - id: ex-1
+    text: "What color is the sky on a clear day?"
+    category: science
+    tags: [science, nature]
+    options:
+      - key: A
+        text: "Red"
+      - key: B
+        text: "Blue"
+      - key: C
+        text: "Green"
+      - key: D
+        text: "Yellow"
+    correctAnswer: B
+
+  - id: ex-2
+    text: "How many legs does a spider have?"
+    tags: [science, animals]
+    timeLimit: 10
+    options:
+      - key: A
+        text: "6"
+      - key: B
+        text: "8"
+      - key: C
+        text: "10"
+      - key: D
+        text: "12"
+    correctAnswer: B
+    explanation: "Spiders are arachnids — they have 8 legs."
+
+  - id: ex-3
+    text: "What is the name of this animal?"
+    tags: [animals, images]
+    media:
+      type: image
+      url: "https://example.com/cat.jpg"
+      previewDuration: 5
+    options:
+      - key: A
+        text: "Dog"
+      - key: B
+        text: "Cat"
+      - key: C
+        text: "Bird"
+      - key: D
+        text: "Fish"
+    correctAnswer: B</pre>
+        </div>
+      </details>
+    </div>
+
+    <div id="content"></div>
+  </main>
+
+  <script>
+    const content = document.getElementById("content");
+    const fileInput = document.getElementById("file-input");
+    const uploadBtn = document.getElementById("upload-btn");
+    const uploadStatus = document.getElementById("upload-status");
+
+    fileInput.addEventListener("change", () => {
+      uploadBtn.disabled = !fileInput.files.length;
+    });
+
+    uploadBtn.addEventListener("click", async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = "Uploading...";
+      uploadStatus.innerHTML = "";
+
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch("/api/question-sets", { method: "POST", body: form });
+        const data = await res.json();
+
+        if (!res.ok) {
+          const detail = data.details ? `\n${JSON.stringify(data.details, null, 2)}` : "";
+          uploadStatus.innerHTML = `<p class="error">${escapeHtml(data.error || "Upload failed")}${detail ? `<pre>${escapeHtml(detail)}</pre>` : ""}</p>`;
+          return;
+        }
+
+        uploadStatus.innerHTML = `<p class="success">${escapeHtml(data.message)}</p>`;
+        fileInput.value = "";
+        load(); // Refresh list
+      } catch (err) {
+        uploadStatus.innerHTML = `<p class="error">${escapeHtml(err.message)}</p>`;
+      } finally {
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = "Upload";
+      }
+    });
+
+    // Track which sets are expanded
+    const expanded = new Set();
+
+    async function load() {
+      showLoading(content);
+      try {
+        const data = await fetchJson("/api/question-sets");
+        const sets = data.sets || [];
+
+        if (sets.length === 0) {
+          content.innerHTML = '<p class="empty">No question sets uploaded yet.</p>';
+          return;
+        }
+
+        const container = document.createElement("div");
+
+        for (const qs of sets) {
+          const card = document.createElement("div");
+          card.className = "card";
+
+          const header = document.createElement("div");
+          header.style.cssText = "display:flex;justify-content:space-between;align-items:center;";
+
+          const info = document.createElement("div");
+          const nameEl = document.createElement("strong");
+          nameEl.textContent = qs.name || qs.id;
+          info.appendChild(nameEl);
+          const countEl = document.createElement("span");
+          countEl.textContent = ` — ${qs.questionCount ?? "?"} questions`;
+          countEl.style.color = "#888";
+          info.appendChild(countEl);
+
+          const actions = document.createElement("div");
+          actions.style.cssText = "display:flex;gap:0.5rem;";
+
+          const toggleBtn = document.createElement("button");
+          toggleBtn.className = "toggle-btn";
+          toggleBtn.textContent = expanded.has(qs.id) ? "Collapse" : "Expand";
+          toggleBtn.onclick = () => toggleSet(qs.id, questionsDiv, toggleBtn);
+          actions.appendChild(toggleBtn);
+
+          const deleteBtn = document.createElement("button");
+          deleteBtn.className = "danger";
+          deleteBtn.textContent = "Delete";
+          deleteBtn.onclick = () => deleteSet(qs.id, qs.name);
+          actions.appendChild(deleteBtn);
+
+          header.appendChild(info);
+          header.appendChild(actions);
+          card.appendChild(header);
+
+          const questionsDiv = document.createElement("div");
+          questionsDiv.id = `set-${qs.id}`;
+          if (expanded.has(qs.id)) {
+            loadSetQuestions(qs.id, questionsDiv);
+          }
+          card.appendChild(questionsDiv);
+
+          container.appendChild(card);
+        }
+
+        content.innerHTML = "";
+        content.appendChild(container);
+      } catch (err) {
+        showError(content, err.message);
+      }
+    }
+
+    async function toggleSet(id, container, btn) {
+      if (expanded.has(id)) {
+        expanded.delete(id);
+        container.innerHTML = "";
+        btn.textContent = "Expand";
+      } else {
+        expanded.add(id);
+        btn.textContent = "Collapse";
+        await loadSetQuestions(id, container);
+      }
+    }
+
+    async function loadSetQuestions(id, container) {
+      showLoading(container);
+      try {
+        const data = await fetchJson(`/api/question-sets/${encodeURIComponent(id)}`);
+        const questions = data.questions || [];
+
+        if (questions.length === 0) {
+          container.innerHTML = '<p class="empty">No questions in this set.</p>';
+          return;
+        }
+
+        renderTable(container,
+          ["#", "Question", "Options", "Answer", "Tags"],
+          questions.map((q, i) => {
+            // Build options cell with correct answer highlighted
+            const optionsEl = document.createElement("div");
+            for (const opt of (q.options || [])) {
+              const row = document.createElement("div");
+              const isCorrect = opt.key === q.correctAnswer;
+              row.style.cssText = isCorrect
+                ? "color:#16a34a;font-weight:600;"
+                : "color:#555;";
+              row.textContent = `${opt.key}. ${opt.text}`;
+              optionsEl.appendChild(row);
+            }
+
+            // Tags cell
+            const tagsEl = document.createElement("span");
+            tagsEl.className = "tags";
+            tagsEl.textContent = (q.tags && q.tags.length) ? q.tags.join(", ") : "—";
+
+            // Correct answer badge
+            const answerEl = document.createElement("span");
+            answerEl.className = "badge badge-win";
+            const correctOpt = (q.options || []).find(o => o.key === q.correctAnswer);
+            answerEl.textContent = correctOpt
+              ? `${correctOpt.key}. ${correctOpt.text}`
+              : q.correctAnswer;
+
+            return {
+              cells: [i + 1, q.text, optionsEl, answerEl, tagsEl],
+            };
+          })
+        );
+      } catch (err) {
+        showError(container, err.message);
+      }
+    }
+
+    async function deleteSet(id, name) {
+      if (!confirm(`Delete question set "${name || id}"? This cannot be undone.`)) return;
+
+      try {
+        const res = await fetch(`/api/question-sets/${encodeURIComponent(id)}`, { method: "DELETE" });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          alert(data.error || "Delete failed");
+          return;
+        }
+        expanded.delete(id);
+        load();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", load);
+  </script>
+</body>
+</html>

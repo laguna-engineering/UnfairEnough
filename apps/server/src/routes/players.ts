@@ -66,4 +66,39 @@ players.get('/:id/stats', async (c) => {
   });
 });
 
+// PUT /api/players/:id/tags — set a tag score for a player
+players.put('/:id/tags', async (c) => {
+  const db = getDb();
+  const id = c.req.param('id');
+  const player = await playersRepo.getPlayer(db, id);
+  if (!player) {
+    return c.json({ error: 'Player not found' }, 404);
+  }
+
+  const body = await c.req.json<{ tag?: string; score?: number }>();
+  const tag = body.tag?.toLowerCase().trim();
+  if (!tag) {
+    return c.json({ error: 'Missing "tag"' }, 400);
+  }
+  const score = typeof body.score === 'number' ? body.score : undefined;
+  if (score === undefined) {
+    return c.json({ error: 'Missing "score" (number)' }, 400);
+  }
+
+  await playerTagScoresRepo.setTagScore(db, id, tag, score);
+  return c.json({ tag, score });
+});
+
+// DELETE /api/players/:id/tags/:tag — remove a tag score
+players.delete('/:id/tags/:tag', async (c) => {
+  const db = getDb();
+  const id = c.req.param('id');
+  const tag = decodeURIComponent(c.req.param('tag'));
+  const deleted = await playerTagScoresRepo.deleteTagScore(db, id, tag);
+  if (!deleted) {
+    return c.json({ error: 'Tag score not found' }, 404);
+  }
+  return c.json({ message: 'Tag score deleted' });
+});
+
 export default players;

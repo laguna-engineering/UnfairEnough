@@ -2,10 +2,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import type React from 'react';
 import {
   ActivityIndicator,
+  Pressable,
   StyleSheet,
   Text,
   type TextStyle,
-  TouchableOpacity,
   type ViewStyle,
 } from 'react-native';
 import { colors, gradients } from '../theme/colors';
@@ -62,64 +62,85 @@ export const Button: React.FC<ButtonProps> = ({
     }
   };
 
+  const content = loading ? (
+    <ActivityIndicator color={getTextColor()} />
+  ) : (
+    <Text style={[typography.button, { color: getTextColor() }, textStyle]}>{title}</Text>
+  );
+
   const gradientColors = !disabled ? getGradientColors() : null;
 
   if (gradientColors) {
     return (
-      <TouchableOpacity
+      <Pressable
         onPress={onPress}
         disabled={disabled || loading}
-        activeOpacity={0.8}
-        style={style}
+        style={(state) => [
+          styles.gradientWrapper,
+          style,
+          (state as any).focused && styles.focused,
+          state.pressed && styles.pressed,
+        ]}
       >
         <LinearGradient
           colors={gradientColors}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
-          style={[styles.button, getSizeStyles()]}
+          style={[styles.gradientInner, getSizeStyles()]}
         >
-          {loading ? (
-            <ActivityIndicator color={getTextColor()} />
-          ) : (
-            <Text style={[typography.button, { color: getTextColor() }, textStyle]}>{title}</Text>
-          )}
+          {content}
         </LinearGradient>
-      </TouchableOpacity>
+      </Pressable>
     );
   }
 
   return (
-    <TouchableOpacity
-      style={[
+    <Pressable
+      style={(state) => [
         styles.button,
         getSizeStyles(),
         { backgroundColor: getBackgroundColor() },
         variant === 'outline' && styles.outline,
         style,
+        (state as any).focused && styles.focused,
+        state.pressed && styles.pressed,
       ]}
       onPress={onPress}
       disabled={disabled || loading}
-      activeOpacity={0.8}
     >
-      {loading ? (
-        <ActivityIndicator color={getTextColor()} />
-      ) : (
-        <Text style={[typography.button, { color: getTextColor() }, textStyle]}>{title}</Text>
-      )}
-    </TouchableOpacity>
+      {content}
+    </Pressable>
   );
 };
 
 const styles = StyleSheet.create({
   button: {
     borderRadius: borderRadius.lg,
+    borderWidth: 2,
+    borderColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 120,
     overflow: 'hidden',
   },
-  outline: {
+  gradientWrapper: {
+    borderRadius: borderRadius.lg,
     borderWidth: 2,
+    borderColor: 'transparent',
+    overflow: 'hidden',
+  },
+  gradientInner: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 120,
+  },
+  outline: {
     borderColor: colors.primary,
+  },
+  focused: {
+    borderColor: colors.primary,
+  },
+  pressed: {
+    opacity: 0.8,
   },
 });

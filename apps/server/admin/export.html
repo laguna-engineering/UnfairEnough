@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Export for LLM — Admin</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="admin.js"></script>
+  <style>
+    .player-picker { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
+    .player-chip {
+      padding: 0.4rem 0.8rem; border-radius: 20px; border: 2px solid #ddd;
+      cursor: pointer; font-size: 0.9rem; background: #fff; transition: all 0.15s;
+      user-select: none;
+    }
+    .player-chip:hover { border-color: #999; }
+    .player-chip.selected { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; font-weight: 600; }
+
+    .player-tags { margin-bottom: 1.5rem; }
+    .player-section { margin-bottom: 1rem; }
+    .player-section h3 { margin: 0 0 0.5rem; font-size: 1rem; }
+
+    .tag-row {
+      display: inline-flex; align-items: center; gap: 0.3rem;
+      margin: 0.2rem 0.3rem; font-size: 0.85rem;
+    }
+    .tag-label {
+      padding: 0.25rem 0.6rem; border-radius: 4px; cursor: pointer;
+      border: 1px solid #ddd; background: #f5f5f5; transition: all 0.15s;
+      user-select: none;
+    }
+    .tag-label:hover { border-color: #999; }
+    .tag-label.strong { background: #dcfce7; border-color: #86efac; color: #166534; }
+    .tag-label.weak { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+    .tag-score { font-size: 0.75rem; color: #888; }
+
+    .output-area {
+      background: #1a1a1a; color: #e0e0e0; border-radius: 6px;
+      padding: 1rem; font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 0.85rem; white-space: pre-wrap; min-height: 120px;
+      line-height: 1.6; position: relative;
+    }
+    .copy-btn {
+      position: absolute; top: 0.5rem; right: 0.5rem;
+      background: #333; color: #ccc; border: 1px solid #555;
+      padding: 0.3rem 0.7rem; font-size: 0.8rem; border-radius: 4px;
+      cursor: pointer;
+    }
+    .copy-btn:hover { background: #444; color: #fff; }
+
+    .controls { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Export Player Profiles for LLM</h1>
+    <p style="color:#555;margin-bottom:1rem;">Select players, then click tags to mark them as <strong style="color:#166534;">strong</strong> or <strong style="color:#991b1b;">weak</strong>. Export as markdown to feed to an LLM for generating tailored questions.</p>
+
+    <h2>1. Select Players</h2>
+    <div class="loading" id="players-loading">Loading players...</div>
+    <div class="player-picker" id="player-picker"></div>
+
+    <div id="tags-section" style="display:none;">
+      <h2>2. Mark Tag Strengths</h2>
+      <p style="color:#555;font-size:0.85rem;margin-bottom:0.75rem;">Click a tag once for <strong style="color:#166534;">strong</strong>, twice for <strong style="color:#991b1b;">weak</strong>, three times to deselect. Tags are pre-classified by score.</p>
+      <div class="controls">
+        <button id="auto-classify-btn" class="toggle-btn">Auto-classify All</button>
+        <button id="clear-tags-btn" class="toggle-btn">Clear All</button>
+      </div>
+      <div id="player-tags" class="player-tags"></div>
+    </div>
+
+    <div id="output-section" style="display:none;">
+      <h2>3. Markdown Output</h2>
+      <div style="position:relative;">
+        <div class="output-area" id="markdown-output"></div>
+        <button class="copy-btn" id="copy-btn">Copy</button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // State
+    let allPlayers = [];
+    let playerStats = {};    // playerId -> { player, tagScores }
+    let selectedPlayers = new Set();
+    // tagClassifications: playerId -> Map<tag, "strong"|"weak">
+    let tagClassifications = {};
+
+    const pickerEl = document.getElementById("player-picker");
+    const tagsSection = document.getElementById("tags-section");
+    const playerTagsEl = document.getElementById("player-tags");
+    const outputSection = document.getElementById("output-section");
+    const markdownOutput = document.getElementById("markdown-output");
+
+    // Load players
+    async function init() {
+      try {
+        const data = await fetchJson("/api/players");
+        allPlayers = data.players || [];
+        document.getElementById("players-loading").style.display = "none";
+        renderPlayerPicker();
+      } catch (err) {
+        document.getElementById("players-loading").innerHTML =
+          `<p class="error">${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    function renderPlayerPicker() {
+      pickerEl.innerHTML = "";
+      for (const p of allPlayers) {
+        const chip = document.createElement("div");
+        chip.className = "player-chip" + (selectedPlayers.has(p.id) ? " selected" : "");
+        chip.textContent = p.displayName || p.id;
+        chip.onclick = () => togglePlayer(p.id);
+        pickerEl.appendChild(chip);
+      }
+    }
+
+    async function togglePlayer(id) {
+      if (selectedPlayers.has(id)) {
+        selectedPlayers.delete(id);
+        delete tagClassifications[id];
+      } else {
+        selectedPlayers.add(id);
+        // Fetch stats if not cached
+        if (!playerStats[id]) {
+          const data = await fetchJson(`/api/players/${encodeURIComponent(id)}/stats`);
+          playerStats[id] = data;
+        }
+        // Auto-classify tags by score
+        autoClassifyPlayer(id);
+      }
+      renderPlayerPicker();
+      renderTagSections();
+      updateOutput();
+    }
+
+    function autoClassifyPlayer(id) {
+      const stats = playerStats[id];
+      if (!stats) return;
+      tagClassifications[id] = {};
+      for (const t of stats.tagScores) {
+        if (t.score > 0) tagClassifications[id][t.tag] = "strong";
+        else if (t.score < 0) tagClassifications[id][t.tag] = "weak";
+      }
+    }
+
+    function renderTagSections() {
+      if (selectedPlayers.size === 0) {
+        tagsSection.style.display = "none";
+        outputSection.style.display = "none";
+        return;
+      }
+      tagsSection.style.display = "";
+
+      playerTagsEl.innerHTML = "";
+      for (const id of selectedPlayers) {
+        const stats = playerStats[id];
+        if (!stats) continue;
+
+        const section = document.createElement("div");
+        section.className = "player-section card";
+
+        const h3 = document.createElement("h3");
+        h3.textContent = stats.player.displayName || stats.player.id;
+        section.appendChild(h3);
+
+        const sorted = (stats.tagScores || []).slice().sort((a, b) => b.score - a.score);
+
+        if (sorted.length === 0) {
+          const p = document.createElement("p");
+          p.className = "empty";
+          p.style.padding = "0.5rem";
+          p.textContent = "No tag scores for this player.";
+          section.appendChild(p);
+        }
+
+        for (const t of sorted) {
+          const row = document.createElement("span");
+          row.className = "tag-row";
+
+          const label = document.createElement("span");
+          label.className = "tag-label";
+          const cls = (tagClassifications[id] || {})[t.tag];
+          if (cls) label.classList.add(cls);
+          label.textContent = t.tag;
+          label.onclick = () => cycleTag(id, t.tag, label);
+          row.appendChild(label);
+
+          const score = document.createElement("span");
+          score.className = "tag-score";
+          score.textContent = t.score.toFixed(1);
+          row.appendChild(score);
+
+          section.appendChild(row);
+        }
+
+        playerTagsEl.appendChild(section);
+      }
+    }
+
+    function cycleTag(playerId, tag, labelEl) {
+      if (!tagClassifications[playerId]) tagClassifications[playerId] = {};
+      const current = tagClassifications[playerId][tag];
+
+      labelEl.classList.remove("strong", "weak");
+      if (!current) {
+        tagClassifications[playerId][tag] = "strong";
+        labelEl.classList.add("strong");
+      } else if (current === "strong") {
+        tagClassifications[playerId][tag] = "weak";
+        labelEl.classList.add("weak");
+      } else {
+        delete tagClassifications[playerId][tag];
+      }
+      updateOutput();
+    }
+
+    // Auto-classify all selected players
+    document.getElementById("auto-classify-btn").onclick = () => {
+      for (const id of selectedPlayers) autoClassifyPlayer(id);
+      renderTagSections();
+      updateOutput();
+    };
+
+    // Clear all classifications
+    document.getElementById("clear-tags-btn").onclick = () => {
+      for (const id of selectedPlayers) tagClassifications[id] = {};
+      renderTagSections();
+      updateOutput();
+    };
+
+    function updateOutput() {
+      const hasAnyTags = [...selectedPlayers].some(id => {
+        const cls = tagClassifications[id] || {};
+        return Object.keys(cls).length > 0;
+      });
+
+      if (selectedPlayers.size === 0 || !hasAnyTags) {
+        outputSection.style.display = "none";
+        return;
+      }
+      outputSection.style.display = "";
+
+      let md = "# Player Profiles\n\n";
+      md += `${selectedPlayers.size} player(s) selected. `;
+      md += "Use these profiles to generate quiz questions that are tailored to each player's strengths and weaknesses.\n\n";
+
+      for (const id of selectedPlayers) {
+        const stats = playerStats[id];
+        if (!stats) continue;
+        const cls = tagClassifications[id] || {};
+        const strong = Object.entries(cls).filter(([, v]) => v === "strong").map(([k]) => k);
+        const weak = Object.entries(cls).filter(([, v]) => v === "weak").map(([k]) => k);
+
+        if (strong.length === 0 && weak.length === 0) continue;
+
+        md += `## ${stats.player.displayName || stats.player.id}\n\n`;
+        if (strong.length) md += `**Strong at:** ${strong.join(", ")}\n`;
+        if (weak.length) md += `**Weak at:** ${weak.join(", ")}\n`;
+        md += "\n";
+      }
+
+      markdownOutput.textContent = md;
+    }
+
+    // Copy to clipboard
+    document.getElementById("copy-btn").onclick = async () => {
+      const text = markdownOutput.textContent;
+      await navigator.clipboard.writeText(text);
+      const btn = document.getElementById("copy-btn");
+      btn.textContent = "Copied!";
+      setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+    };
+
+    document.addEventListener("DOMContentLoaded", init);
+  </script>
+</body>
+</html>

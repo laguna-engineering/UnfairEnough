@@ -13,7 +13,7 @@ import {
 } from '@unfairenough/ui';
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useGameController } from '../hooks/useGameController';
 import { getDb } from '../services/database';
@@ -96,12 +96,14 @@ export const LobbyScreen: React.FC = () => {
         <Text style={styles.title}>{t('lobby.title')}</Text>
         <View style={styles.languageSwitcher}>
           {LANGUAGES.map((lang) => (
-            <TouchableOpacity
+            <Pressable
               key={lang.code}
               onPress={() => handleLanguageChange(lang.code)}
-              style={[
+              style={(state) => [
                 styles.languageButton,
                 i18n.language === lang.code && styles.languageButtonActive,
+                (state as any).focused && styles.focused,
+                state.pressed && styles.pressed,
               ]}
             >
               <Text
@@ -112,7 +114,7 @@ export const LobbyScreen: React.FC = () => {
               >
                 {lang.label}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           ))}
         </View>
       </View>
@@ -186,11 +188,13 @@ export const LobbyScreen: React.FC = () => {
               )}
             </View>
             <View style={styles.gameModeButtons}>
-              <TouchableOpacity
+              <Pressable
                 onPress={() => handleModeChange('casual')}
-                style={[
+                style={(state) => [
                   styles.gameModeButton,
                   selectedMode === 'casual' && styles.gameModeButtonActive,
+                  (state as any).focused && styles.focused,
+                  state.pressed && styles.pressed,
                 ]}
               >
                 <Text
@@ -201,12 +205,14 @@ export const LobbyScreen: React.FC = () => {
                 >
                   {t('gameConfig.casual')}
                 </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </Pressable>
+              <Pressable
                 onPress={() => handleModeChange('configured')}
-                style={[
+                style={(state) => [
                   styles.gameModeButton,
                   selectedMode === 'configured' && styles.gameModeButtonActive,
+                  (state as any).focused && styles.focused,
+                  state.pressed && styles.pressed,
                 ]}
               >
                 <Text
@@ -217,14 +223,18 @@ export const LobbyScreen: React.FC = () => {
                 >
                   {t('gameConfig.configured')}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
               {mode === 'local' && (
-                <TouchableOpacity
+                <Pressable
                   onPress={() => setShowImportModal(true)}
-                  style={styles.importButton}
+                  style={(state) => [
+                    styles.importButton,
+                    (state as any).focused && styles.focused,
+                    state.pressed && styles.pressed,
+                  ]}
                 >
                   <Text style={styles.importButtonText}>{t('gameConfig.importQuestions')}</Text>
-                </TouchableOpacity>
+                </Pressable>
               )}
             </View>
 
@@ -240,12 +250,14 @@ export const LobbyScreen: React.FC = () => {
                   <Text style={styles.noSetsText}>{t('gameConfig.noSets')}</Text>
                 ) : (
                   questionSets.map((set) => (
-                    <TouchableOpacity
+                    <Pressable
                       key={set.id}
                       onPress={() => configureGame('configured', set.id)}
-                      style={[
+                      style={(state) => [
                         styles.setCard,
                         gameConfig.questionSetId === set.id && styles.setCardActive,
+                        (state as any).focused && styles.focused,
+                        state.pressed && styles.pressed,
                       ]}
                     >
                       <Text
@@ -260,7 +272,7 @@ export const LobbyScreen: React.FC = () => {
                       <Text style={styles.setCardCount}>
                         {t('gameConfig.questionsCount', { count: set.questionCount })}
                       </Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   ))
                 )}
               </ScrollView>
@@ -321,7 +333,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.md,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: colors.textSecondary,
   },
   languageButtonActive: {
@@ -438,7 +450,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: colors.accentYellow,
     borderStyle: 'dashed',
   },
@@ -458,7 +470,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: colors.textSecondary,
     minWidth: 120,
   },
@@ -489,7 +501,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: colors.textSecondary,
   },
   gameModeButtonActive: {
@@ -514,5 +526,11 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.textSecondary,
     marginTop: spacing.sm,
+  },
+  focused: {
+    borderColor: colors.primary,
+  },
+  pressed: {
+    opacity: 0.8,
   },
 });

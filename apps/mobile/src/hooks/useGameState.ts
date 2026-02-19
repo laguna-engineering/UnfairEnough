@@ -3,16 +3,20 @@ import { changeLanguage } from '@unfairenough/i18n';
 import type {
   AnswerKey,
   GameResult,
+  IdentityPayload,
   MediaPreviewPayload,
   Question,
   RoundResult,
   WelcomePayload,
 } from '@unfairenough/ws-protocol';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { clearDeviceId, getDeviceId } from '../services/deviceId';
 import { wsClient } from '../services/WebSocketClient';
 
 export type MobileGamePhase =
   | 'SCAN'
+  | 'IDENTIFYING'
+  | 'WELCOME_BACK'
   | 'JOIN'
   | 'WAITING'
   | 'COUNTDOWN'
@@ -38,12 +42,24 @@ export function useGameState() {
   const [roundResult, setRoundResult] = useState<RoundResult | null>(null);
   const [gameResult, setGameResult] = useState<GameResult | null>(null);
   const [mediaPreview, setMediaPreview] = useState<MediaPreviewPayload | null>(null);
+  const [identifiedProfile, setIdentifiedProfile] = useState<IdentityPayload['profile'] | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const languageOverridden = useRef(false);
 
   useEffect(() => {
     wsClient.setCallbacks({
       onConnectionStateChange: setConnectionState,
+      onIdentity: (data) => {
+        if (data.profile) {
+          setIdentifiedProfile(data.profile);
+          setPhase('WELCOME_BACK');
+        } else {
+          setIdentifiedProfile(null);
+          setPhase('JOIN');
+        }
+      },
       onWelcome: (data) => {
         setPlayerInfo(data);
         setPhase('WAITING');
@@ -94,12 +110,25 @@ export function useGameState() {
   }, []);
 
   const connect = useCallback((url: string) => {
-    wsClient.connect(url);
-    setPhase('JOIN');
+    const deviceId = getDeviceId() ?? undefined;
+    wsClient.connect(url, deviceId);
+    setPhase('IDENTIFYING');
   }, []);
 
   const join = useCallback((name: string, roomCode?: string, deviceId?: string) => {
     wsClient.join(name, roomCode, deviceId);
+  }, []);
+
+  const confirmIdentity = useCallback(() => {
+    if (!identifiedProfile) return;
+    const deviceId = getDeviceId() ?? undefined;
+    wsClient.join(identifiedProfile.displayName, undefined, deviceId);
+  }, [identifiedProfile]);
+
+  const rejectIdentity = useCallback(async () => {
+    await clearDeviceId();
+    setIdentifiedProfile(null);
+    setPhase('JOIN');
   }, []);
 
   const submitAnswer = useCallback(
@@ -116,6 +145,7 @@ export function useGameState() {
     wsClient.disconnect();
     setPhase('SCAN');
     setPlayerInfo(null);
+    setIdentifiedProfile(null);
     setCurrentQuestion(null);
     setSelectedAnswer(null);
     setConfirmedAnswer(null);
@@ -135,6 +165,7 @@ export function useGameState() {
     phase,
     connectionState,
     playerInfo,
+    identifiedProfile,
     countdown,
     currentQuestion,
     timeRemaining,
@@ -146,6 +177,8 @@ export function useGameState() {
     error,
     connect,
     join,
+    confirmIdentity,
+    rejectIdentity,
     submitAnswer,
     reset,
     setLanguageOverride,

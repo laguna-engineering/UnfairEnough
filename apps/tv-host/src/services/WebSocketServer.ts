@@ -366,6 +366,10 @@ class WebSocketServerService {
           break;
         }
 
+        case 'IDENTIFY':
+          this.sendToClient(client, { type: 'IDENTITY', payload: { profile: null } });
+          break;
+
         case 'PING':
           this.sendToClient(client, { type: 'PONG' });
           break;

@@ -45,6 +45,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({
 
       {/* Status */}
       <View style={styles.statusContainer}>
+        <Text style={styles.lookAtTv}>{t('game.lookAtTv')}</Text>
         {confirmedAnswer ? (
           <Text style={styles.confirmedText}>{t('game.answerSubmitted')}</Text>
         ) : (
@@ -102,6 +103,11 @@ const styles = StyleSheet.create({
   statusContainer: {
     alignItems: 'center',
     marginBottom: spacing.lg,
+  },
+  lookAtTv: {
+    ...typography.h2,
+    color: colors.textPrimary,
+    marginBottom: spacing.sm,
   },
   hintText: {
     ...typography.body,

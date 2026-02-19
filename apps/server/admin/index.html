@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Players — Admin</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="admin.js"></script>
+</head>
+<body>
+  <main>
+    <h1>Players</h1>
+    <div id="content"></div>
+  </main>
+
+  <script>
+    const content = document.getElementById("content");
+
+    async function load() {
+      showLoading(content);
+      try {
+        const data = await fetchJson("/api/players");
+        const players = data.players || [];
+
+        renderTable(content, ["Name", "Games", "Wins", "Total Score"], players.map(p => ({
+          cells: [
+            link(`player.html?id=${encodeURIComponent(p.id)}`, p.displayName || p.id),
+            fmtNum(p.totalGames ?? 0),
+            fmtNum(p.totalWins ?? 0),
+            fmtNum(p.totalScore ?? 0),
+          ],
+        })));
+      } catch (err) {
+        showError(content, err.message);
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", load);
+  </script>
+</body>
+</html>

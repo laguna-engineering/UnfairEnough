@@ -7,6 +7,7 @@ import type {
   AnswerKey,
   ClientMessage,
   GameResult,
+  IdentityPayload,
   MediaPreviewPayload,
   Question,
   RoundResult,
@@ -18,6 +19,7 @@ type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
 interface Callbacks {
   onConnectionStateChange?: (state: ConnectionState) => void;
+  onIdentity?: (data: IdentityPayload) => void;
   onWelcome?: (data: WelcomePayload) => void;
   onPlayerJoined?: (data: { playerId: string; name: string; color: string }) => void;
   onPlayerLeft?: (data: { playerId: string }) => void;
@@ -44,18 +46,20 @@ class WebSocketClient {
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
   private playerId: string | null = null;
+  private pendingDeviceId: string | null = null;
   private connectionState: ConnectionState = 'disconnected';
 
   setCallbacks(callbacks: Callbacks): void {
     this.callbacks = { ...this.callbacks, ...callbacks };
   }
 
-  connect(url: string): void {
+  connect(url: string, deviceId?: string): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       return;
     }
 
     this.url = url;
+    this.pendingDeviceId = deviceId ?? null;
     this.setConnectionState('connecting');
 
     try {
@@ -69,6 +73,10 @@ class WebSocketClient {
         // If we have a stored playerId, try to reconnect
         if (this.playerId) {
           this.send({ type: 'RECONNECT', payload: { playerId: this.playerId } });
+        } else if (this.pendingDeviceId) {
+          // New connection — identify the device to check for an existing profile
+          this.send({ type: 'IDENTIFY', payload: { deviceId: this.pendingDeviceId } });
+          this.pendingDeviceId = null;
         }
       };
 
@@ -97,6 +105,10 @@ class WebSocketClient {
       const message = JSON.parse(data) as ServerMessage;
 
       switch (message.type) {
+        case 'IDENTITY':
+          this.callbacks.onIdentity?.(message.payload);
+          break;
+
         case 'WELCOME':
           this.playerId = message.payload.playerId;
           this.callbacks.onWelcome?.(message.payload);
@@ -170,6 +182,10 @@ class WebSocketClient {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
     }
+  }
+
+  identify(deviceId: string): void {
+    this.send({ type: 'IDENTIFY', payload: { deviceId } });
   }
 
   join(name: string, roomCode?: string, deviceId?: string): void {

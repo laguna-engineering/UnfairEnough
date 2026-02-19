@@ -26,7 +26,8 @@
     "grantPermission": "Grant Permission",
     "scanQrOnTv": "Scan the QR code on the TV",
     "orEnterRoomCode": "Or enter room code:",
-    "loadingCamera": "Loading camera..."
+    "loadingCamera": "Loading camera...",
+    "recentServers": "Recent servers"
   },
   "lobby": {
     "title": "Unfair Enough!",
@@ -86,7 +87,9 @@
     "welcomeBack": "Welcome back, {{name}}!",
     "gamesPlayed": "{{count}} games played",
     "wins": "{{count}} wins",
-    "firstTime": "First game — have fun!"
+    "firstTime": "First game — have fun!",
+    "joinAs": "Join as {{name}}",
+    "notMe": "Not me"
   },
   "mode": {
     "title": "Choose Game Mode",
@@ -103,7 +106,8 @@
     "connected": "Connected!",
     "connectionFailed": "Connection failed",
     "retry": "Retry",
-    "back": "Back"
+    "back": "Back",
+    "recentServers": "Recent servers"
   },
   "game": {
     "getReady": "Get Ready!",
@@ -121,7 +125,7 @@
     "fastestAnswer": "Fastest: {{name}} ({{time}}s)",
     "allAnswered": "Everyone answered!",
     "timeUp": "Time's up!",
-    "lookAtTv": "Look at the TV",
+    "lookAtTv": "Look at the TV! 📺",
     "waitingForNextQuestion": "Waiting for next question...",
     "correctAnswerLabel": "Correct Answer",
     "correctAnswerIs": "Correct answer:",

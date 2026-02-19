@@ -89,6 +89,35 @@ export async function incrementGamesPlayed(db: DbAdapter, playerId: string): Pro
   );
 }
 
+export async function setTagScore(
+  db: DbAdapter,
+  playerId: string,
+  tag: string,
+  score: number,
+): Promise<void> {
+  const id = crypto.randomUUID();
+  await db.run(
+    `INSERT INTO player_tag_scores (id, player_id, tag, score, total_correct, total_incorrect, last_updated)
+     VALUES (?, ?, ?, ?, 0, 0, datetime('now'))
+     ON CONFLICT(player_id, tag) DO UPDATE SET
+       score = ?,
+       last_updated = datetime('now')`,
+    [id, playerId, tag, score, score],
+  );
+}
+
+export async function deleteTagScore(
+  db: DbAdapter,
+  playerId: string,
+  tag: string,
+): Promise<boolean> {
+  const result = await db.run('DELETE FROM player_tag_scores WHERE player_id = ? AND tag = ?', [
+    playerId,
+    tag,
+  ]);
+  return result.changes > 0;
+}
+
 export async function getAllTags(
   db: DbAdapter,
 ): Promise<Array<{ tag: string; playerCount: number }>> {

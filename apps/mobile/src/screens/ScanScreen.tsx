@@ -9,8 +9,9 @@ import {
   typography,
 } from '@unfairenough/ui';
 import type React from 'react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { addRecentServer, getRecentServers, initRecentServers } from '../services/recentServers';
 
 // Only import camera on native platforms
 let CameraView: any = null;
@@ -31,8 +32,36 @@ interface ScanScreenProps {
   onLanguageChange: (lang: SupportedLanguage) => void;
 }
 
+function RecentServersList({
+  servers,
+  onSelect,
+}: {
+  servers: string[];
+  onSelect: (address: string) => void;
+}) {
+  const { t } = useTranslation();
+  if (servers.length === 0) return null;
+  return (
+    <View style={styles.recentContainer}>
+      <Text style={styles.recentLabel}>{t('scan.recentServers')}</Text>
+      <View style={styles.recentChips}>
+        {servers.map((address) => (
+          <TouchableOpacity
+            key={address}
+            style={styles.recentChip}
+            onPress={() => onSelect(address)}
+          >
+            <Text style={styles.recentChipText}>{address}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageChange }) => {
   const { t, i18n } = useTranslation();
+  const [recentServers, setRecentServers] = useState<string[]>([]);
 
   const handleLanguageChange = useCallback(
     (lang: SupportedLanguage) => {
@@ -50,12 +79,29 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
         useCameraPermissions()
       : [{ granted: false }, () => {}];
 
+  useEffect(() => {
+    initRecentServers().then((servers) => {
+      setRecentServers(servers);
+      if (servers.length > 0) {
+        setManualIp(servers[0]);
+      }
+    });
+  }, []);
+
   const handleBarCodeScanned = ({ data }: { data: string }) => {
     if (scanned) return;
     setScanned(true);
 
     // Expect ws://IP:PORT format
     if (data.startsWith('ws://')) {
+      // Extract host:port from ws://host:port/path
+      try {
+        const url = new URL(data);
+        const address = url.port ? `${url.hostname}:${url.port}` : url.hostname;
+        addRecentServer(address).then(() => setRecentServers(getRecentServers()));
+      } catch {
+        // URL parsing failed, still connect
+      }
       onConnect(data);
     } else {
       if (Platform.OS === 'web') {
@@ -85,8 +131,41 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
   const handleIpConnect = () => {
     const input = manualIp.trim() || 'localhost:3000';
     const code = manualCode.toUpperCase().trim();
+    addRecentServer(input).then(() => setRecentServers(getRecentServers()));
     onConnect(`ws://${input}/ws?role=player&roomCode=${code}`);
   };
+
+  const handleSelectRecent = (address: string) => {
+    setManualIp(address);
+  };
+
+  const ipInputSection = (
+    <>
+      <Text style={styles.manualLabel}>{t('scan.enterTvIp')}</Text>
+      <TextInput
+        style={styles.ipInput}
+        value={manualIp}
+        onChangeText={setManualIp}
+        placeholder={t('scan.ipPlaceholder')}
+        placeholderTextColor={colors.textSecondary}
+        autoFocus
+      />
+      <RecentServersList servers={recentServers} onSelect={handleSelectRecent} />
+      <View style={styles.buttonRow}>
+        <Button
+          title={t('common.back')}
+          onPress={() => setShowIpInput(false)}
+          variant="outline"
+          size="small"
+        />
+        <Button
+          title={t('common.connect')}
+          onPress={handleIpConnect}
+          style={styles.connectButton}
+        />
+      </View>
+    </>
+  );
 
   // Web version - no camera
   if (Platform.OS === 'web') {
@@ -138,30 +217,7 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
               />
             </>
           ) : (
-            <>
-              <Text style={styles.manualLabel}>{t('scan.enterTvIp')}</Text>
-              <TextInput
-                style={styles.ipInput}
-                value={manualIp}
-                onChangeText={setManualIp}
-                placeholder={t('scan.ipPlaceholder')}
-                placeholderTextColor={colors.textSecondary}
-                autoFocus
-              />
-              <View style={styles.buttonRow}>
-                <Button
-                  title={t('common.back')}
-                  onPress={() => setShowIpInput(false)}
-                  variant="outline"
-                  size="small"
-                />
-                <Button
-                  title={t('common.connect')}
-                  onPress={handleIpConnect}
-                  style={styles.connectButton}
-                />
-              </View>
-            </>
+            ipInputSection
           )}
         </Card>
       </ScreenBackground>
@@ -189,6 +245,18 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
             style={styles.permissionButton}
           />
         </Card>
+      </ScreenBackground>
+    );
+  }
+
+  // Native IP input step (after entering room code)
+  if (showIpInput) {
+    return (
+      <ScreenBackground style={styles.container}>
+        <View style={styles.headerRow}>
+          <Text style={styles.title}>{t('lobby.title')}</Text>
+        </View>
+        <Card style={styles.manualCardLarge}>{ipInputSection}</Card>
       </ScreenBackground>
     );
   }
@@ -399,7 +467,7 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textPrimary,
     textAlign: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   connectButton: {
     minWidth: 150,
@@ -408,5 +476,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: spacing.md,
+  },
+  recentContainer: {
+    marginBottom: spacing.md,
+  },
+  recentLabel: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+    textAlign: 'center',
+  },
+  recentChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  recentChip: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  recentChipText: {
+    ...typography.bodySmall,
+    color: colors.primary,
   },
 });

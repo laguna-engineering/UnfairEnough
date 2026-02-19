@@ -27,7 +27,7 @@ questionSets.get('/', async (c) => {
   return c.json({ sets });
 });
 
-// GET /api/question-sets/:id — get set details
+// GET /api/question-sets/:id — get set details with questions
 questionSets.get('/:id', async (c) => {
   const db = getDb();
   const id = c.req.param('id');
@@ -35,7 +35,8 @@ questionSets.get('/:id', async (c) => {
   if (!set) {
     return c.json({ error: 'Question set not found' }, 404);
   }
-  return c.json({ set });
+  const questions = await questionsRepo.getQuestionsBySet(db, id);
+  return c.json({ set, questions });
 });
 
 // POST /api/question-sets — upload YAML question set

@@ -1,5 +1,7 @@
+import { colors, ScreenBackground } from '@unfairenough/ui';
 import type React from 'react';
 import { useEffect, useRef } from 'react';
+import { ActivityIndicator } from 'react-native';
 import { useGameState } from '../hooks/useGameState';
 import { getDeviceId, initDeviceId } from '../services/deviceId';
 import { CountdownScreen } from './CountdownScreen';
@@ -10,12 +12,14 @@ import { PlayScreen } from './PlayScreen';
 import { ResultScreen } from './ResultScreen';
 import { ScanScreen } from './ScanScreen';
 import { WaitingScreen } from './WaitingScreen';
+import { WelcomeBackScreen } from './WelcomeBackScreen';
 
 export const GameScreen: React.FC = () => {
   const {
     phase,
     connectionState,
     playerInfo,
+    identifiedProfile,
     countdown,
     currentQuestion,
     timeRemaining,
@@ -26,6 +30,8 @@ export const GameScreen: React.FC = () => {
     error,
     connect,
     join,
+    confirmIdentity,
+    rejectIdentity,
     submitAnswer,
     reset,
     setLanguageOverride,
@@ -43,6 +49,24 @@ export const GameScreen: React.FC = () => {
   switch (phase) {
     case 'SCAN':
       return <ScanScreen onConnect={connect} onLanguageChange={setLanguageOverride} />;
+
+    case 'IDENTIFYING':
+      return (
+        <ScreenBackground style={{ justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </ScreenBackground>
+      );
+
+    case 'WELCOME_BACK':
+      if (!identifiedProfile)
+        return <ScanScreen onConnect={connect} onLanguageChange={setLanguageOverride} />;
+      return (
+        <WelcomeBackScreen
+          profile={identifiedProfile}
+          onConfirm={confirmIdentity}
+          onReject={rejectIdentity}
+        />
+      );
 
     case 'JOIN':
       return (

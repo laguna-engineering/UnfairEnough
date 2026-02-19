@@ -73,3 +73,14 @@ export async function initDeviceId(): Promise<string> {
 export function getDeviceId(): string | null {
   return cachedDeviceId;
 }
+
+/**
+ * Clear the current device ID and generate a fresh one.
+ * Used for "Not me" / logout — dissociates the device from its profile.
+ */
+export async function clearDeviceId(): Promise<string> {
+  const newId = generateUUID();
+  cachedDeviceId = newId;
+  await saveToStorage(newId);
+  return newId;
+}

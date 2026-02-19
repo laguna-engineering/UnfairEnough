@@ -1,7 +1,7 @@
 import type { AnswerKey } from '@unfairenough/ws-protocol';
 import { LinearGradient } from 'expo-linear-gradient';
 import type React from 'react';
-import { StyleSheet, Text, TouchableOpacity, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, Text, type ViewStyle } from 'react-native';
 import { colors, gradients } from '../theme/colors';
 import { borderRadius, spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -75,8 +75,8 @@ export const AnswerButton: React.FC<AnswerButtonProps> = ({
   );
 
   return (
-    <TouchableOpacity
-      style={[
+    <Pressable
+      style={(pressState) => [
         styles.button,
         {
           backgroundColor: gradientColors ? undefined : colors.card,
@@ -84,10 +84,11 @@ export const AnswerButton: React.FC<AnswerButtonProps> = ({
           opacity: getOpacity(),
         },
         style,
+        (pressState as any).focused && styles.focused,
+        pressState.pressed && styles.pressed,
       ]}
       onPress={onPress}
       disabled={disabled || state === 'disabled'}
-      activeOpacity={0.8}
     >
       {gradientColors && (
         <LinearGradient
@@ -98,7 +99,7 @@ export const AnswerButton: React.FC<AnswerButtonProps> = ({
         />
       )}
       {content}
-    </TouchableOpacity>
+    </Pressable>
   );
 };
 
@@ -116,6 +117,12 @@ const styles = StyleSheet.create({
   gradientFill: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: borderRadius.lg,
+  },
+  focused: {
+    borderColor: colors.primary,
+  },
+  pressed: {
+    opacity: 0.8,
   },
   keyLabel: {
     ...typography.h2,

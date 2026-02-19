@@ -3,6 +3,7 @@ import { gamesRepo, playersRepo, playerTagScoresRepo, questionsRepo } from '@unf
 import type {
   AnswerKey,
   ClientMessage,
+  IdentityPayload,
   PlayerRanking,
   PlayerResult,
   PositionSnapshot,
@@ -269,6 +270,10 @@ export class GameRoom {
     }
 
     switch (message.type) {
+      case 'IDENTIFY': {
+        this.handleIdentify(ws, message.payload.deviceId);
+        break;
+      }
       case 'JOIN': {
         this.addPlayer(ws, message.payload.name, message.payload.deviceId);
         break;
@@ -625,6 +630,25 @@ export class GameRoom {
   private allConnectedPlayersAnswered(): boolean {
     const connected = this.connectedPlayerCount;
     return connected > 0 && this.answers.size >= connected;
+  }
+
+  private async handleIdentify(ws: ServerWebSocket<WSData>, deviceId: string): Promise<void> {
+    let payload: IdentityPayload = { profile: null };
+    try {
+      const existing = await playersRepo.findByDeviceId(this.db, deviceId);
+      if (existing) {
+        payload = {
+          profile: {
+            displayName: existing.displayName,
+            totalGames: existing.totalGames,
+            totalWins: existing.totalWins,
+          },
+        };
+      }
+    } catch (err) {
+      console.error('IDENTIFY lookup failed:', err);
+    }
+    this.sendTo(ws, { type: 'IDENTITY', payload });
   }
 
   private handleAnswer(ws: ServerWebSocket<WSData>, questionId: string, answer: AnswerKey): void {

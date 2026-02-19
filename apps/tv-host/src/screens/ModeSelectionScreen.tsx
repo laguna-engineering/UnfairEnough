@@ -1,7 +1,7 @@
 import { useTranslation } from '@unfairenough/i18n';
 import { Card, colors, ScreenBackground, spacing, typography } from '@unfairenough/ui';
 import type React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 const TV_SAFE_HORIZONTAL = 96;
 const TV_SAFE_VERTICAL = 54;
@@ -19,19 +19,33 @@ export const ModeSelectionScreen: React.FC<Props> = ({ onSelectLocal, onSelectHo
       <Text style={styles.title}>{t('mode.title')}</Text>
 
       <View style={styles.cardsRow}>
-        <TouchableOpacity style={styles.cardWrapper} onPress={onSelectLocal} activeOpacity={0.8}>
+        <Pressable
+          style={(state) => [
+            styles.cardWrapper,
+            (state as any).focused && styles.focused,
+            state.pressed && styles.pressed,
+          ]}
+          onPress={onSelectLocal}
+        >
           <Card style={styles.card} variant="glow" glowColor={colors.secondary}>
             <Text style={styles.cardTitle}>{t('mode.local')}</Text>
             <Text style={styles.cardDescription}>{t('mode.localDescription')}</Text>
           </Card>
-        </TouchableOpacity>
+        </Pressable>
 
-        <TouchableOpacity style={styles.cardWrapper} onPress={onSelectHosted} activeOpacity={0.8}>
+        <Pressable
+          style={(state) => [
+            styles.cardWrapper,
+            (state as any).focused && styles.focused,
+            state.pressed && styles.pressed,
+          ]}
+          onPress={onSelectHosted}
+        >
           <Card style={styles.card} variant="glow" glowColor={colors.primary}>
             <Text style={styles.cardTitle}>{t('mode.hosted')}</Text>
             <Text style={styles.cardDescription}>{t('mode.hostedDescription')}</Text>
           </Card>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     </ScreenBackground>
   );
@@ -56,6 +70,9 @@ const styles = StyleSheet.create({
   cardWrapper: {
     flex: 1,
     maxWidth: 400,
+    borderRadius: 20,
+    borderWidth: 3,
+    borderColor: 'transparent',
   },
   card: {
     padding: spacing.xl,
@@ -72,5 +89,11 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textSecondary,
     textAlign: 'center',
+  },
+  focused: {
+    borderColor: colors.primary,
+  },
+  pressed: {
+    opacity: 0.8,
   },
 });

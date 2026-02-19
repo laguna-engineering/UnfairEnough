@@ -61,6 +61,20 @@ export function parseClientMessage(data: unknown): ClientMessage {
       };
     }
 
+    case 'IDENTIFY': {
+      if (!payload || typeof payload !== 'object') {
+        throw new Error('IDENTIFY requires payload');
+      }
+      const p = payload as { deviceId?: unknown };
+      if (typeof p.deviceId !== 'string' || !isValidUUID(p.deviceId)) {
+        throw new Error('Valid deviceId is required');
+      }
+      return {
+        type: 'IDENTIFY',
+        payload: { deviceId: p.deviceId },
+      };
+    }
+
     case 'RECONNECT': {
       if (!payload || typeof payload !== 'object') {
         throw new Error('RECONNECT requires payload');

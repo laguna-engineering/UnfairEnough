@@ -9,8 +9,9 @@ import {
   typography,
 } from '@unfairenough/ui';
 import type React from 'react';
-import { useCallback, useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { addRecentServer, getRecentServers, initRecentServers } from '../services/recentServers';
 
 const TV_SAFE_HORIZONTAL = 96;
 const TV_SAFE_VERTICAL = 54;
@@ -26,6 +27,16 @@ export const ConnectScreen: React.FC<Props> = ({ onConnected, onBack }) => {
   const { t } = useTranslation();
   const [serverUrl, setServerUrl] = useState('');
   const [status, setStatus] = useState<ConnectionStatus>('idle');
+  const [recentServers, setRecentServers] = useState<string[]>([]);
+
+  useEffect(() => {
+    initRecentServers().then((servers) => {
+      setRecentServers(servers);
+      if (servers.length > 0) {
+        setServerUrl(servers[0]);
+      }
+    });
+  }, []);
 
   const handleConnect = useCallback(() => {
     if (!serverUrl.trim()) return;
@@ -43,6 +54,7 @@ export const ConnectScreen: React.FC<Props> = ({ onConnected, onBack }) => {
       .then((res) => {
         if (res.ok) {
           setStatus('connected');
+          addRecentServer(host).then(() => setRecentServers(getRecentServers()));
           // Short delay so user sees "Connected!" before transition
           setTimeout(() => onConnected(host), 500);
         } else {
@@ -89,6 +101,25 @@ export const ConnectScreen: React.FC<Props> = ({ onConnected, onBack }) => {
           onSubmitEditing={handleConnect}
         />
 
+        {recentServers.length > 0 && (
+          <View style={styles.recentContainer}>
+            <Text style={styles.recentLabel}>{t('connect.recentServers')}</Text>
+            {recentServers.map((address) => (
+              <Pressable
+                key={address}
+                style={(state) => [
+                  styles.recentRow,
+                  (state as any).focused && styles.focused,
+                  state.pressed && styles.pressed,
+                ]}
+                onPress={() => setServerUrl(address)}
+              >
+                <Text style={styles.recentRowText}>{address}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
         {statusText && (
           <Text style={[styles.statusText, { color: statusColor }]}>{statusText}</Text>
         )}
@@ -101,9 +132,16 @@ export const ConnectScreen: React.FC<Props> = ({ onConnected, onBack }) => {
             size="large"
             style={styles.connectButton}
           />
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <Pressable
+            onPress={onBack}
+            style={(state) => [
+              styles.backButton,
+              (state as any).focused && styles.focused,
+              state.pressed && styles.pressed,
+            ]}
+          >
             <Text style={styles.backText}>{t('connect.back')}</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </Card>
     </ScreenBackground>
@@ -144,6 +182,27 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     marginBottom: spacing.md,
   },
+  recentContainer: {
+    marginBottom: spacing.md,
+  },
+  recentLabel: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  recentRow: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.sm,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    marginBottom: spacing.xs,
+  },
+  recentRowText: {
+    ...typography.body,
+    color: colors.primary,
+  },
   statusText: {
     ...typography.bodySmall,
     marginBottom: spacing.md,
@@ -158,9 +217,19 @@ const styles = StyleSheet.create({
   },
   backButton: {
     paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.sm,
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
   backText: {
     ...typography.body,
     color: colors.textSecondary,
+  },
+  focused: {
+    borderColor: colors.primary,
+  },
+  pressed: {
+    opacity: 0.8,
   },
 });

@@ -1,6 +1,7 @@
 // Client -> Server messages
 export type ClientMessage =
   | { type: 'JOIN'; payload: { name: string; roomCode?: string; deviceId?: string } }
+  | { type: 'IDENTIFY'; payload: { deviceId: string } }
   | { type: 'RECONNECT'; payload: { playerId: string } }
   | { type: 'ANSWER'; payload: { questionId: string; answer: AnswerKey } }
   | { type: 'LEAVE' }
@@ -9,6 +10,7 @@ export type ClientMessage =
 // Server -> Client messages
 export type ServerMessage =
   | { type: 'WELCOME'; payload: WelcomePayload }
+  | { type: 'IDENTITY'; payload: IdentityPayload }
   | { type: 'ROOM_CREATED'; payload: { roomCode: string } }
   | { type: 'PLAYER_JOINED'; payload: PlayerInfo }
   | { type: 'PLAYER_LEFT'; payload: { playerId: string } }
@@ -39,6 +41,14 @@ export interface WelcomePayload {
     totalGames: number;
     totalWins: number;
   };
+}
+
+export interface IdentityPayload {
+  profile: {
+    displayName: string;
+    totalGames: number;
+    totalWins: number;
+  } | null;
 }
 
 export interface PlayerInfo {

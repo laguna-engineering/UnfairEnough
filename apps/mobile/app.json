@@ -19,7 +19,7 @@
       "package": "com.unfairenough.mobile",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#1a1a2e"
+        "backgroundImage": "./assets/adaptive-icon-bg.png"
       }
     },
     "ios": {
