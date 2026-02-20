@@ -40,6 +40,7 @@ export const LobbyScreen: React.FC = () => {
     qrUrl,
     gameConfig,
     mode,
+    serverUrl,
     serverPort,
     localIp,
   } = useGameController();
@@ -51,17 +52,31 @@ export const LobbyScreen: React.FC = () => {
   const [totalQuestions, setTotalQuestions] = useState(0);
 
   const loadQuestionSets = useCallback(async () => {
-    if (mode !== 'local') return;
     try {
-      const db = getDb();
-      const sets = await questionsRepo.getQuestionSets(db);
-      setQuestionSets(sets);
-      const count = await questionsRepo.getTotalQuestionCount(db);
-      setTotalQuestions(count);
+      if (mode === 'local') {
+        const db = getDb();
+        const sets = await questionsRepo.getQuestionSets(db);
+        setQuestionSets(sets);
+        const count = await questionsRepo.getTotalQuestionCount(db);
+        setTotalQuestions(count);
+      } else if (mode === 'hosted' && serverUrl) {
+        // Fetch sets from server API
+        const httpBase = serverUrl.replace(/^wss?:\/\//, 'http://');
+        const res = await fetch(`${httpBase}/api/question-sets`);
+        if (res.ok) {
+          const data = await res.json();
+          setQuestionSets(data.sets || []);
+          const total = (data.sets || []).reduce(
+            (sum: number, s: QuestionSetWithMeta) => sum + (s.questionCount ?? 0),
+            0,
+          );
+          setTotalQuestions(total);
+        }
+      }
     } catch (err) {
       console.error('Failed to load question sets:', err);
     }
-  }, [mode]);
+  }, [mode, serverUrl]);
 
   useEffect(() => {
     loadQuestionSets();
@@ -181,11 +196,9 @@ export const LobbyScreen: React.FC = () => {
           <View style={styles.gameModeContainer}>
             <View style={styles.gameModeHeader}>
               <Text style={styles.gameModeLabel}>{t('gameConfig.gameMode')}</Text>
-              {mode === 'local' && (
-                <Text style={styles.questionCount}>
-                  {t('gameConfig.totalQuestions', { count: totalQuestions })}
-                </Text>
-              )}
+              <Text style={styles.questionCount}>
+                {t('gameConfig.totalQuestions', { count: totalQuestions })}
+              </Text>
             </View>
             <View style={styles.gameModeButtons}>
               <Pressable
@@ -238,8 +251,8 @@ export const LobbyScreen: React.FC = () => {
               )}
             </View>
 
-            {/* Question Set Picker (configured mode, local only) */}
-            {selectedMode === 'configured' && mode === 'local' && (
+            {/* Question Set Picker (configured mode) */}
+            {selectedMode === 'configured' && (
               <ScrollView
                 horizontal
                 style={styles.setPickerContainer}
@@ -253,11 +266,12 @@ export const LobbyScreen: React.FC = () => {
                     <Pressable
                       key={set.id}
                       onPress={() => configureGame('configured', set.id)}
-                      style={(state) => [
+                      style={(pressState) => [
                         styles.setCard,
+                        set.isMeta && styles.setCardMeta,
                         gameConfig.questionSetId === set.id && styles.setCardActive,
-                        (state as any).focused && styles.focused,
-                        state.pressed && styles.pressed,
+                        (pressState as any).focused && styles.focused,
+                        pressState.pressed && styles.pressed,
                       ]}
                     >
                       <Text
@@ -270,7 +284,9 @@ export const LobbyScreen: React.FC = () => {
                         {set.name}
                       </Text>
                       <Text style={styles.setCardCount}>
-                        {t('gameConfig.questionsCount', { count: set.questionCount })}
+                        {set.isMeta
+                          ? t('gameConfig.questionsCount', { count: set.questionCount })
+                          : t('gameConfig.questionsCount', { count: set.questionCount })}
                       </Text>
                     </Pressable>
                   ))
@@ -473,6 +489,9 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.textSecondary,
     minWidth: 120,
+  },
+  setCardMeta: {
+    borderStyle: 'dashed',
   },
   setCardActive: {
     backgroundColor: colors.secondary,

@@ -59,6 +59,7 @@ export function useGameController() {
     setLanguage,
     mode: mode as GameMode,
     qrUrl,
+    serverUrl,
     phase: state.game.phase as GamePhase,
     roomCode: state.game.roomCode,
     serverPort: state.game.serverPort,

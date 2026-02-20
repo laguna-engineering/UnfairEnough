@@ -124,6 +124,24 @@ questions:
       </details>
     </div>
 
+    <div class="card">
+      <h2 style="margin-top:0">Create Meta Set</h2>
+      <p style="font-size:0.85rem;color:#666;margin:0 0 0.75rem;">
+        A meta set is a collection of question sets. When selected in a game, questions from all child sets are mixed together.
+      </p>
+      <div style="display:flex;flex-direction:column;gap:0.5rem;">
+        <input type="text" id="meta-name" placeholder="Meta set name" style="padding:0.4rem 0.6rem;">
+        <input type="text" id="meta-description" placeholder="Description (optional)" style="padding:0.4rem 0.6rem;">
+        <div id="meta-child-picker" style="max-height:200px;overflow-y:auto;border:1px solid #ddd;border-radius:4px;padding:0.5rem;">
+          <p class="loading">Loading sets...</p>
+        </div>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+          <button id="meta-create-btn" disabled>Create Meta Set</button>
+          <span id="meta-status"></span>
+        </div>
+      </div>
+    </div>
+
     <div id="content"></div>
   </main>
 
@@ -170,12 +188,115 @@ questions:
 
     // Track which sets are expanded
     const expanded = new Set();
+    // Track editing state for meta sets
+    let editingMetaId = null;
+
+    // ── Meta set creation ──────────────────────────────────────
+    const metaNameInput = document.getElementById("meta-name");
+    const metaDescInput = document.getElementById("meta-description");
+    const metaChildPicker = document.getElementById("meta-child-picker");
+    const metaCreateBtn = document.getElementById("meta-create-btn");
+    const metaStatus = document.getElementById("meta-status");
+
+    function updateMetaCreateBtn() {
+      const name = metaNameInput.value.trim();
+      const checked = metaChildPicker.querySelectorAll('input[type="checkbox"]:checked');
+      metaCreateBtn.disabled = !name || checked.length === 0;
+    }
+
+    metaNameInput.addEventListener("input", updateMetaCreateBtn);
+
+    function renderChildPicker(sets, selectedIds = []) {
+      const regularSets = sets.filter(s => !s.isMeta);
+      if (regularSets.length === 0) {
+        metaChildPicker.innerHTML = '<p class="empty" style="margin:0;font-size:0.85rem;">No question sets available.</p>';
+        return;
+      }
+      metaChildPicker.innerHTML = "";
+      for (const s of regularSets) {
+        const label = document.createElement("label");
+        label.style.cssText = "display:flex;align-items:center;gap:0.4rem;padding:0.25rem 0;cursor:pointer;font-size:0.9rem;";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.value = s.id;
+        cb.checked = selectedIds.includes(s.id);
+        cb.addEventListener("change", updateMetaCreateBtn);
+        label.appendChild(cb);
+        const text = document.createElement("span");
+        text.textContent = `${s.name} (${s.questionCount} questions)`;
+        label.appendChild(text);
+        metaChildPicker.appendChild(label);
+      }
+    }
+
+    metaCreateBtn.addEventListener("click", async () => {
+      const name = metaNameInput.value.trim();
+      const childSetIds = [...metaChildPicker.querySelectorAll('input[type="checkbox"]:checked')].map(cb => cb.value);
+      if (!name || childSetIds.length === 0) return;
+
+      metaCreateBtn.disabled = true;
+      const isEditing = editingMetaId !== null;
+      metaCreateBtn.textContent = isEditing ? "Saving..." : "Creating...";
+      metaStatus.textContent = "";
+
+      try {
+        const url = isEditing ? `/api/meta-sets/${encodeURIComponent(editingMetaId)}` : "/api/meta-sets";
+        const method = isEditing ? "PUT" : "POST";
+        const res = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, description: metaDescInput.value.trim() || undefined, childSetIds }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          metaStatus.innerHTML = `<span class="error">${escapeHtml(data.error || "Failed")}</span>`;
+          return;
+        }
+        metaStatus.innerHTML = `<span class="success">${escapeHtml(data.message)}</span>`;
+        metaNameInput.value = "";
+        metaDescInput.value = "";
+        cancelMetaEdit();
+        load();
+      } catch (err) {
+        metaStatus.innerHTML = `<span class="error">${escapeHtml(err.message)}</span>`;
+      } finally {
+        metaCreateBtn.disabled = false;
+        metaCreateBtn.textContent = editingMetaId ? "Save Changes" : "Create Meta Set";
+      }
+    });
+
+    function startMetaEdit(metaSet, childIds) {
+      editingMetaId = metaSet.id;
+      metaNameInput.value = metaSet.name;
+      metaDescInput.value = metaSet.description || "";
+      metaCreateBtn.textContent = "Save Changes";
+      // Re-render picker with selections
+      fetchJson("/api/question-sets").then(data => {
+        renderChildPicker(data.sets || [], childIds);
+        updateMetaCreateBtn();
+      });
+      // Scroll to form
+      metaNameInput.scrollIntoView({ behavior: "smooth" });
+      metaNameInput.focus();
+    }
+
+    function cancelMetaEdit() {
+      editingMetaId = null;
+      metaCreateBtn.textContent = "Create Meta Set";
+      updateMetaCreateBtn();
+    }
+
+    // ── Load sets ──────────────────────────────────────────────
 
     async function load() {
       showLoading(content);
       try {
         const data = await fetchJson("/api/question-sets");
         const sets = data.sets || [];
+
+        // Update child picker
+        renderChildPicker(sets);
+        updateMetaCreateBtn();
 
         if (sets.length === 0) {
           content.innerHTML = '<p class="empty">No question sets uploaded yet.</p>';
@@ -192,6 +313,12 @@ questions:
           header.style.cssText = "display:flex;justify-content:space-between;align-items:center;";
 
           const info = document.createElement("div");
+          if (qs.isMeta) {
+            const badge = document.createElement("span");
+            badge.textContent = "Collection";
+            badge.style.cssText = "display:inline-block;background:#7c3aed;color:#fff;font-size:0.7rem;font-weight:600;padding:0.15rem 0.4rem;border-radius:3px;margin-right:0.4rem;vertical-align:middle;";
+            info.appendChild(badge);
+          }
           const nameEl = document.createElement("strong");
           nameEl.textContent = qs.name || qs.id;
           info.appendChild(nameEl);
@@ -206,25 +333,40 @@ questions:
           const toggleBtn = document.createElement("button");
           toggleBtn.className = "toggle-btn";
           toggleBtn.textContent = expanded.has(qs.id) ? "Collapse" : "Expand";
-          toggleBtn.onclick = () => toggleSet(qs.id, questionsDiv, toggleBtn);
+          toggleBtn.onclick = () => toggleSet(qs.id, detailsDiv, toggleBtn, qs.isMeta);
           actions.appendChild(toggleBtn);
+
+          if (qs.isMeta) {
+            const editBtn = document.createElement("button");
+            editBtn.textContent = "Edit";
+            editBtn.onclick = async () => {
+              const metaData = await fetchJson(`/api/meta-sets/${encodeURIComponent(qs.id)}`);
+              const childIds = (metaData.children || []).map(c => c.id);
+              startMetaEdit(qs, childIds);
+            };
+            actions.appendChild(editBtn);
+          }
 
           const deleteBtn = document.createElement("button");
           deleteBtn.className = "danger";
           deleteBtn.textContent = "Delete";
-          deleteBtn.onclick = () => deleteSet(qs.id, qs.name);
+          deleteBtn.onclick = () => qs.isMeta ? deleteMetaSet(qs.id, qs.name) : deleteSet(qs.id, qs.name);
           actions.appendChild(deleteBtn);
 
           header.appendChild(info);
           header.appendChild(actions);
           card.appendChild(header);
 
-          const questionsDiv = document.createElement("div");
-          questionsDiv.id = `set-${qs.id}`;
+          const detailsDiv = document.createElement("div");
+          detailsDiv.id = `set-${qs.id}`;
           if (expanded.has(qs.id)) {
-            loadSetQuestions(qs.id, questionsDiv);
+            if (qs.isMeta) {
+              loadMetaSetChildren(qs.id, detailsDiv);
+            } else {
+              loadSetQuestions(qs.id, detailsDiv);
+            }
           }
-          card.appendChild(questionsDiv);
+          card.appendChild(detailsDiv);
 
           container.appendChild(card);
         }
@@ -236,7 +378,7 @@ questions:
       }
     }
 
-    async function toggleSet(id, container, btn) {
+    async function toggleSet(id, container, btn, isMeta) {
       if (expanded.has(id)) {
         expanded.delete(id);
         container.innerHTML = "";
@@ -244,7 +386,56 @@ questions:
       } else {
         expanded.add(id);
         btn.textContent = "Collapse";
-        await loadSetQuestions(id, container);
+        if (isMeta) {
+          await loadMetaSetChildren(id, container);
+        } else {
+          await loadSetQuestions(id, container);
+        }
+      }
+    }
+
+    async function loadMetaSetChildren(id, container) {
+      showLoading(container);
+      try {
+        const data = await fetchJson(`/api/meta-sets/${encodeURIComponent(id)}`);
+        const children = data.children || [];
+
+        if (children.length === 0) {
+          container.innerHTML = '<p class="empty">No child sets.</p>';
+          return;
+        }
+
+        renderTable(container,
+          ["#", "Name", "Questions", "Tags"],
+          children.map((child, i) => {
+            const tagsEl = document.createElement("span");
+            tagsEl.className = "tags";
+            tagsEl.textContent = (child.tags && child.tags.length) ? child.tags.join(", ") : "—";
+            return {
+              cells: [i + 1, child.name, child.questionCount, tagsEl],
+            };
+          })
+        );
+      } catch (err) {
+        showError(container, err.message);
+      }
+    }
+
+    async function deleteMetaSet(id, name) {
+      if (!confirm(`Delete meta set "${name || id}"? Child sets will not be affected.`)) return;
+
+      try {
+        const res = await fetch(`/api/meta-sets/${encodeURIComponent(id)}`, { method: "DELETE" });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          alert(data.error || "Delete failed");
+          return;
+        }
+        expanded.delete(id);
+        if (editingMetaId === id) cancelMetaEdit();
+        load();
+      } catch (err) {
+        alert(err.message);
       }
     }
 
