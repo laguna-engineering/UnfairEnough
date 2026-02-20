@@ -14,11 +14,22 @@ import type { WSData } from './types';
 
 const app = new Hono();
 
+const port = Number(process.env.PORT) || 3000;
+const mobileDevPort = process.env.MOBILE_DEV_PORT;
+const localIp = Object.values(networkInterfaces())
+  .flat()
+  .find((i) => i?.family === 'IPv4' && !i.internal)?.address;
+
 // ── CORS (allow local dev origins) ──────────────────────────────
 app.use('/api/*', cors());
 
 // ── Health check ───────────────────────────────────────────────
-app.get('/api/health', (c) => c.json({ status: 'ok' }));
+app.get('/api/health', (c) => {
+  const mobilePort = mobileDevPort ? Number(mobileDevPort) : port;
+  const mobilePath = mobileDevPort ? '' : '/mobile';
+  const mobileBaseUrl = localIp ? `http://${localIp}:${mobilePort}${mobilePath}` : null;
+  return c.json({ status: 'ok', lanIp: localIp ?? null, port, mobileBaseUrl });
+});
 
 // ── REST API routes ───────────────────────────────────────────
 app.route('/api/question-sets', questionSetsRoutes);
@@ -147,7 +158,6 @@ app.use(
 );
 
 // ── Mobile web app ───────────────────────────────────────────
-const mobileDevPort = process.env.MOBILE_DEV_PORT;
 
 async function proxyToMetro(req: Request, path: string) {
   try {
@@ -199,8 +209,6 @@ if (mobileDevPort) {
 }
 
 // ── Initialize database and start server ──────────────────────
-const port = Number(process.env.PORT) || 3000;
-
 const db = await initDatabase();
 setDbAdapter(db);
 
@@ -209,10 +217,6 @@ export default {
   fetch: app.fetch,
   websocket,
 };
-
-const localIp = Object.values(networkInterfaces())
-  .flat()
-  .find((i) => i?.family === 'IPv4' && !i.internal)?.address;
 
 console.log(`Server listening on http://localhost:${port}`);
 if (localIp) {

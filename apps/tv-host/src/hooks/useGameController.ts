@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { type GameMode, useGameMode } from '../context/GameModeContext';
 
 export function useGameController() {
-  const { mode, controller, serverUrl } = useGameMode();
+  const { mode, controller, serverUrl, mobileBaseUrl } = useGameMode();
   const [state, setState] = useState<RootState>(controller.getState());
 
   useEffect(() => {
@@ -46,9 +46,12 @@ export function useGameController() {
   if (mode === 'local') {
     qrUrl = localIp && serverPort ? `ws://${localIp}:${serverPort}` : null;
   } else if (mode === 'hosted' && serverUrl && roomCode) {
-    // Strip ws:// prefix if present, ensure http://
-    const httpUrl = serverUrl.replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '');
-    qrUrl = `http://${httpUrl}/mobile/?roomCode=${roomCode}`;
+    const host = serverUrl.replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '');
+    if (mobileBaseUrl) {
+      qrUrl = `${mobileBaseUrl}/?roomCode=${roomCode}&server=${encodeURIComponent(host)}`;
+    } else {
+      qrUrl = `http://${host}/mobile/?roomCode=${roomCode}`;
+    }
   }
 
   return {

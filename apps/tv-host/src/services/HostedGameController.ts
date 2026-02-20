@@ -161,8 +161,10 @@ export class HostedGameController implements IGameController {
       }
 
       case 'PLAYER_JOINED': {
-        const { playerId, name, color } = message.payload;
-        this.store.dispatch(addPlayer({ id: playerId, name, color, score: 0, isConnected: true }));
+        const { playerId, name, color, emoji } = message.payload;
+        this.store.dispatch(
+          addPlayer({ id: playerId, name, color, emoji, score: 0, isConnected: true }),
+        );
         break;
       }
 

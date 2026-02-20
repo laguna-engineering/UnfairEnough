@@ -34,6 +34,7 @@ export default function App() {
     Platform.OS === 'web' ? 'connect' : 'mode_select',
   );
   const [hostedServerUrl, setHostedServerUrl] = useState<string>('');
+  const [hostedMobileBaseUrl, setHostedMobileBaseUrl] = useState<string | null>(null);
   const hostedControllerRef = useRef<HostedGameController | null>(null);
 
   const handleSelectLocal = useCallback(() => {
@@ -44,8 +45,9 @@ export default function App() {
     setScreen('connect');
   }, []);
 
-  const handleConnected = useCallback((serverUrl: string) => {
+  const handleConnected = useCallback((serverUrl: string, mobileBaseUrl: string | null) => {
     setHostedServerUrl(serverUrl);
+    setHostedMobileBaseUrl(mobileBaseUrl);
 
     // Clean up previous hosted controller if any
     hostedControllerRef.current?.cleanup();
@@ -113,7 +115,12 @@ export default function App() {
       return (
         <>
           <StatusBar style="light" hidden />
-          <GameModeProvider mode="hosted" controller={controller} serverUrl={hostedServerUrl}>
+          <GameModeProvider
+            mode="hosted"
+            controller={controller}
+            serverUrl={hostedServerUrl}
+            mobileBaseUrl={hostedMobileBaseUrl ?? undefined}
+          >
             {content}
           </GameModeProvider>
         </>

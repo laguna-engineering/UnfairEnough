@@ -30,6 +30,7 @@ type PlayerJoinedCallback = (data: {
   playerId: string;
   name: string;
   color: string;
+  emoji?: string;
   deviceId?: string;
 }) => void;
 type PlayerLeftCallback = (data: { playerId: string }) => void;

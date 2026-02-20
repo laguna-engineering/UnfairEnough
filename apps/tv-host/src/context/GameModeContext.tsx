@@ -8,6 +8,7 @@ interface GameModeContextValue {
   mode: GameMode;
   controller: IGameController;
   serverUrl?: string;
+  mobileBaseUrl?: string;
 }
 
 const GameModeContext = createContext<GameModeContextValue | null>(null);
@@ -22,6 +23,7 @@ interface GameModeProviderProps {
   mode: GameMode;
   controller: IGameController;
   serverUrl?: string;
+  mobileBaseUrl?: string;
   children: React.ReactNode;
 }
 
@@ -29,9 +31,10 @@ export const GameModeProvider: React.FC<GameModeProviderProps> = ({
   mode,
   controller,
   serverUrl,
+  mobileBaseUrl,
   children,
 }) => (
-  <GameModeContext.Provider value={{ mode, controller, serverUrl }}>
+  <GameModeContext.Provider value={{ mode, controller, serverUrl, mobileBaseUrl }}>
     {children}
   </GameModeContext.Provider>
 );

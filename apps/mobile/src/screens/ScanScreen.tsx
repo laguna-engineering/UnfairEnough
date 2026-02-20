@@ -103,16 +103,18 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
       }
       onConnect(data);
     } else if (data.startsWith('http://') || data.startsWith('https://')) {
-      // Hosted mode: http://server/mobile/?roomCode=XXXX
+      // Hosted mode: http://metro/?roomCode=XXXX&server=host:port
+      // or legacy:   http://server/mobile/?roomCode=XXXX
       try {
         const url = new URL(data);
         const roomCode = url.searchParams.get('roomCode');
+        const serverHost = url.searchParams.get('server') || url.host;
         const wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-        const address = url.port ? `${url.hostname}:${url.port}` : url.hostname;
+        const address = serverHost.includes(':') ? serverHost : `${serverHost}:${url.port || '80'}`;
         addRecentServer(address).then(() => setRecentServers(getRecentServers()));
         const wsUrl = roomCode
-          ? `${wsProtocol}//${url.host}/ws?role=player&roomCode=${roomCode}`
-          : `${wsProtocol}//${url.host}/ws?role=player`;
+          ? `${wsProtocol}//${serverHost}/ws?role=player&roomCode=${roomCode}`
+          : `${wsProtocol}//${serverHost}/ws?role=player`;
         onConnect(wsUrl);
       } catch {
         if (Platform.OS === 'web') {

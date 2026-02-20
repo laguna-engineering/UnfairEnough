@@ -19,7 +19,7 @@ const TV_SAFE_VERTICAL = 54;
 type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'failed';
 
 interface Props {
-  onConnected: (serverUrl: string) => void;
+  onConnected: (serverUrl: string, mobileBaseUrl: string | null) => void;
   onBack: () => void;
 }
 
@@ -51,12 +51,17 @@ export const ConnectScreen: React.FC<Props> = ({ onConnected, onBack }) => {
     const healthUrl = `http://${host}/api/health`;
 
     fetch(healthUrl)
-      .then((res) => {
+      .then(async (res) => {
         if (res.ok) {
           setStatus('connected');
           addRecentServer(host).then(() => setRecentServers(getRecentServers()));
+
+          // Use the server's LAN IP so the QR code works for other devices
+          const data = await res.json().catch(() => ({}));
+          const lanHost = data.lanIp && data.port ? `${data.lanIp}:${data.port}` : host;
+
           // Short delay so user sees "Connected!" before transition
-          setTimeout(() => onConnected(host), 500);
+          setTimeout(() => onConnected(lanHost, data.mobileBaseUrl ?? null), 500);
         } else {
           setStatus('failed');
         }

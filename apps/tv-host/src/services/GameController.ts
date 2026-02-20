@@ -88,6 +88,7 @@ class GameController implements IGameController {
             id: data.playerId,
             name: data.name,
             color: data.color,
+            emoji: data.emoji,
             score: 0,
             isConnected: true,
           }),

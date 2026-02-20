@@ -21,6 +21,7 @@ export const GameOverScreen: React.FC = () => {
   const { width: windowWidth } = useWindowDimensions();
 
   const players = playersSelectors.selectAll(state.players);
+  const emojiById = new Map(players.map((p) => [p.id, p.emoji]));
   const rankings = rankPlayers(players.map((p) => ({ id: p.id, name: p.name, score: p.score })));
 
   const winner = rankings[0];
@@ -95,6 +96,7 @@ export const GameOverScreen: React.FC = () => {
                 <PlayerAvatar
                   name={podium[1].name}
                   color={getRankColor(2)}
+                  emoji={emojiById.get(podium[1].id)}
                   size="large"
                   showScore
                   score={podium[1].score}
@@ -109,6 +111,7 @@ export const GameOverScreen: React.FC = () => {
                 <PlayerAvatar
                   name={podium[0].name}
                   color={getRankColor(1)}
+                  emoji={emojiById.get(podium[0].id)}
                   size="large"
                   showScore
                   score={podium[0].score}
@@ -123,6 +126,7 @@ export const GameOverScreen: React.FC = () => {
                 <PlayerAvatar
                   name={podium[2].name}
                   color={getRankColor(3)}
+                  emoji={emojiById.get(podium[2].id)}
                   size="large"
                   showScore
                   score={podium[2].score}

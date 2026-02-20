@@ -8,6 +8,7 @@ import { typography } from '../theme/typography';
 export interface PlayerAvatarProps {
   name: string;
   color: string;
+  emoji?: string;
   score?: number;
   size?: 'small' | 'medium' | 'large';
   showScore?: boolean;
@@ -24,6 +25,7 @@ const darken = (hex: string, amount: number): string => {
 export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
   name,
   color,
+  emoji,
   score,
   size = 'medium',
   showScore = false,
@@ -61,7 +63,9 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
           },
         ]}
       >
-        <Text style={[styles.initials, { fontSize: sizeStyles.fontSize }]}>{initials}</Text>
+        <Text style={[styles.initials, { fontSize: sizeStyles.fontSize }]}>
+          {emoji || initials}
+        </Text>
       </LinearGradient>
       <Text style={styles.name} numberOfLines={1}>
         {name}

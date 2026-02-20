@@ -41,24 +41,19 @@ export const GameScreen: React.FC = () => {
     setLanguageOverride,
   } = useGameState();
 
-  const deviceIdReady = useRef(false);
-
-  // Load deviceId early so it's available when the player joins
+  // Load deviceId early, then auto-connect on web if roomCode is in the URL
   useEffect(() => {
     initDeviceId().then(() => {
-      deviceIdReady.current = true;
+      if (Platform.OS !== 'web') return;
+      const params = new URLSearchParams(window.location.search);
+      const roomCode = params.get('roomCode');
+      if (roomCode) {
+        // The "server" param points to the game server (may differ from the page host in dev)
+        const serverHost = params.get('server') || window.location.host;
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        connect(`${wsProtocol}//${serverHost}/ws?role=player&roomCode=${roomCode}`);
+      }
     });
-  }, []);
-
-  // Web: auto-connect when loaded with ?roomCode= in the URL
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    const params = new URLSearchParams(window.location.search);
-    const roomCode = params.get('roomCode');
-    if (roomCode) {
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      connect(`${wsProtocol}//${window.location.host}/ws?role=player&roomCode=${roomCode}`);
-    }
   }, [connect]);
 
   switch (phase) {

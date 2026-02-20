@@ -205,6 +205,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                   key={player.id}
                   name={player.name}
                   color={player.color}
+                  emoji={player.emoji}
                   size={playerCount > 6 ? 'medium' : 'large'}
                 />
               ))}
