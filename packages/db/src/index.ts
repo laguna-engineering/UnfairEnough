@@ -26,6 +26,7 @@ export type {
   GameSession,
   GameType,
   MediaType,
+  MetaSetChildRow,
   PlayerProfile,
   PlayerRow,
   PlayerTagScore,

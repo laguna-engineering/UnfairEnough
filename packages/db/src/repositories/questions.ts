@@ -1,6 +1,12 @@
 import type { DbAdapter } from '../adapter';
 import type { QuestionSetInput } from '../import/validator';
-import type { QuestionRow, QuestionSetRow, QuestionSetWithMeta, QuestionWithMeta } from '../schema';
+import type {
+  MetaSetChildRow,
+  QuestionRow,
+  QuestionSetRow,
+  QuestionSetWithMeta,
+  QuestionWithMeta,
+} from '../schema';
 
 function rowToQuestionWithMeta(row: QuestionRow): QuestionWithMeta {
   return {
@@ -35,6 +41,7 @@ function rowToQuestionSetWithMeta(row: QuestionSetRow): QuestionSetWithMeta {
     defaultTimeLimit: row.default_time_limit,
     tags: row.tags ? JSON.parse(row.tags) : [],
     questionCount: row.question_count,
+    isMeta: row.is_meta === 1,
     deletedAt: row.deleted_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -127,8 +134,21 @@ export async function getQuestionsBySet(db: DbAdapter, setId: string): Promise<Q
 }
 
 export async function getQuestionSets(db: DbAdapter): Promise<QuestionSetWithMeta[]> {
+  // For meta sets, compute question_count dynamically from child sets
   const rows = await db.all<QuestionSetRow>(
-    'SELECT * FROM question_sets WHERE deleted_at IS NULL ORDER BY created_at DESC',
+    `SELECT qs.*,
+       CASE WHEN qs.is_meta = 1
+         THEN COALESCE((
+           SELECT COUNT(*) FROM questions q
+           JOIN meta_set_children msc ON q.set_id = msc.child_set_id
+           JOIN question_sets cs ON cs.id = msc.child_set_id AND cs.deleted_at IS NULL
+           WHERE msc.meta_set_id = qs.id
+         ), 0)
+         ELSE qs.question_count
+       END AS question_count
+     FROM question_sets qs
+     WHERE qs.deleted_at IS NULL
+     ORDER BY qs.created_at DESC`,
   );
   return rows.map(rowToQuestionSetWithMeta);
 }
@@ -138,7 +158,18 @@ export async function getQuestionSet(
   setId: string,
 ): Promise<QuestionSetWithMeta | null> {
   const row = await db.get<QuestionSetRow>(
-    'SELECT * FROM question_sets WHERE id = ? AND deleted_at IS NULL',
+    `SELECT qs.*,
+       CASE WHEN qs.is_meta = 1
+         THEN COALESCE((
+           SELECT COUNT(*) FROM questions q
+           JOIN meta_set_children msc ON q.set_id = msc.child_set_id
+           JOIN question_sets cs ON cs.id = msc.child_set_id AND cs.deleted_at IS NULL
+           WHERE msc.meta_set_id = qs.id
+         ), 0)
+         ELSE qs.question_count
+       END AS question_count
+     FROM question_sets qs
+     WHERE qs.id = ? AND qs.deleted_at IS NULL`,
     [setId],
   );
   return row ? rowToQuestionSetWithMeta(row) : null;
@@ -187,4 +218,114 @@ export async function markQuestionAsked(db: DbAdapter, questionId: string): Prom
     `UPDATE questions SET times_asked = times_asked + 1, last_asked_at = datetime('now') WHERE id = ?`,
     [questionId],
   );
+}
+
+// ── Meta question sets ──────────────────────────────────────
+
+export async function createMetaSet(
+  db: DbAdapter,
+  id: string,
+  name: string,
+  childSetIds: string[],
+  description?: string,
+  defaultTimeLimit?: number,
+): Promise<string> {
+  await db.run(
+    `INSERT INTO question_sets (id, name, description, default_time_limit, is_meta, question_count)
+     VALUES (?, ?, ?, ?, 1, 0)`,
+    [id, name, description ?? null, defaultTimeLimit ?? 10],
+  );
+
+  for (let i = 0; i < childSetIds.length; i++) {
+    await db.run(
+      'INSERT INTO meta_set_children (meta_set_id, child_set_id, sort_order) VALUES (?, ?, ?)',
+      [id, childSetIds[i], i],
+    );
+  }
+
+  return id;
+}
+
+export async function updateMetaSet(
+  db: DbAdapter,
+  id: string,
+  name: string,
+  childSetIds: string[],
+  description?: string,
+  defaultTimeLimit?: number,
+): Promise<boolean> {
+  const result = await db.run(
+    `UPDATE question_sets SET name = ?, description = ?, default_time_limit = ?, updated_at = datetime('now')
+     WHERE id = ? AND is_meta = 1 AND deleted_at IS NULL`,
+    [name, description ?? null, defaultTimeLimit ?? 10, id],
+  );
+  if (result.changes === 0) return false;
+
+  // Replace child set memberships
+  await db.run('DELETE FROM meta_set_children WHERE meta_set_id = ?', [id]);
+  for (let i = 0; i < childSetIds.length; i++) {
+    await db.run(
+      'INSERT INTO meta_set_children (meta_set_id, child_set_id, sort_order) VALUES (?, ?, ?)',
+      [id, childSetIds[i], i],
+    );
+  }
+
+  return true;
+}
+
+export async function getMetaSetChildren(
+  db: DbAdapter,
+  metaSetId: string,
+): Promise<QuestionSetWithMeta[]> {
+  const rows = await db.all<QuestionSetRow>(
+    `SELECT qs.* FROM question_sets qs
+     JOIN meta_set_children msc ON qs.id = msc.child_set_id
+     WHERE msc.meta_set_id = ? AND qs.deleted_at IS NULL
+     ORDER BY msc.sort_order`,
+    [metaSetId],
+  );
+  return rows.map(rowToQuestionSetWithMeta);
+}
+
+export async function getMetaSetChildIds(
+  db: DbAdapter,
+  metaSetId: string,
+): Promise<string[]> {
+  const rows = await db.all<MetaSetChildRow>(
+    `SELECT msc.* FROM meta_set_children msc
+     JOIN question_sets qs ON qs.id = msc.child_set_id
+     WHERE msc.meta_set_id = ? AND qs.deleted_at IS NULL
+     ORDER BY msc.sort_order`,
+    [metaSetId],
+  );
+  return rows.map((r) => r.child_set_id);
+}
+
+export async function getQuestionsByMetaSet(
+  db: DbAdapter,
+  metaSetId: string,
+): Promise<QuestionWithMeta[]> {
+  const rows = await db.all<QuestionRow>(
+    `SELECT q.* FROM questions q
+     JOIN meta_set_children msc ON q.set_id = msc.child_set_id
+     JOIN question_sets cs ON cs.id = msc.child_set_id AND cs.deleted_at IS NULL
+     WHERE msc.meta_set_id = ?
+     ORDER BY RANDOM()`,
+    [metaSetId],
+  );
+  return rows.map(rowToQuestionWithMeta);
+}
+
+export async function getMetaSetQuestionCount(
+  db: DbAdapter,
+  metaSetId: string,
+): Promise<number> {
+  const row = await db.get<{ count: number }>(
+    `SELECT COUNT(*) as count FROM questions q
+     JOIN meta_set_children msc ON q.set_id = msc.child_set_id
+     JOIN question_sets cs ON cs.id = msc.child_set_id AND cs.deleted_at IS NULL
+     WHERE msc.meta_set_id = ?`,
+    [metaSetId],
+  );
+  return row?.count ?? 0;
 }

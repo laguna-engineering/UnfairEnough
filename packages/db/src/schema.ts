@@ -10,9 +10,16 @@ export interface QuestionSetRow {
   default_time_limit: number;
   tags: string | null; // JSON array
   question_count: number;
+  is_meta: number; // 0 or 1
   deleted_at: string | null; // soft delete
   created_at: string;
   updated_at: string;
+}
+
+export interface MetaSetChildRow {
+  meta_set_id: string;
+  child_set_id: string;
+  sort_order: number;
 }
 
 export interface QuestionRow {
@@ -128,6 +135,8 @@ export interface QuestionSetWithMeta {
   defaultTimeLimit: number;
   tags: string[];
   questionCount: number;
+  isMeta: boolean;
+  childSetIds?: string[];
   deletedAt: string | null;
   createdAt: string;
   updatedAt: string;

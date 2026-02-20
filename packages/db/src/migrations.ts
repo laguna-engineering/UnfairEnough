@@ -137,6 +137,19 @@ ALTER TABLE questions ADD COLUMN times_asked INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE questions ADD COLUMN last_asked_at TEXT DEFAULT NULL;
 `;
 
+const MIGRATION_V7 = `
+ALTER TABLE question_sets ADD COLUMN is_meta INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS meta_set_children (
+  meta_set_id TEXT NOT NULL REFERENCES question_sets(id),
+  child_set_id TEXT NOT NULL REFERENCES question_sets(id),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (meta_set_id, child_set_id)
+);
+CREATE INDEX IF NOT EXISTS idx_meta_set_children_meta ON meta_set_children(meta_set_id);
+CREATE INDEX IF NOT EXISTS idx_meta_set_children_child ON meta_set_children(child_set_id);
+`;
+
 interface Migration {
   version: number;
   sql: string;
@@ -149,6 +162,7 @@ const migrations: Migration[] = [
   { version: 4, sql: MIGRATION_V4 },
   { version: 5, sql: MIGRATION_V5 },
   { version: 6, sql: MIGRATION_V6 },
+  { version: 7, sql: MIGRATION_V7 },
 ];
 
 /**
