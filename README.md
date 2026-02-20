@@ -3,7 +3,7 @@
 A multiplayer quiz game where a TV acts as the host display and phones are player controllers. Supports two modes:
 
 - **Local mode** — The TV app runs a WebSocket server directly on the device via TCP sockets. Phones connect over the local network. No external server needed.
-- **Hosted mode** — A Bun server manages game rooms. The TV connects as a "host" client, phones connect as players. The server also serves the TV web build, so you can run everything from a single process.
+- **Hosted mode** — A Bun server manages game rooms. The TV connects as a "host" client, phones connect as players. The server serves the mobile web app at `/mobile/`, the TV web build at `/tv/`, and an admin dashboard at `/admin/`.
 
 ## Prerequisites
 
@@ -27,7 +27,7 @@ All packages are consumed as TypeScript source — there's no build step for sha
 
 ### Hosted mode
 
-The Bun server is the central hub. It manages game rooms, serves the TV web build, the admin dashboard, and a REST API. The TV connects as a "host" client, phones connect as players. Everything goes through port 3000.
+The Bun server is the central hub. It manages game rooms, serves the mobile web app, the TV web build, the admin dashboard, and a REST API. The TV connects as a "host" client, phones connect as players. Everything goes through port 3000.
 
 ```mermaid
 graph LR
@@ -35,7 +35,8 @@ graph LR
         WS["/ws — WebSocket"]
         API["/api/* — REST API"]
         Admin["/admin/ — Dashboard"]
-        Static["/* — TV web build"]
+        Mobile["/mobile/ — Mobile web app"]
+        TV_Static["/tv/ — TV web build"]
     end
 
     TV["TV Host<br/>(web or native app)"]
@@ -46,6 +47,7 @@ graph LR
     TV -- "ws://.../ws?role=host" --> WS
     P1 -- "ws://.../ws?role=player<br/>&roomCode=XXXX" --> WS
     P2 -- "ws://.../ws?role=player<br/>&roomCode=XXXX" --> WS
+    P1 -. "http://.../mobile/" .-> Mobile
     Browser -- "http://.../admin/" --> Admin
 ```
 
@@ -55,7 +57,7 @@ When running in development, each app has its own Metro bundler:
 
 | Process | Default port | Notes |
 |---------|-------------|-------|
-| Bun server | `:3000` | WebSocket, REST API, admin dashboard, static files |
+| Bun server | `:3000` | WebSocket, REST API, `/admin/`, `/mobile/` (proxy to Metro), `/tv/` |
 | TV Metro bundler | `:8082` | Expo dev server for tv-host (always 8082 to avoid conflicts) |
 | Mobile Metro bundler | `:8081` | Expo dev server for mobile (Expo default) |
 
@@ -102,12 +104,12 @@ graph TB
     MetroTV -. "JS bundle" .-> AndroidTV
     MetroTV -. "JS bundle" .-> WebTV
     MetroMob -. "JS bundle" .-> Phone
-    MetroMob -. "JS bundle" .-> WebPlayer
+    Server -. "/mobile/ proxy" .-> MetroMob
 
     AndroidTV -- "ws :3000" --> Server
     WebTV -- "ws :3000" --> Server
     Phone -- "ws :3000" --> Server
-    WebPlayer -- "ws :3000" --> Server
+    WebPlayer -- "http :3000/mobile/" --> Server
     AdminBrowser -- "http :3000/admin/" --> Server
 ```
 
@@ -116,13 +118,14 @@ graph TB
 This is the easiest way to get everything running. You need two terminals:
 
 ```bash
-# Terminal 1 — Start the server (port 3000)
-yarn dev:server
-
-# Terminal 2 — Start the mobile app (web)
+# Terminal 1 — Start the mobile Metro bundler (port 8081)
 yarn dev:mobile
-# then press 'w' to open in browser, or scan the QR code with Expo Go
+
+# Terminal 2 — Start the server (port 3000, proxies /mobile/ to Metro)
+yarn dev:server
 ```
+
+Open `http://localhost:3000/mobile/` in a browser to play as a web player. The server proxies to the Metro dev server on port 8081.
 
 The TV host can also run as a web app pointed at the server:
 
@@ -131,6 +134,17 @@ The TV host can also run as a web app pointed at the server:
 yarn tv web
 # Opens on a separate port; connect to the server URL shown in the UI
 ```
+
+### Admin Dashboard
+
+The admin dashboard is available at `http://localhost:3000/admin/` when the server is running. It provides:
+
+- **Players** — Create and manage player profiles (name, color, avatar emoji).
+- **Question Sets** — Browse imported question sets.
+- **Tags** — View tags and the questions associated with each tag.
+- **Export** — Export game data.
+
+The admin dashboard is only available in hosted mode — in local mode, question sets are managed through the TV host UI.
 
 ## Running in Local Mode
 
@@ -224,9 +238,9 @@ Questions support optional fields: `category`, `tags`, `timeLimit` (per-question
 ## Key Dev Commands
 
 ```bash
-yarn dev:server            # Bun server with hot reload (port 3000)
+yarn dev:server            # Bun server with hot reload (port 3000, proxies /mobile/ to Metro)
 yarn dev:tv                # TV host Metro bundler (sets EXPO_TV=1)
-yarn dev:mobile            # Mobile Metro bundler
+yarn dev:mobile            # Mobile Metro bundler (port 8081)
 
 yarn tv <cmd>              # Run command in tv-host workspace (e.g. yarn tv ios)
 yarn mobile <cmd>          # Run command in mobile workspace (e.g. yarn mobile web)

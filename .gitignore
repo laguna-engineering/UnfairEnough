@@ -17,6 +17,9 @@ web-build/
 *.db-shm
 *.db-wal
 
+# Environment
+.env
+
 # macOS
 .DS_Store
 

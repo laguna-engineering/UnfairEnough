@@ -3,6 +3,8 @@ import { Nunito_600SemiBold } from '@expo-google-fonts/nunito/600SemiBold';
 import { Nunito_700Bold } from '@expo-google-fonts/nunito/700Bold';
 import { Sniglet_400Regular } from '@expo-google-fonts/sniglet/400Regular';
 import { useFonts } from '@expo-google-fonts/sniglet/useFonts';
+import { changeLanguage, type SupportedLanguage } from '@unfairenough/i18n';
+import Constants from 'expo-constants';
 import { StatusBar } from 'expo-status-bar';
 import type React from 'react';
 import { useCallback, useRef, useState } from 'react';
@@ -14,6 +16,9 @@ import { ModeSelectionScreen } from './src/screens/ModeSelectionScreen';
 import { HostedGameController } from './src/services/HostedGameController';
 import type { IGameController } from './src/services/IGameController';
 import '@unfairenough/i18n';
+
+const defaultLang = Constants.expoConfig?.extra?.defaultLang;
+if (defaultLang) changeLanguage(defaultLang as SupportedLanguage);
 
 type AppScreen = 'mode_select' | 'local_game' | 'connect' | 'hosted_game';
 
