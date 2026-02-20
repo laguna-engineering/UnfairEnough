@@ -92,6 +92,7 @@ export class GameRoom {
   // Game configuration
   private gameType: 'casual' | 'configured' = 'casual';
   private questionSetId: string | null = null;
+  private isMetaSet = false;
   private configuredTotalQuestions: number | null = null;
   private configuredTimeLimit: number | null = null;
 
@@ -488,8 +489,11 @@ export class GameRoom {
         return;
       }
 
-      const questions = await questionsRepo.getQuestionsBySet(this.db, payload.questionSetId);
-      if (questions.length === 0) {
+      const questionCount = set.isMeta
+        ? (await questionsRepo.getQuestionsByMetaSet(this.db, payload.questionSetId)).length
+        : (await questionsRepo.getQuestionsBySet(this.db, payload.questionSetId)).length;
+
+      if (questionCount === 0) {
         this.sendToHost({
           type: 'ERROR',
           payload: { code: 'SET_EMPTY', message: 'Question set has no questions' },
@@ -499,12 +503,13 @@ export class GameRoom {
 
       this.gameType = 'configured';
       this.questionSetId = payload.questionSetId;
+      this.isMetaSet = set.isMeta;
       this.configuredTotalQuestions = payload.totalQuestions ?? null;
       this.configuredTimeLimit = payload.questionTimeLimit ?? null;
 
       this.sendToHost({
         type: 'GAME_CONFIGURED',
-        payload: { gameType: 'configured', questionCount: questions.length },
+        payload: { gameType: 'configured', questionCount },
       });
     } else {
       this.gameType = 'casual';
@@ -532,23 +537,30 @@ export class GameRoom {
     await this.loadPlayerTagScores();
 
     // Load questions based on game configuration
-    if (this.gameType === 'configured' && this.questionSetId) {
+    if (this.gameType === 'configured' && this.questionSetId && !this.isMetaSet) {
+      // Regular configured set: serve in authored order
       this.questions = await questionsRepo.getQuestionsBySet(this.db, this.questionSetId);
-      // Optionally limit to N questions
       if (this.configuredTotalQuestions && this.configuredTotalQuestions < this.questions.length) {
         this.questions = this.questions.slice(0, this.configuredTotalQuestions);
       }
       this.questionPool = [];
     } else {
-      // Casual mode: load 3× the requested count, curate via buildQuestionPool
+      // Casual mode or meta set: use adaptive selection pipeline
       const requestedCount = this.configuredTotalQuestions ?? TOTAL_QUESTIONS;
-      const rawPool = await questionsRepo.getRandomQuestions(this.db, requestedCount * 3);
+      let rawPool: QuestionWithMeta[];
+
+      if (this.isMetaSet && this.questionSetId) {
+        // Meta set: load all questions from child sets
+        rawPool = await questionsRepo.getQuestionsByMetaSet(this.db, this.questionSetId);
+      } else {
+        // Casual mode: load 3× from the general pool
+        rawPool = await questionsRepo.getRandomQuestions(this.db, requestedCount * 3);
+      }
 
       this.questionPool = buildQuestionPool(rawPool, {
         nRounds: requestedCount,
         playerTagScores: this.playerTagScores,
       });
-      // Pre-select first batch for fallback (in case pool is small)
       this.questions = this.questionPool.slice(0, requestedCount);
     }
     if (this.questions.length === 0 && this.questionPool.length === 0) return;
@@ -595,8 +607,8 @@ export class GameRoom {
 
     let q: QuestionWithMeta;
 
-    if (this.gameType === 'configured' || this.questionPool.length === 0) {
-      // Configured mode: use authored order
+    if ((this.gameType === 'configured' && !this.isMetaSet) || this.questionPool.length === 0) {
+      // Configured mode (non-meta): use authored order
       if (this.currentQuestionIndex >= this.questions.length) {
         this.endGame();
         return;
@@ -1088,6 +1100,7 @@ export class GameRoom {
     this.gameId = null;
     this.gameType = 'casual';
     this.questionSetId = null;
+    this.isMetaSet = false;
     this.configuredTotalQuestions = null;
     this.configuredTimeLimit = null;
     this.playerTagScores.clear();

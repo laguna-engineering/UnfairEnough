@@ -4,6 +4,7 @@ import { serveStatic, upgradeWebSocket, websocket } from 'hono/bun';
 import { initDatabase } from './db';
 import { createRoom, destroyRoom, getRoom, setDbAdapter } from './roomManager';
 import gamesRoutes from './routes/games';
+import metaSetsRoutes from './routes/metaSets';
 import playersRoutes from './routes/players';
 import questionSetsRoutes from './routes/questionSets';
 import tagsRoutes from './routes/tags';
@@ -16,6 +17,7 @@ app.get('/api/health', (c) => c.json({ status: 'ok' }));
 
 // ── REST API routes ───────────────────────────────────────────
 app.route('/api/question-sets', questionSetsRoutes);
+app.route('/api/meta-sets', metaSetsRoutes);
 app.route('/api/players', playersRoutes);
 app.route('/api/games', gamesRoutes);
 app.route('/api/tags', tagsRoutes);

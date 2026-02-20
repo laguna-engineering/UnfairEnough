@@ -71,6 +71,7 @@ class GameController implements IGameController {
   private playerProfiles = new Map<string, LocalPlayerProfile>(); // playerId -> profile
   private playerTagScores = new Map<string, Map<string, number>>(); // profileId -> tag -> decayed score
   private currentRoundDifficulties = new Map<string, number>(); // playerId -> difficulty
+  private isMetaSet = false;
 
   constructor() {
     this.setupServerCallbacks();
@@ -183,14 +184,21 @@ class GameController implements IGameController {
     // Load tag scores for profiled players
     await this.loadPlayerTagScores();
 
-    let dbQuestions: QuestionWithMeta[];
-
-    if (gameType === 'configured' && questionSetId) {
-      dbQuestions = await questionsRepo.getQuestionsBySet(db, questionSetId);
-      this.questionPool = dbQuestions;
+    if (gameType === 'configured' && questionSetId && !this.isMetaSet) {
+      // Regular configured set: serve in authored order
+      this.questionPool = await questionsRepo.getQuestionsBySet(db, questionSetId);
     } else {
-      // Casual mode: load 3× and curate via buildQuestionPool
-      const rawPool = await questionsRepo.getRandomQuestions(db, totalQuestions * 3);
+      // Casual mode or meta set: use adaptive selection pipeline
+      let rawPool: QuestionWithMeta[];
+
+      if (this.isMetaSet && questionSetId) {
+        // Meta set: load all questions from child sets
+        rawPool = await questionsRepo.getQuestionsByMetaSet(db, questionSetId);
+      } else {
+        // Casual mode: load 3× from the general pool
+        rawPool = await questionsRepo.getRandomQuestions(db, totalQuestions * 3);
+      }
+
       this.questionPool = buildQuestionPool(rawPool, {
         nRounds: totalQuestions,
         playerTagScores: this.playerTagScores,
@@ -278,8 +286,8 @@ class GameController implements IGameController {
     const state = this.getState();
     let question: QuestionWithMeta;
 
-    if (state.game.config.gameType === 'configured') {
-      // Configured mode: use authored order
+    if (state.game.config.gameType === 'configured' && !this.isMetaSet) {
+      // Configured mode (non-meta): use authored order
       if (this.currentQuestionIndex >= this.questionPool.length) {
         this.endGame();
         return;
@@ -662,13 +670,17 @@ class GameController implements IGameController {
           if (!set || set.questionCount === 0) {
             console.warn('Question set not found or empty:', questionSetId);
             this.store.dispatch(updateConfig({ gameType: 'casual', questionSetId: undefined }));
+            this.isMetaSet = false;
           } else {
+            this.isMetaSet = set.isMeta;
             this.store.dispatch(updateConfig({ totalQuestions: set.questionCount }));
           }
         })
         .catch((err) => {
           console.error('Failed to validate question set:', err);
         });
+    } else {
+      this.isMetaSet = false;
     }
   }
 
@@ -685,6 +697,7 @@ class GameController implements IGameController {
     this.questionPool = [];
     this.usedQuestionIds.clear();
     this.currentQuestionIndex = 0;
+    this.isMetaSet = false;
     this.playerTagScores.clear();
     this.currentRoundDifficulties.clear();
   }
