@@ -12,6 +12,11 @@ npm-debug.*
 *.orig.*
 web-build/
 
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal
+
 # macOS
 .DS_Store
 
