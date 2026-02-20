@@ -38,6 +38,10 @@ test-results/
 questions/*
 !questions/example.yaml
 
+# Background music (user-provided)
+apps/server/music/*
+!apps/server/music/.gitkeep
+
 # Claude
 .claude/*.local.json
 .claude/.lint-cache.json

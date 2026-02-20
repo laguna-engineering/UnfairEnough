@@ -1,4 +1,5 @@
 import type React from 'react';
+import { useBgMusic } from '../hooks/useBgMusic';
 import { useGameController } from '../hooks/useGameController';
 import { CountdownScreen } from './CountdownScreen';
 import { GameOverScreen } from './GameOverScreen';
@@ -10,10 +11,11 @@ import { RevealScreen } from './RevealScreen';
 
 export const GameScreen: React.FC = () => {
   const { phase } = useGameController();
+  const bgMusic = useBgMusic();
 
   switch (phase) {
     case 'LOBBY':
-      return <LobbyScreen />;
+      return <LobbyScreen bgMusic={bgMusic} />;
     case 'COUNTDOWN':
       return <CountdownScreen />;
     case 'MEDIA_PREVIEW':
@@ -27,6 +29,6 @@ export const GameScreen: React.FC = () => {
     case 'GAME_OVER':
       return <GameOverScreen />;
     default:
-      return <LobbyScreen />;
+      return <LobbyScreen bgMusic={bgMusic} />;
   }
 };

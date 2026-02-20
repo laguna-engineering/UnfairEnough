@@ -29,7 +29,13 @@ const LANGUAGES: { code: SupportedLanguage; label: string }[] = [
   { code: 'it', label: 'IT' },
 ];
 
-export const LobbyScreen: React.FC = () => {
+interface BgMusic {
+  isMuted: boolean;
+  toggleMute: () => void;
+  hasTracks: boolean;
+}
+
+export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
   const { t, i18n } = useTranslation();
   const {
     state,
@@ -109,28 +115,44 @@ export const LobbyScreen: React.FC = () => {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>{t('lobby.title')}</Text>
-        <View style={styles.languageSwitcher}>
-          {LANGUAGES.map((lang) => (
+        <View style={styles.headerControls}>
+          {bgMusic?.hasTracks && (
             <Pressable
-              key={lang.code}
-              onPress={() => handleLanguageChange(lang.code)}
+              onPress={bgMusic.toggleMute}
               style={(state) => [
-                styles.languageButton,
-                i18n.language === lang.code && styles.languageButtonActive,
+                styles.muteButton,
                 (state as any).focused && styles.focused,
                 state.pressed && styles.pressed,
               ]}
             >
-              <Text
-                style={[
-                  styles.languageButtonText,
-                  i18n.language === lang.code && styles.languageButtonTextActive,
-                ]}
-              >
-                {lang.label}
+              <Text style={styles.muteButtonText}>
+                {bgMusic.isMuted ? '\u{1F507}' : '\u{1F50A}'}
               </Text>
             </Pressable>
-          ))}
+          )}
+          <View style={styles.languageSwitcher}>
+            {LANGUAGES.map((lang) => (
+              <Pressable
+                key={lang.code}
+                onPress={() => handleLanguageChange(lang.code)}
+                style={(state) => [
+                  styles.languageButton,
+                  i18n.language === lang.code && styles.languageButtonActive,
+                  (state as any).focused && styles.focused,
+                  state.pressed && styles.pressed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.languageButtonText,
+                    i18n.language === lang.code && styles.languageButtonTextActive,
+                  ]}
+                >
+                  {lang.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
       </View>
 
@@ -339,9 +361,24 @@ const styles = StyleSheet.create({
     ...typography.displayMedium,
     color: colors.primary,
   },
-  languageSwitcher: {
+  headerControls: {
     position: 'absolute',
     right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  muteButton: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    borderWidth: 2,
+    borderColor: colors.textSecondary,
+  },
+  muteButtonText: {
+    fontSize: 20,
+  },
+  languageSwitcher: {
     flexDirection: 'row',
     gap: spacing.xs,
   },

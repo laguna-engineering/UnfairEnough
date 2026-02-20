@@ -1,3 +1,4 @@
+import { readdir } from 'node:fs/promises';
 import { networkInterfaces } from 'node:os';
 import { Hono } from 'hono';
 import { serveStatic, upgradeWebSocket, websocket } from 'hono/bun';
@@ -110,6 +111,21 @@ app.get(
     };
   }),
 );
+
+// ── Background music ─────────────────────────────────────────
+const musicDir = './music';
+
+app.get('/api/music', async (c) => {
+  try {
+    const entries = await readdir(musicDir);
+    const tracks = entries.filter((f) => f.toLowerCase().endsWith('.mp3')).sort();
+    return c.json({ tracks });
+  } catch {
+    return c.json({ tracks: [] });
+  }
+});
+
+app.use('/music/*', serveStatic({ root: './' }));
 
 // ── Admin dashboard ──────────────────────────────────────────
 app.get('/admin', (c) => c.redirect('/admin/'));

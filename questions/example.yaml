@@ -10,7 +10,7 @@ questions:
   - id: ex-1
     text: "What color is the sky on a clear day?"
     category: science
-    tags: [science, nature, weather]
+    tags: [science, nature]
     options:
       - key: A
         text: "Red"
@@ -42,7 +42,7 @@ questions:
   - id: ex-3
     text: "What is the name of this animal?"
     category: animals
-    tags: [animals, images]
+    tags: [animals]
     media:
       type: image
       url: "https://example.com/cat.jpg"
