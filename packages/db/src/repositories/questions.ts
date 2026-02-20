@@ -287,10 +287,7 @@ export async function getMetaSetChildren(
   return rows.map(rowToQuestionSetWithMeta);
 }
 
-export async function getMetaSetChildIds(
-  db: DbAdapter,
-  metaSetId: string,
-): Promise<string[]> {
+export async function getMetaSetChildIds(db: DbAdapter, metaSetId: string): Promise<string[]> {
   const rows = await db.all<MetaSetChildRow>(
     `SELECT msc.* FROM meta_set_children msc
      JOIN question_sets qs ON qs.id = msc.child_set_id
@@ -316,10 +313,7 @@ export async function getQuestionsByMetaSet(
   return rows.map(rowToQuestionWithMeta);
 }
 
-export async function getMetaSetQuestionCount(
-  db: DbAdapter,
-  metaSetId: string,
-): Promise<number> {
+export async function getMetaSetQuestionCount(db: DbAdapter, metaSetId: string): Promise<number> {
   const row = await db.get<{ count: number }>(
     `SELECT COUNT(*) as count FROM questions q
      JOIN meta_set_children msc ON q.set_id = msc.child_set_id
