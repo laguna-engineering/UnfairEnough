@@ -18,6 +18,7 @@ import {
 } from '../../../packages/game-logic/src/utils/questionSelection';
 import { calculateScore, rankPlayers } from '../../../packages/game-logic/src/utils/scoring';
 import {
+  computeEffectiveDifficulty,
   computePlayerDifficulty,
   computeTagUpdates,
   decayedScore,
@@ -45,7 +46,7 @@ const COLORS = [
 const DEFAULT_QUESTION_TIME_LIMIT = 10;
 const MAX_PLAYERS = 12;
 
-const TOTAL_QUESTIONS = 5;
+const TOTAL_QUESTIONS = 10;
 const COUNTDOWN_SECONDS = 3;
 const REVEAL_DELAY_MS = 2000;
 const RESULTS_DELAY_MS = 5000;
@@ -788,7 +789,8 @@ export class GameRoom {
       }
 
       // Apply difficulty multiplier
-      const playerDifficulty = this.currentRoundDifficulties.get(player.playerId) ?? 2.5;
+      const playerDifficulty =
+        this.currentRoundDifficulties.get(player.playerId) ?? q.difficulty ?? 3;
       const multiplier = difficultyMultiplier(playerDifficulty);
       const pointsEarned = Math.round(baseScore * multiplier);
 
@@ -832,6 +834,7 @@ export class GameRoom {
         questionId: q.id,
         correctAnswer,
         tags: q.tags.length > 0 ? q.tags : undefined,
+        questionDifficulty: q.difficulty ?? 3,
         playerResults,
         rankings,
       },
@@ -863,6 +866,11 @@ export class GameRoom {
       gamesRepo
         .insertRoundResults(this.db, gameId, roundResults)
         .catch((err) => console.error('Failed to insert round results:', err));
+
+      // Track question usage (fire-and-forget)
+      questionsRepo
+        .markQuestionAsked(this.db, q.id)
+        .catch((err) => console.error('Failed to update question usage:', err));
 
       // Update tag scores for profiled players (fire-and-forget + update in-memory)
       this.updateTagScoresAfterRound(q, playerResults).catch((err) =>
@@ -999,18 +1007,17 @@ export class GameRoom {
 
   private computeRoundDifficulties(q: QuestionWithMeta): void {
     this.currentRoundDifficulties.clear();
+    const absoluteDifficulty = q.difficulty ?? 3;
+
     for (const player of this.players.values()) {
       if (player.profileId && q.tags.length > 0) {
         const tagScores = this.playerTagScores.get(player.profileId) ?? new Map<string, number>();
-        const dynamicDifficulty = computePlayerDifficulty(tagScores, q.tags);
-        const effective = resolvePlayerDifficulty(
-          player.name,
-          q.playerDifficulty,
-          dynamicDifficulty,
-        );
+        const eloDifficulty = computePlayerDifficulty(tagScores, q.tags);
+        const blended = computeEffectiveDifficulty(absoluteDifficulty, eloDifficulty);
+        const effective = resolvePlayerDifficulty(player.name, q.playerDifficulty, blended);
         this.currentRoundDifficulties.set(player.playerId, effective);
       } else {
-        this.currentRoundDifficulties.set(player.playerId, 2.5);
+        this.currentRoundDifficulties.set(player.playerId, absoluteDifficulty);
       }
     }
   }

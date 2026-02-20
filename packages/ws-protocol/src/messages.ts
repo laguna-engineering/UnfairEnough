@@ -115,6 +115,7 @@ export interface RoundResult {
   questionId: string;
   correctAnswer: AnswerKey;
   tags?: string[];
+  questionDifficulty?: number;
   playerResults: PlayerResult[];
   rankings?: PlayerRanking[];
 }

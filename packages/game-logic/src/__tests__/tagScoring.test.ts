@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  computeEffectiveDifficulty,
   computePlayerDifficulty,
   computeTagUpdates,
   decayedScore,
@@ -239,5 +240,38 @@ describe('resolvePlayerDifficulty', () => {
   test('falls back to dynamic if no match and no default', () => {
     const staticDiff = { Bob: 4.0 };
     expect(resolvePlayerDifficulty('Alice', staticDiff, 2.5)).toBe(2.5);
+  });
+});
+
+describe('computeEffectiveDifficulty', () => {
+  test('null Elo returns absolute difficulty unchanged', () => {
+    expect(computeEffectiveDifficulty(5, null)).toBe(5);
+    expect(computeEffectiveDifficulty(1, null)).toBe(1);
+    expect(computeEffectiveDifficulty(3, null)).toBe(3);
+  });
+
+  test('blends 50/50 when both values present', () => {
+    // Hard question (5) + strong player (Elo=1): (5+1)/2 = 3.0
+    expect(computeEffectiveDifficulty(5, 1)).toBeCloseTo(3.0, 5);
+    // Hard question (5) + weak player (Elo=5): (5+5)/2 = 5.0
+    expect(computeEffectiveDifficulty(5, 5)).toBeCloseTo(5.0, 5);
+    // Easy question (1) + strong player (Elo=1): (1+1)/2 = 1.0
+    expect(computeEffectiveDifficulty(1, 1)).toBeCloseTo(1.0, 5);
+    // Easy question (1) + weak player (Elo=5): (1+5)/2 = 3.0
+    expect(computeEffectiveDifficulty(1, 5)).toBeCloseTo(3.0, 5);
+  });
+
+  test('average difficulty + baseline Elo stays at 3', () => {
+    expect(computeEffectiveDifficulty(3, 3)).toBeCloseTo(3.0, 5);
+  });
+
+  test('result stays within 1-5 range for valid inputs', () => {
+    for (let abs = 1; abs <= 5; abs++) {
+      for (let elo = 1; elo <= 5; elo++) {
+        const result = computeEffectiveDifficulty(abs, elo);
+        expect(result).toBeGreaterThanOrEqual(1);
+        expect(result).toBeLessThanOrEqual(5);
+      }
+    }
   });
 });

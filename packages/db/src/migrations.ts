@@ -128,6 +128,15 @@ ALTER TABLE players ADD COLUMN avatar_emoji TEXT DEFAULT NULL;
 ALTER TABLE players ADD COLUMN source TEXT NOT NULL DEFAULT 'auto';
 `;
 
+const MIGRATION_V5 = `
+ALTER TABLE questions ADD COLUMN difficulty INTEGER NOT NULL DEFAULT 3;
+`;
+
+const MIGRATION_V6 = `
+ALTER TABLE questions ADD COLUMN times_asked INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE questions ADD COLUMN last_asked_at TEXT DEFAULT NULL;
+`;
+
 interface Migration {
   version: number;
   sql: string;
@@ -138,6 +147,8 @@ const migrations: Migration[] = [
   { version: 2, sql: MIGRATION_V2 },
   { version: 3, sql: MIGRATION_V3 },
   { version: 4, sql: MIGRATION_V4 },
+  { version: 5, sql: MIGRATION_V5 },
+  { version: 6, sql: MIGRATION_V6 },
 ];
 
 /**

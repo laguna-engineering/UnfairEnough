@@ -116,6 +116,13 @@
             "type": "string",
             "description": "Key of the correct answer (A-D for multiple_choice, true/false for true_false)"
           },
+          "difficulty": {
+            "type": "integer",
+            "description": "Absolute question difficulty (1=easy, 3=average, 5=hard). Defaults to 3 if omitted.",
+            "minimum": 1,
+            "maximum": 5,
+            "default": 3
+          },
           "playerDifficulty": {
             "type": "object",
             "description": "Per-player difficulty ratings (player name -> 1-5 scale). 'default' is the fallback.",

@@ -6,6 +6,137 @@
   <title>Tags — Admin</title>
   <link rel="stylesheet" href="style.css">
   <script src="admin.js"></script>
+  <style>
+    .tag-row { cursor: pointer; }
+    .tag-row:hover { background: #f0f4ff; }
+    .tag-row td:first-child::before {
+      content: "▶";
+      display: inline-block;
+      margin-right: 0.5rem;
+      font-size: 0.7rem;
+      transition: transform 0.15s;
+      color: #888;
+    }
+    .tag-row.expanded td:first-child::before { transform: rotate(90deg); }
+
+    .player-panel { background: #fafafa; }
+    .player-panel td { padding: 0; }
+    .player-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 0.5rem;
+      padding: 0.75rem 0.8rem;
+    }
+    .player-card {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: #fff;
+      border: 1px solid #e5e5e5;
+      border-radius: 6px;
+      padding: 0.4rem 0.6rem;
+    }
+    .player-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+    .player-name {
+      font-size: 0.85rem;
+      font-weight: 500;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .player-score-btns {
+      display: flex;
+      gap: 2px;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+    .score-btn {
+      padding: 0.2rem 0.35rem;
+      font-size: 0.7rem;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      cursor: pointer;
+      background: #fff;
+      color: #555;
+      font-weight: 500;
+      transition: all 0.1s;
+      min-width: 24px;
+      text-align: center;
+    }
+    .score-btn:hover { background: #e8e8e8; color: #1a1a1a; }
+    .score-btn.active { border-color: #2563eb; color: #2563eb; font-weight: 700; }
+    .score-btn.active-strong { background: #e6f9e6; border-color: #16a34a; color: #166534; }
+    .score-btn.active-weak { background: #fde8e8; border-color: #dc2626; color: #991b1b; }
+    .score-btn.active-neutral { background: #f0f0f0; border-color: #888; color: #555; }
+    .score-btn.remove { color: #999; font-size: 0.75rem; }
+    .score-btn.remove:hover { background: #fde8e8; color: #dc2626; border-color: #dc2626; }
+    .saving { opacity: 0.5; pointer-events: none; }
+
+    .questions-section {
+      border-top: 1px solid #e5e5e5;
+      padding: 0.75rem 0.8rem;
+    }
+    .questions-section h4 {
+      margin: 0 0 0.5rem;
+      font-size: 0.85rem;
+      color: #555;
+    }
+    .question-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .question-list li {
+      padding: 0.35rem 0;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .question-list li:last-child { border-bottom: none; }
+    .question-diff {
+      font-size: 0.7rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 3px;
+      background: #f0f0f0;
+      color: #555;
+      flex-shrink: 0;
+    }
+    .question-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .view-all-link {
+      display: inline-block;
+      margin-top: 0.5rem;
+      font-size: 0.85rem;
+      color: #2563eb;
+      text-decoration: none;
+    }
+    .view-all-link:hover { text-decoration: underline; }
+
+    thead th.sortable { cursor: pointer; user-select: none; }
+    thead th.sortable:hover { color: #1a1a1a; }
+    thead th.sortable::after {
+      content: " ↕";
+      font-size: 0.7rem;
+      color: #bbb;
+    }
+    thead th.sort-asc::after { content: " ↑"; color: #555; }
+    thead th.sort-desc::after { content: " ↓"; color: #555; }
+  </style>
 </head>
 <body>
   <main>
@@ -15,18 +146,307 @@
 
   <script>
     const content = document.getElementById("content");
+    const SCORE_LEVELS = [
+      { value: 1900, label: "1900", shortLabel: "S+", className: "active-strong" },
+      { value: 1700, label: "1700", shortLabel: "S", className: "active-strong" },
+      { value: 1500, label: "1500", shortLabel: "N", className: "active-neutral" },
+      { value: 1300, label: "1300", shortLabel: "W", className: "active-weak" },
+      { value: 1100, label: "1100", shortLabel: "W+", className: "active-weak" },
+    ];
+
+    const COLUMNS = [
+      { key: "tag", label: "Tag", sort: (a, b) => a.tag.localeCompare(b.tag) },
+      { key: "questionCount", label: "Questions", sort: (a, b) => a.questionCount - b.questionCount },
+      { key: "playerCount", label: "Rated Players", sort: (a, b) => a.playerCount - b.playerCount },
+    ];
+
+    let expandedTag = null;
+    let allTags = [];
+    let totalPlayers = 0;
+    let sortCol = "questionCount";
+    let sortDir = "desc";
 
     async function load() {
       showLoading(content);
       try {
         const data = await fetchJson("/api/tags");
-        const tags = data.tags || [];
-
-        renderTable(content, ["Tag", "Questions", "Players"], tags.map(t => ({
-          cells: [t.tag, fmtNum(t.questionCount), fmtNum(t.playerCount)],
-        })));
+        allTags = data.tags || [];
+        totalPlayers = data.totalPlayers || 0;
+        renderTable();
       } catch (err) {
         showError(content, err.message);
+      }
+    }
+
+    function renderTable() {
+      if (allTags.length === 0) {
+        content.innerHTML = '<p class="empty">No tags yet.</p>';
+        return;
+      }
+
+      const sorted = allTags.slice();
+      const colDef = COLUMNS.find(c => c.key === sortCol);
+      if (colDef) {
+        sorted.sort((a, b) => {
+          const v = colDef.sort(a, b);
+          return sortDir === "desc" ? -v : v;
+        });
+      }
+
+      const table = document.createElement("table");
+
+      const thead = document.createElement("thead");
+      const headerRow = document.createElement("tr");
+      for (const col of COLUMNS) {
+        const th = document.createElement("th");
+        th.textContent = col.label;
+        th.className = "sortable";
+        if (sortCol === col.key) {
+          th.classList.add(sortDir === "asc" ? "sort-asc" : "sort-desc");
+        }
+        th.addEventListener("click", () => {
+          if (sortCol === col.key) {
+            sortDir = sortDir === "asc" ? "desc" : "asc";
+          } else {
+            sortCol = col.key;
+            sortDir = col.key === "tag" ? "asc" : "desc";
+          }
+          expandedTag = null;
+          renderTable();
+        });
+        headerRow.appendChild(th);
+      }
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+
+      const tbody = document.createElement("tbody");
+      for (const t of sorted) {
+        const tr = document.createElement("tr");
+        tr.className = "tag-row";
+
+        const tdTag = document.createElement("td");
+        tdTag.textContent = t.tag;
+        tr.appendChild(tdTag);
+
+        const tdQ = document.createElement("td");
+        tdQ.textContent = fmtNum(t.questionCount);
+        tr.appendChild(tdQ);
+
+        const tdP = document.createElement("td");
+        tdP.textContent = `${t.playerCount} / ${totalPlayers}`;
+        tr.appendChild(tdP);
+
+        tr.addEventListener("click", () => toggleTag(t.tag, tr, tbody));
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
+
+      content.innerHTML = "";
+      content.appendChild(table);
+    }
+
+    async function toggleTag(tag, tagRow, tbody) {
+      // If already expanded, collapse
+      const existingPanel = tagRow.nextElementSibling;
+      if (existingPanel && existingPanel.classList.contains("player-panel")) {
+        existingPanel.remove();
+        tagRow.classList.remove("expanded");
+        expandedTag = null;
+        return;
+      }
+
+      // Collapse any other expanded tag
+      const prev = tbody.querySelector(".player-panel");
+      if (prev) {
+        prev.previousElementSibling.classList.remove("expanded");
+        prev.remove();
+      }
+
+      tagRow.classList.add("expanded");
+      expandedTag = tag;
+
+      // Create panel row
+      const panelRow = document.createElement("tr");
+      panelRow.className = "player-panel";
+      const panelCell = document.createElement("td");
+      panelCell.colSpan = 3;
+      panelCell.innerHTML = '<p class="loading" style="padding:0.75rem;">Loading players...</p>';
+      panelRow.appendChild(panelCell);
+      tagRow.after(panelRow);
+
+      try {
+        const [playersData, questionsData] = await Promise.all([
+          fetchJson(`/api/tags/${encodeURIComponent(tag)}/players`),
+          fetchJson(`/api/tags/${encodeURIComponent(tag)}/questions?limit=10`),
+        ]);
+        const players = playersData.players || [];
+        const questions = questionsData.questions || [];
+
+        panelCell.innerHTML = "";
+
+        if (players.length > 0) {
+          const grid = document.createElement("div");
+          grid.className = "player-grid";
+          for (const p of players) {
+            grid.appendChild(buildPlayerCard(tag, p));
+          }
+          panelCell.appendChild(grid);
+        }
+
+        if (questions.length > 0) {
+          const section = document.createElement("div");
+          section.className = "questions-section";
+
+          const h4 = document.createElement("h4");
+          h4.textContent = "Questions";
+          section.appendChild(h4);
+
+          const ul = document.createElement("ul");
+          ul.className = "question-list";
+          for (const q of questions) {
+            const li = document.createElement("li");
+            const diff = document.createElement("span");
+            diff.className = "question-diff";
+            diff.textContent = `D${q.difficulty ?? 3}`;
+            li.appendChild(diff);
+            const text = document.createElement("span");
+            text.className = "question-text";
+            text.textContent = q.text;
+            li.appendChild(text);
+            ul.appendChild(li);
+          }
+          section.appendChild(ul);
+
+          const tagInfo = allTags.find(t => t.tag === tag);
+          const totalQ = tagInfo ? tagInfo.questionCount : 0;
+          if (totalQ > 10) {
+            const link = document.createElement("a");
+            link.className = "view-all-link";
+            link.href = `tag-questions.html?tag=${encodeURIComponent(tag)}`;
+            link.textContent = `View all ${totalQ} questions →`;
+            section.appendChild(link);
+          }
+
+          panelCell.appendChild(section);
+        }
+
+        if (players.length === 0 && questions.length === 0) {
+          panelCell.innerHTML = '<p class="empty" style="padding:0.75rem;">No data.</p>';
+        }
+      } catch (err) {
+        panelCell.innerHTML = `<p class="error" style="margin:0.75rem;">${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    function buildPlayerCard(tag, player) {
+      const card = document.createElement("div");
+      card.className = "player-card";
+
+      // Avatar
+      const avatar = document.createElement("div");
+      avatar.className = "player-avatar";
+      avatar.style.background = player.avatarColor || "#ccc";
+      avatar.textContent = player.avatarEmoji || "?";
+      card.appendChild(avatar);
+
+      // Name
+      const name = document.createElement("span");
+      name.className = "player-name";
+      name.textContent = player.displayName;
+      card.appendChild(name);
+
+      // Score buttons
+      const btns = document.createElement("div");
+      btns.className = "player-score-btns";
+
+      for (const level of SCORE_LEVELS) {
+        const btn = document.createElement("button");
+        btn.className = "score-btn";
+        btn.textContent = level.shortLabel;
+        btn.title = `${level.label} — Set score to ${level.value}`;
+
+        if (player.score !== null && Math.abs(player.score - level.value) < 50) {
+          btn.classList.add(level.className);
+        }
+
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          setScore(tag, player.id, level.value, card, btns);
+        });
+        btns.appendChild(btn);
+      }
+
+      // Remove button (only if player has a score)
+      const removeBtn = document.createElement("button");
+      removeBtn.className = "score-btn remove";
+      removeBtn.textContent = "✕";
+      removeBtn.title = "Remove score";
+      removeBtn.style.display = player.score !== null ? "" : "none";
+      removeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        removeScore(tag, player.id, card, btns);
+      });
+      btns.appendChild(removeBtn);
+
+      card.appendChild(btns);
+      return card;
+    }
+
+    async function setScore(tag, playerId, score, card, btnsContainer) {
+      card.classList.add("saving");
+      try {
+        const res = await fetch(`/api/players/${encodeURIComponent(playerId)}/tags`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tag, score }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          alert(data.error || "Failed to set score");
+          return;
+        }
+
+        // Update button states
+        const scoreBtns = btnsContainer.querySelectorAll(".score-btn:not(.remove)");
+        for (let i = 0; i < scoreBtns.length; i++) {
+          const level = SCORE_LEVELS[i];
+          scoreBtns[i].className = "score-btn";
+          if (Math.abs(score - level.value) < 50) {
+            scoreBtns[i].classList.add(level.className);
+          }
+        }
+        // Show remove button
+        btnsContainer.querySelector(".remove").style.display = "";
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        card.classList.remove("saving");
+      }
+    }
+
+    async function removeScore(tag, playerId, card, btnsContainer) {
+      card.classList.add("saving");
+      try {
+        const res = await fetch(
+          `/api/players/${encodeURIComponent(playerId)}/tags/${encodeURIComponent(tag)}`,
+          { method: "DELETE" },
+        );
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          alert(data.error || "Failed to remove score");
+          return;
+        }
+
+        // Clear all active states
+        for (const btn of btnsContainer.querySelectorAll(".score-btn:not(.remove)")) {
+          btn.className = "score-btn";
+        }
+        // Hide remove button
+        btnsContainer.querySelector(".remove").style.display = "none";
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        card.classList.remove("saving");
       }
     }
 

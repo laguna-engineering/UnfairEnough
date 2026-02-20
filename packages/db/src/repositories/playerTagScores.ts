@@ -118,6 +118,14 @@ export async function deleteTagScore(
   return result.changes > 0;
 }
 
+export async function getScoresByTag(db: DbAdapter, tag: string): Promise<PlayerTagScore[]> {
+  const rows = await db.all<PlayerTagScoreRow>(
+    'SELECT * FROM player_tag_scores WHERE tag = ? ORDER BY score DESC',
+    [tag],
+  );
+  return rows.map(rowToTagScore);
+}
+
 export async function getAllTags(
   db: DbAdapter,
 ): Promise<Array<{ tag: string; playerCount: number }>> {

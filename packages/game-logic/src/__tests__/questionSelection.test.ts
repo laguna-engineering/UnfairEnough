@@ -3,7 +3,7 @@ import type { QuestionWithMeta } from '@unfairenough/db';
 import type { RoundSelectionContext, SelectableQuestion } from '../utils/questionSelection';
 import { buildQuestionPool, selectNextQuestion } from '../utils/questionSelection';
 
-function makeQuestion(id: string, tags: string[] = []): QuestionWithMeta {
+function makeQuestion(id: string, tags: string[] = [], difficulty = 3): QuestionWithMeta {
   return {
     id,
     setId: null,
@@ -20,12 +20,17 @@ function makeQuestion(id: string, tags: string[] = []): QuestionWithMeta {
     ],
     correctAnswer: 'A',
     playerDifficulty: null,
+    difficulty,
     explanation: null,
   };
 }
 
-function makeMinimalQuestion(id: string, tags: string[] = []): SelectableQuestion {
-  return { id, tags };
+function makeMinimalQuestion(
+  id: string,
+  tags: string[] = [],
+  difficulty?: number,
+): SelectableQuestion {
+  return { id, tags, difficulty };
 }
 
 /** Deterministic seeded random for reproducible tests */
@@ -449,5 +454,59 @@ describe('buildQuestionPool', () => {
 
     // Both should produce same result (same cold-start path)
     expect(withEmpty.map((q) => q.id)).toEqual(withoutScores.map((q) => q.id));
+  });
+
+  test('difficulty spread: prefers underrepresented difficulty levels among tag ties', () => {
+    // All questions share the same tag, so tag coverage is always tied.
+    // 8 easy (diff=1) and 2 hard (diff=5) — pool should include both hard ones
+    const questions = [
+      ...Array.from({ length: 8 }, (_, i) => makeMinimalQuestion(`easy${i}`, ['trivia'], 1)),
+      makeMinimalQuestion('hard0', ['trivia'], 5),
+      makeMinimalQuestion('hard1', ['trivia'], 5),
+    ];
+
+    // Run many times to check the bias statistically
+    let hardInPool = 0;
+    const iterations = 100;
+    for (let i = 0; i < iterations; i++) {
+      const pool = buildQuestionPool(questions, { nRounds: 2 }, seededRandom(i + 1));
+      // target size = min(6, 10) = 6
+      const hardCount = pool.filter((q) => q.id.startsWith('hard')).length;
+      hardInPool += hardCount;
+    }
+
+    // Without difficulty bias, expected hard count per pool ≈ 6*(2/10) = 1.2
+    // With difficulty bias, hard questions should be selected more often since diff=5 is underrepresented
+    // Average should be above random baseline
+    const avgHard = hardInPool / iterations;
+    expect(avgHard).toBeGreaterThan(1.2);
+  });
+
+  test('difficulty spread: works with all same difficulty (no-op bias)', () => {
+    const questions = Array.from({ length: 10 }, (_, i) =>
+      makeMinimalQuestion(`q${i}`, [`tag${i % 3}`], 3),
+    );
+
+    const random = seededRandom(42);
+    const pool = buildQuestionPool(questions, { nRounds: 3 }, random);
+    // Should still work normally — all difficulty=3
+    expect(pool).toHaveLength(9); // min(9, 10) = 9
+  });
+
+  test('difficulty spread: questions without difficulty default to 3', () => {
+    const questions = [
+      makeMinimalQuestion('no-diff', ['a']), // difficulty=undefined → treated as 3
+      makeMinimalQuestion('diff3', ['b'], 3),
+      makeMinimalQuestion('diff1', ['c'], 1),
+      makeMinimalQuestion('diff5', ['d'], 5),
+    ];
+
+    const pool = buildQuestionPool(questions, { nRounds: 1 }, seededRandom(42));
+    // target = min(3, 4) = 3; should include a spread of difficulties
+    expect(pool).toHaveLength(3);
+    const diffs = pool.map((q) => q.difficulty ?? 3);
+    // All three unique difficulties available (1, 3, 5) should be represented
+    const uniqueDiffs = new Set(diffs);
+    expect(uniqueDiffs.size).toBe(3);
   });
 });

@@ -30,8 +30,11 @@
       user-select: none;
     }
     .tag-label:hover { border-color: #999; }
+    .tag-label.very_strong { background: #bbf7d0; border-color: #4ade80; color: #14532d; font-weight: 600; }
     .tag-label.strong { background: #dcfce7; border-color: #86efac; color: #166534; }
+    .tag-label.average { background: #f5f5f5; border-color: #d4d4d4; color: #525252; }
     .tag-label.weak { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+    .tag-label.very_weak { background: #fecaca; border-color: #f87171; color: #7f1d1d; font-weight: 600; }
     .tag-score { font-size: 0.75rem; color: #888; }
 
     .output-area {
@@ -54,7 +57,7 @@
 <body>
   <main>
     <h1>Export Player Profiles for LLM</h1>
-    <p style="color:#555;margin-bottom:1rem;">Select players, then click tags to mark them as <strong style="color:#166534;">strong</strong> or <strong style="color:#991b1b;">weak</strong>. Export as markdown to feed to an LLM for generating tailored questions.</p>
+    <p style="color:#555;margin-bottom:1rem;">Select players, then review auto-classified tags (very strong → strong → average → weak → very weak). Click a tag to cycle through levels. Export as markdown to feed to an LLM for generating tailored questions.</p>
 
     <h2>1. Select Players</h2>
     <div class="loading" id="players-loading">Loading players...</div>
@@ -62,7 +65,7 @@
 
     <div id="tags-section" style="display:none;">
       <h2>2. Mark Tag Strengths</h2>
-      <p style="color:#555;font-size:0.85rem;margin-bottom:0.75rem;">Click a tag once for <strong style="color:#166534;">strong</strong>, twice for <strong style="color:#991b1b;">weak</strong>, three times to deselect. Tags are pre-classified by score.</p>
+      <p style="color:#555;font-size:0.85rem;margin-bottom:0.75rem;">Click a tag to cycle: very strong → strong → average → weak → very weak → unclassified. Tags are auto-classified by score thresholds (1900/1700/1500/1300/1100).</p>
       <div class="controls">
         <button id="auto-classify-btn" class="toggle-btn">Auto-classify All</button>
         <button id="clear-tags-btn" class="toggle-btn">Clear All</button>
@@ -136,13 +139,20 @@
       updateOutput();
     }
 
+    function classifyScore(score) {
+      if (score >= 1900) return "very_strong";
+      if (score >= 1700) return "strong";
+      if (score >= 1500) return "average";
+      if (score >= 1300) return "weak";
+      return "very_weak";
+    }
+
     function autoClassifyPlayer(id) {
       const stats = playerStats[id];
-      if (!stats) return;
+      if (!stats || !stats.tagScores.length) return;
       tagClassifications[id] = {};
       for (const t of stats.tagScores) {
-        if (t.score > 0) tagClassifications[id][t.tag] = "strong";
-        else if (t.score < 0) tagClassifications[id][t.tag] = "weak";
+        tagClassifications[id][t.tag] = classifyScore(t.score);
       }
     }
 
@@ -184,6 +194,7 @@
           label.className = "tag-label";
           const cls = (tagClassifications[id] || {})[t.tag];
           if (cls) label.classList.add(cls);
+          label.title = cls ? cls.replace("_", " ") : "unclassified";
           label.textContent = t.tag;
           label.onclick = () => cycleTag(id, t.tag, label);
           row.appendChild(label);
@@ -200,19 +211,22 @@
       }
     }
 
+    const TAG_LEVELS = ["very_strong", "strong", "average", "weak", "very_weak"];
+
     function cycleTag(playerId, tag, labelEl) {
       if (!tagClassifications[playerId]) tagClassifications[playerId] = {};
       const current = tagClassifications[playerId][tag];
 
-      labelEl.classList.remove("strong", "weak");
-      if (!current) {
-        tagClassifications[playerId][tag] = "strong";
-        labelEl.classList.add("strong");
-      } else if (current === "strong") {
-        tagClassifications[playerId][tag] = "weak";
-        labelEl.classList.add("weak");
+      labelEl.classList.remove(...TAG_LEVELS);
+      const idx = current ? TAG_LEVELS.indexOf(current) : -1;
+      const next = idx < TAG_LEVELS.length - 1 ? TAG_LEVELS[idx + 1] : undefined;
+      if (next) {
+        tagClassifications[playerId][tag] = next;
+        labelEl.classList.add(next);
+        labelEl.title = next.replace("_", " ");
       } else {
         delete tagClassifications[playerId][tag];
+        labelEl.title = "unclassified";
       }
       updateOutput();
     }
@@ -251,14 +265,23 @@
         const stats = playerStats[id];
         if (!stats) continue;
         const cls = tagClassifications[id] || {};
-        const strong = Object.entries(cls).filter(([, v]) => v === "strong").map(([k]) => k);
-        const weak = Object.entries(cls).filter(([, v]) => v === "weak").map(([k]) => k);
+        if (Object.keys(cls).length === 0) continue;
 
-        if (strong.length === 0 && weak.length === 0) continue;
+        const groups = {
+          very_strong: { label: "Very strong at", tags: [] },
+          strong: { label: "Strong at", tags: [] },
+          average: { label: "Average at", tags: [] },
+          weak: { label: "Weak at", tags: [] },
+          very_weak: { label: "Very weak at", tags: [] },
+        };
+        for (const [tag, level] of Object.entries(cls)) {
+          if (groups[level]) groups[level].tags.push(tag);
+        }
 
         md += `## ${stats.player.displayName || stats.player.id}\n\n`;
-        if (strong.length) md += `**Strong at:** ${strong.join(", ")}\n`;
-        if (weak.length) md += `**Weak at:** ${weak.join(", ")}\n`;
+        for (const g of Object.values(groups)) {
+          if (g.tags.length) md += `**${g.label}:** ${g.tags.join(", ")}\n`;
+        }
         md += "\n";
       }
 

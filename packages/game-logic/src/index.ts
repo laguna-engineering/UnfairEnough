@@ -61,6 +61,7 @@ export {
   rankPlayers,
 } from './utils/scoring';
 export {
+  computeEffectiveDifficulty,
   computePlayerDifficulty,
   computeTagUpdates,
   decayedScore,

@@ -19,7 +19,10 @@ function rowToQuestionWithMeta(row: QuestionRow): QuestionWithMeta {
     options: JSON.parse(row.options),
     correctAnswer: row.correct_answer,
     playerDifficulty: row.player_difficulty ? JSON.parse(row.player_difficulty) : null,
+    difficulty: row.difficulty,
     explanation: row.explanation,
+    timesAsked: row.times_asked,
+    lastAskedAt: row.last_asked_at,
   };
 }
 
@@ -66,8 +69,8 @@ export async function importQuestionSet(
     const questionId = generateId();
     await db.run(
       `INSERT INTO questions (id, set_id, original_id, type, text, category, tags, time_limit,
-        media_type, media_url, media_preview_duration, options, correct_answer, player_difficulty, explanation)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        media_type, media_url, media_preview_duration, options, correct_answer, player_difficulty, difficulty, explanation)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         questionId,
         setId,
@@ -83,6 +86,7 @@ export async function importQuestionSet(
         JSON.stringify(q.options),
         q.correctAnswer,
         q.playerDifficulty ? JSON.stringify(q.playerDifficulty) : null,
+        q.difficulty ?? 3,
         q.explanation ?? null,
       ],
     );
@@ -107,7 +111,7 @@ export async function getRandomQuestions(
     params.push(...excludeSetIds);
   }
 
-  sql += ' ORDER BY RANDOM() LIMIT ?';
+  sql += ' ORDER BY last_asked_at IS NOT NULL, last_asked_at ASC, RANDOM() LIMIT ?';
   params.push(count);
 
   const rows = await db.all<QuestionRow>(sql, params);
@@ -155,4 +159,32 @@ export async function getTotalQuestionCount(db: DbAdapter): Promise<number> {
     )`,
   );
   return row?.count ?? 0;
+}
+
+export async function getQuestionsByTag(
+  db: DbAdapter,
+  tag: string,
+  limit?: number,
+): Promise<QuestionWithMeta[]> {
+  let sql = `SELECT * FROM questions WHERE EXISTS (
+    SELECT 1 FROM json_each(tags) WHERE json_each.value = ?
+  ) AND (set_id IS NULL OR set_id NOT IN (
+    SELECT id FROM question_sets WHERE deleted_at IS NOT NULL
+  )) ORDER BY rowid`;
+  const params: (string | number)[] = [tag];
+
+  if (limit) {
+    sql += ' LIMIT ?';
+    params.push(limit);
+  }
+
+  const rows = await db.all<QuestionRow>(sql, params);
+  return rows.map(rowToQuestionWithMeta);
+}
+
+export async function markQuestionAsked(db: DbAdapter, questionId: string): Promise<void> {
+  await db.run(
+    `UPDATE questions SET times_asked = times_asked + 1, last_asked_at = datetime('now') WHERE id = ?`,
+    [questionId],
+  );
 }

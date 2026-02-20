@@ -72,6 +72,18 @@ export function computePlayerDifficulty(
 }
 
 /**
+ * Blend absolute question difficulty with Elo-derived per-player difficulty.
+ * Returns the absolute difficulty when no Elo data is available (cold start).
+ */
+export function computeEffectiveDifficulty(
+  absoluteDifficulty: number,
+  eloDifficulty: number | null,
+): number {
+  if (eloDifficulty == null) return absoluteDifficulty;
+  return 0.5 * absoluteDifficulty + 0.5 * eloDifficulty;
+}
+
+/**
  * Map difficulty (1-5) to a score multiplier.
  * Intentionally small range [0.95, 1.10] — question selection is the main catch-up lever.
  */

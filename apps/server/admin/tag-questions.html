@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tag Questions — Admin</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="admin.js"></script>
+</head>
+<body>
+  <main>
+    <h1 id="page-title">Questions</h1>
+    <p><a href="tags.html">&larr; Back to Tags</a></p>
+    <div id="content"></div>
+  </main>
+
+  <script>
+    const content = document.getElementById("content");
+    const pageTitle = document.getElementById("page-title");
+    const tag = new URLSearchParams(window.location.search).get("tag");
+
+    if (!tag) {
+      content.innerHTML = '<p class="error">No tag specified.</p>';
+    }
+
+    async function load() {
+      if (!tag) return;
+      pageTitle.textContent = `Questions tagged "${tag}"`;
+      showLoading(content);
+
+      try {
+        const data = await fetchJson(`/api/tags/${encodeURIComponent(tag)}/questions`);
+        const questions = data.questions || [];
+
+        if (questions.length === 0) {
+          content.innerHTML = '<p class="empty">No questions with this tag.</p>';
+          return;
+        }
+
+        renderTable(content,
+          ["#", "Question", "Type", "Media", "Options", "Answer", "Diff", "Tags"],
+          questions.map((q, i) => {
+            // Options cell with correct answer highlighted
+            const optionsEl = document.createElement("div");
+            for (const opt of (q.options || [])) {
+              const row = document.createElement("div");
+              const isCorrect = opt.key === q.correctAnswer;
+              row.style.cssText = isCorrect
+                ? "color:#16a34a;font-weight:600;"
+                : "color:#555;";
+              row.textContent = `${opt.key}. ${opt.text}`;
+              optionsEl.appendChild(row);
+            }
+
+            // Type badge
+            const typeEl = document.createElement("span");
+            typeEl.className = "badge";
+            typeEl.textContent = (q.type || "multiple_choice").replace("_", " ");
+
+            // Media indicator
+            const mediaEl = document.createElement("span");
+            mediaEl.textContent = q.media ? "\u2713" : "";
+            if (q.media) mediaEl.style.cssText = "color:#16a34a;font-weight:600;";
+
+            // Correct answer badge
+            const answerEl = document.createElement("span");
+            answerEl.className = "badge badge-win";
+            const correctOpt = (q.options || []).find(o => o.key === q.correctAnswer);
+            answerEl.textContent = correctOpt
+              ? `${correctOpt.key}. ${correctOpt.text}`
+              : q.correctAnswer;
+
+            // Difficulty badge
+            const diffEl = document.createElement("span");
+            diffEl.className = "badge";
+            diffEl.textContent = String(q.difficulty ?? 3);
+
+            // Tags cell
+            const tagsEl = document.createElement("span");
+            tagsEl.className = "tags";
+            tagsEl.textContent = (q.tags && q.tags.length) ? q.tags.join(", ") : "\u2014";
+
+            return {
+              cells: [i + 1, q.text, typeEl, mediaEl, optionsEl, answerEl, diffEl, tagsEl],
+            };
+          })
+        );
+      } catch (err) {
+        showError(content, err.message);
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", load);
+  </script>
+</body>
+</html>

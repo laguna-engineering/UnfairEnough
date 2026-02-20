@@ -26,6 +26,10 @@ playwright-report/
 test-results/
 /playwright/.cache/
 
+# Questions (ignore all except the example)
+questions/*
+!questions/example.yaml
+
 # Claude
 .claude/*.local.json
 .claude/.lint-cache.json

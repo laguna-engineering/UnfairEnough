@@ -14,6 +14,7 @@ import {
   addPoints,
   buildQuestionPool,
   calculateScore,
+  computeEffectiveDifficulty,
   computePlayerDifficulty,
   computeTagUpdates,
   createStore,
@@ -356,20 +357,18 @@ class GameController implements IGameController {
     this.currentRoundDifficulties.clear();
     const state = this.getState();
     const players = playersSelectors.selectAll(state.players);
+    const absoluteDifficulty = q.difficulty ?? 3;
 
     for (const player of players) {
       const profile = this.playerProfiles.get(player.id);
       if (profile && q.tags.length > 0) {
         const tagScores = this.playerTagScores.get(profile.profileId) ?? new Map<string, number>();
-        const dynamicDifficulty = computePlayerDifficulty(tagScores, q.tags);
-        const effective = resolvePlayerDifficulty(
-          player.name,
-          q.playerDifficulty,
-          dynamicDifficulty,
-        );
+        const eloDifficulty = computePlayerDifficulty(tagScores, q.tags);
+        const blended = computeEffectiveDifficulty(absoluteDifficulty, eloDifficulty);
+        const effective = resolvePlayerDifficulty(player.name, q.playerDifficulty, blended);
         this.currentRoundDifficulties.set(player.id, effective);
       } else {
-        this.currentRoundDifficulties.set(player.id, 2.5);
+        this.currentRoundDifficulties.set(player.id, absoluteDifficulty);
       }
     }
   }
@@ -482,7 +481,8 @@ class GameController implements IGameController {
       }
 
       // Apply difficulty multiplier
-      const playerDifficulty = this.currentRoundDifficulties.get(player.id) ?? 2.5;
+      const playerDifficulty =
+        this.currentRoundDifficulties.get(player.id) ?? currentQuestion.difficulty ?? 3;
       const multiplier = difficultyMultiplier(playerDifficulty);
       const pointsEarned = Math.round(baseScore * multiplier);
 
@@ -530,6 +530,7 @@ class GameController implements IGameController {
         questionId: currentQuestion.id,
         correctAnswer,
         tags: currentQuestion.tags.length > 0 ? currentQuestion.tags : undefined,
+        questionDifficulty: currentQuestion.difficulty ?? 3,
         playerResults,
         rankings,
       },
@@ -539,6 +540,11 @@ class GameController implements IGameController {
     this.updateTagScoresAfterRound(currentQuestion, playerResults).catch((err) =>
       console.error('Failed to update tag scores:', err),
     );
+
+    // Track question usage (fire-and-forget)
+    questionsRepo
+      .markQuestionAsked(getDb(), currentQuestion.id)
+      .catch((err) => console.error('Failed to update question usage:', err));
 
     // Move to next question after showing results
     this.resultsTimeout = setTimeout(() => {

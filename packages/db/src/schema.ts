@@ -30,7 +30,10 @@ export interface QuestionRow {
   options: string; // JSON array of {key, text}
   correct_answer: string;
   player_difficulty: string | null; // JSON object
+  difficulty: number;
   explanation: string | null;
+  times_asked: number;
+  last_asked_at: string | null;
   created_at: string;
 }
 
@@ -111,7 +114,10 @@ export interface QuestionWithMeta {
   options: QuestionOption[];
   correctAnswer: string;
   playerDifficulty: Record<string, number> | null;
+  difficulty: number;
   explanation: string | null;
+  timesAsked: number;
+  lastAskedAt: string | null;
 }
 
 export interface QuestionSetWithMeta {

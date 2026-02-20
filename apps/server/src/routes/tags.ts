@@ -1,4 +1,4 @@
-import { playerTagScoresRepo, questionsRepo } from '@unfairenough/db';
+import { playersRepo, playerTagScoresRepo, questionsRepo } from '@unfairenough/db';
 import { Hono } from 'hono';
 import { getDb } from '../db';
 
@@ -7,9 +7,10 @@ const tags = new Hono();
 // GET /api/tags — all known tags with question counts
 tags.get('/', async (c) => {
   const db = getDb();
-  const [playerTags, questions] = await Promise.all([
+  const [playerTags, questions, allPlayers] = await Promise.all([
     playerTagScoresRepo.getAllTags(db),
     questionsRepo.getRandomQuestions(db, 10000), // Get all questions to count tags
+    playersRepo.listPlayers(db),
   ]);
 
   // Count questions per tag
@@ -31,7 +32,54 @@ tags.get('/', async (c) => {
 
   result.sort((a, b) => b.questionCount - a.questionCount);
 
-  return c.json({ tags: result });
+  return c.json({ tags: result, totalPlayers: allPlayers.length });
+});
+
+// GET /api/tags/:tag/players — all players with their score for a tag
+tags.get('/:tag/players', async (c) => {
+  const db = getDb();
+  const tag = decodeURIComponent(c.req.param('tag')).toLowerCase().trim();
+
+  const [allPlayers, tagScores] = await Promise.all([
+    playersRepo.listPlayers(db),
+    playerTagScoresRepo.getScoresByTag(db, tag),
+  ]);
+
+  const scoreByPlayerId = new Map(tagScores.map((ts) => [ts.playerId, ts.score]));
+
+  const players = allPlayers.map((p) => ({
+    id: p.id,
+    displayName: p.displayName,
+    avatarColor: p.avatarColor,
+    avatarEmoji: p.avatarEmoji,
+    score: scoreByPlayerId.get(p.id) ?? null,
+  }));
+
+  return c.json({ tag, players });
+});
+
+// GET /api/tags/:tag/questions — questions with this tag (optional ?limit=N)
+tags.get('/:tag/questions', async (c) => {
+  const db = getDb();
+  const tag = decodeURIComponent(c.req.param('tag')).toLowerCase().trim();
+  const limit = c.req.query('limit') ? Number(c.req.query('limit')) : undefined;
+
+  const questions = await questionsRepo.getQuestionsByTag(db, tag, limit);
+
+  return c.json({
+    tag,
+    questions: questions.map((q) => ({
+      id: q.id,
+      text: q.text,
+      type: q.type,
+      category: q.category,
+      tags: q.tags,
+      difficulty: q.difficulty,
+      options: q.options,
+      correctAnswer: q.correctAnswer,
+      media: q.media,
+    })),
+  });
 });
 
 export default tags;

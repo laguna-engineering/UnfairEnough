@@ -5,6 +5,7 @@ import { computePlayerDifficulty } from './tagScoring';
 export interface SelectableQuestion {
   id: string;
   tags: string[];
+  difficulty?: number;
   playerDifficulty?: Record<string, number> | null;
 }
 
@@ -88,7 +89,8 @@ export function buildQuestionPool<T extends SelectableQuestion>(
 
 /**
  * Greedy tag-diversity selector: pick questions that add the most new tags.
- * Ties broken randomly via injectable `random`.
+ * Among ties, prefer questions whose difficulty level is underrepresented
+ * in the pool so far (soft spread bias). Final ties broken randomly.
  */
 function selectDiverse<T extends SelectableQuestion>(
   questions: T[],
@@ -100,6 +102,8 @@ function selectDiverse<T extends SelectableQuestion>(
   const selected: T[] = [];
   const usedTags = new Set<string>();
   const remaining = [...questions];
+  // Track how many questions of each difficulty level (1-5) have been selected
+  const difficultyCounts = new Map<number, number>();
 
   while (selected.length < count && remaining.length > 0) {
     let bestNewTags = -1;
@@ -116,12 +120,36 @@ function selectDiverse<T extends SelectableQuestion>(
       }
     }
 
-    const pickIdx = candidates[Math.floor(random() * candidates.length)];
+    // Among tag-coverage ties, prefer underrepresented difficulty levels
+    let pickIdx: number;
+    if (candidates.length > 1) {
+      let lowestCount = Number.POSITIVE_INFINITY;
+      const diffTied: number[] = [];
+
+      for (const idx of candidates) {
+        const diff = remaining[idx].difficulty ?? 3;
+        const count = difficultyCounts.get(diff) ?? 0;
+        if (count < lowestCount) {
+          lowestCount = count;
+          diffTied.length = 0;
+          diffTied.push(idx);
+        } else if (count === lowestCount) {
+          diffTied.push(idx);
+        }
+      }
+
+      pickIdx = diffTied[Math.floor(random() * diffTied.length)];
+    } else {
+      pickIdx = candidates[0];
+    }
+
     const picked = remaining[pickIdx];
     selected.push(picked);
     for (const tag of picked.tags) {
       usedTags.add(tag.toLowerCase().trim());
     }
+    const pickedDiff = picked.difficulty ?? 3;
+    difficultyCounts.set(pickedDiff, (difficultyCounts.get(pickedDiff) ?? 0) + 1);
     remaining.splice(pickIdx, 1);
   }
 

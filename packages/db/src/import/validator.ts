@@ -20,6 +20,7 @@ export interface QuestionInput {
   options: QuestionOptionInput[];
   correctAnswer: string;
   playerDifficulty?: Record<string, number>;
+  difficulty?: number;
   explanation?: string;
 }
 
@@ -151,6 +152,17 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
       errors.push(`${prefix}.timeLimit: must be a number between 1 and 120`);
     }
 
+    // Validate difficulty
+    if (
+      qObj.difficulty !== undefined &&
+      (typeof qObj.difficulty !== 'number' ||
+        !Number.isInteger(qObj.difficulty) ||
+        qObj.difficulty < 1 ||
+        qObj.difficulty > 5)
+    ) {
+      errors.push(`${prefix}.difficulty: must be an integer between 1 and 5`);
+    }
+
     questions.push({
       id: typeof qObj.id === 'string' ? qObj.id : undefined,
       text: String(qObj.text ?? ''),
@@ -178,6 +190,10 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
       playerDifficulty:
         qObj.playerDifficulty && typeof qObj.playerDifficulty === 'object'
           ? (qObj.playerDifficulty as Record<string, number>)
+          : undefined,
+      difficulty:
+        typeof qObj.difficulty === 'number' && Number.isInteger(qObj.difficulty)
+          ? qObj.difficulty
           : undefined,
       explanation: typeof qObj.explanation === 'string' ? qObj.explanation : undefined,
     });
