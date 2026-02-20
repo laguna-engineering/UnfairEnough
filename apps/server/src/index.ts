@@ -2,6 +2,7 @@ import { readdir } from 'node:fs/promises';
 import { networkInterfaces } from 'node:os';
 import { Hono } from 'hono';
 import { serveStatic, upgradeWebSocket, websocket } from 'hono/bun';
+import { cors } from 'hono/cors';
 import { initDatabase } from './db';
 import { createRoom, destroyRoom, getRoom, setDbAdapter } from './roomManager';
 import gamesRoutes from './routes/games';
@@ -12,6 +13,9 @@ import tagsRoutes from './routes/tags';
 import type { WSData } from './types';
 
 const app = new Hono();
+
+// ── CORS (allow local dev origins) ──────────────────────────────
+app.use('/api/*', cors());
 
 // ── Health check ───────────────────────────────────────────────
 app.get('/api/health', (c) => c.json({ status: 'ok' }));

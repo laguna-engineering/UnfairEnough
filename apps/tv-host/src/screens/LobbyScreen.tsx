@@ -67,8 +67,8 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
         setTotalQuestions(count);
       } else if (mode === 'hosted' && serverUrl) {
         // Fetch sets from server API
-        const httpBase = serverUrl.replace(/^wss?:\/\//, 'http://');
-        const res = await fetch(`${httpBase}/api/question-sets`);
+        const host = serverUrl.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '');
+        const res = await fetch(`http://${host}/api/question-sets`);
         if (res.ok) {
           const data = await res.json();
           setQuestionSets(data.sets || []);

@@ -17,7 +17,8 @@ export function useBgMusic() {
   const httpBaseRef = useRef<string | null>(null);
 
   // Derive HTTP base URL from WebSocket URL
-  httpBaseRef.current = serverUrl?.replace(/^wss?:\/\//, 'http://') ?? null;
+  const host = serverUrl?.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '') ?? null;
+  httpBaseRef.current = host ? `http://${host}` : null;
 
   const playTrack = useCallback((index: number) => {
     const tracks = tracksRef.current;
