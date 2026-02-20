@@ -156,18 +156,18 @@ In `LobbyScreen.tsx`, meta sets appear in the same horizontal `ScrollView`:
 
 ## Acceptance Criteria
 
-- [ ] DB migration V7 adds `is_meta` column and `meta_set_children` junction table
-- [ ] Admin can create a meta set, selecting child sets from existing regular sets
-- [ ] Admin can edit a meta set to add/remove/reorder child sets
-- [ ] Admin can delete a meta set without affecting child sets
-- [ ] Meta sets appear in `GET /api/question-sets` with `isMeta: true` and computed `questionCount`
-- [ ] TV lobby shows meta sets with visual distinction in both local and hosted modes
-- [ ] Selecting a meta set and starting a game loads all child set questions
-- [ ] Meta set games use adaptive picking (`buildQuestionPool` → `selectNextQuestion`), not sequential order
-- [ ] Host can configure number of rounds for meta set games
-- [ ] Soft-deleting a child set excludes its questions from parent meta sets
-- [ ] Meta sets cannot contain other meta sets (enforced in admin UI and API)
-- [ ] Game history records the meta set ID in `GameRow.question_set_id`
+- [x] DB migration V7 adds `is_meta` column and `meta_set_children` junction table
+- [x] Admin can create a meta set, selecting child sets from existing regular sets
+- [x] Admin can edit a meta set to add/remove/reorder child sets
+- [x] Admin can delete a meta set without affecting child sets
+- [x] Meta sets appear in `GET /api/question-sets` with `isMeta: true` and computed `questionCount`
+- [x] TV lobby shows meta sets with visual distinction in both local and hosted modes
+- [x] Selecting a meta set and starting a game loads all child set questions
+- [x] Meta set games use adaptive picking (`buildQuestionPool` → `selectNextQuestion`), not sequential order
+- [x] Host can configure number of rounds for meta set games
+- [x] Soft-deleting a child set excludes its questions from parent meta sets
+- [x] Meta sets cannot contain other meta sets (enforced in admin UI and API)
+- [x] Game history records the meta set ID in `GameRow.question_set_id`
 
 ## Dependencies & Risks
 
