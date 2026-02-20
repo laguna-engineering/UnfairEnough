@@ -55,14 +55,14 @@ type Mode = "local" | "hosted" | "dev";
 type TvPlatform = "android-tv" | "web";
 type MobilePlatform = "android" | "web";
 
-function startTv(tvPlatform: TvPlatform, portArgs: string[]) {
+function startTv(tvPlatform: TvPlatform) {
 	console.log(
 		`Starting TV app (${tvPlatform === "web" ? "web" : "Android TV"})...`,
 	);
 	if (tvPlatform === "web") {
-		run("yarn", ["tv", "web", ...portArgs], { EXPO_TV: "1" });
+		run("yarn", ["tv", "web"], { EXPO_TV: "1" });
 	} else {
-		run("yarn", ["tv", "expo", "run:android", ...portArgs], {
+		run("yarn", ["tv", "expo", "run:android"], {
 			EXPO_TV: "1",
 		});
 	}
@@ -125,7 +125,7 @@ async function main() {
 		});
 
 		const wantsMobile = await select<boolean>({
-			message: "Also start mobile app?",
+			message: "Also start mobile dev server (for testing on phone/browser)?",
 			choices: [
 				{ name: "Yes", value: true },
 				{ name: "No", value: false },
@@ -141,8 +141,7 @@ async function main() {
 			startServer();
 		}
 
-		const tvPortArgs = wantsMobile ? ["--port", "8082"] : [];
-		startTv(tvPlatform, tvPortArgs);
+		startTv(tvPlatform);
 
 		if (mobilePlatform) {
 			startMobile(mobilePlatform);
@@ -188,8 +187,7 @@ async function main() {
 		}
 
 		if (tvPlatform) {
-			const tvPortArgs = hasMobile ? ["--port", "8082"] : [];
-			startTv(tvPlatform, tvPortArgs);
+			startTv(tvPlatform);
 		}
 
 		if (mobilePlatform) {

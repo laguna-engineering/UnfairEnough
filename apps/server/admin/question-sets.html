@@ -14,7 +14,7 @@
     <div class="card">
       <h2 style="margin-top:0">Upload YAML</h2>
       <div class="upload-form">
-        <input type="file" id="file-input" accept=".yaml,.yml">
+        <input type="file" id="file-input" accept=".yaml,.yml" multiple>
         <button id="upload-btn" disabled>Upload</button>
       </div>
       <div id="upload-status"></div>
@@ -143,6 +143,16 @@ questions:
     </div>
 
     <div id="content"></div>
+
+    <div id="bulk-bar" class="bulk-bar" style="display:none;">
+      <div class="bulk-bar-inner">
+        <span id="bulk-info"></span>
+        <div style="display:flex;gap:0.5rem;">
+          <button id="bulk-cancel-btn" class="toggle-btn" style="border-color:#fff;color:#fff;">Cancel</button>
+          <button id="bulk-delete-btn" class="danger">Delete Selected</button>
+        </div>
+      </div>
+    </div>
   </main>
 
   <script>
@@ -156,40 +166,152 @@ questions:
     });
 
     uploadBtn.addEventListener("click", async () => {
-      const file = fileInput.files[0];
-      if (!file) return;
+      const files = [...fileInput.files];
+      if (files.length === 0) return;
 
       uploadBtn.disabled = true;
-      uploadBtn.textContent = "Uploading...";
+      fileInput.disabled = true;
       uploadStatus.innerHTML = "";
 
-      try {
-        const form = new FormData();
-        form.append("file", file);
-        const res = await fetch("/api/question-sets", { method: "POST", body: form });
-        const data = await res.json();
+      let succeeded = 0;
 
-        if (!res.ok) {
-          const detail = data.details ? `\n${JSON.stringify(data.details, null, 2)}` : "";
-          uploadStatus.innerHTML = `<p class="error">${escapeHtml(data.error || "Upload failed")}${detail ? `<pre>${escapeHtml(detail)}</pre>` : ""}</p>`;
-          return;
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        uploadBtn.textContent = files.length === 1
+          ? "Uploading..."
+          : `Uploading ${i + 1}/${files.length}...`;
+
+        const row = document.createElement("p");
+        row.textContent = `Uploading ${file.name}...`;
+        row.style.color = "#555";
+        uploadStatus.appendChild(row);
+
+        try {
+          const form = new FormData();
+          form.append("file", file);
+          const res = await fetch("/api/question-sets", { method: "POST", body: form });
+          const data = await res.json();
+
+          if (!res.ok) {
+            const detail = data.details ? `\n${JSON.stringify(data.details, null, 2)}` : "";
+            row.className = "error";
+            row.innerHTML = `${escapeHtml(file.name)}: ${escapeHtml(data.error || "Upload failed")}${detail ? `<pre>${escapeHtml(detail)}</pre>` : ""}`;
+          } else {
+            row.className = "success";
+            row.textContent = `${file.name}: ${data.message}`;
+            succeeded++;
+          }
+        } catch (err) {
+          row.className = "error";
+          row.textContent = `${file.name}: ${err.message}`;
         }
-
-        uploadStatus.innerHTML = `<p class="success">${escapeHtml(data.message)}</p>`;
-        fileInput.value = "";
-        load(); // Refresh list
-      } catch (err) {
-        uploadStatus.innerHTML = `<p class="error">${escapeHtml(err.message)}</p>`;
-      } finally {
-        uploadBtn.disabled = false;
-        uploadBtn.textContent = "Upload";
       }
+
+      fileInput.value = "";
+      fileInput.disabled = false;
+      uploadBtn.disabled = false;
+      uploadBtn.textContent = "Upload";
+      if (succeeded > 0) load();
     });
 
     // Track which sets are expanded
     const expanded = new Set();
     // Track editing state for meta sets
     let editingMetaId = null;
+    // Track selected sets for bulk delete: id → { name, questionCount, isMeta }
+    const selected = new Map();
+
+    const bulkBar = document.getElementById("bulk-bar");
+    const bulkInfo = document.getElementById("bulk-info");
+    const bulkDeleteBtn = document.getElementById("bulk-delete-btn");
+    const bulkCancelBtn = document.getElementById("bulk-cancel-btn");
+
+    function updateBulkBar() {
+      if (selected.size === 0) {
+        bulkBar.style.display = "none";
+        document.querySelector("main").style.paddingBottom = "";
+        return;
+      }
+      bulkBar.style.display = "block";
+      document.querySelector("main").style.paddingBottom = "4rem";
+      const totalQ = [...selected.values()].reduce((sum, s) => sum + (s.questionCount || 0), 0);
+      const setsWord = selected.size === 1 ? "set" : "sets";
+      const qWord = totalQ === 1 ? "question" : "questions";
+      bulkInfo.textContent = `${selected.size} ${setsWord} selected (${totalQ} ${qWord} total)`;
+      bulkDeleteBtn.textContent = `Delete ${selected.size} ${setsWord}`;
+    }
+
+    function toggleSelection(qs, checkbox) {
+      if (checkbox.checked) {
+        selected.set(qs.id, { name: qs.name, questionCount: qs.questionCount || 0, isMeta: qs.isMeta });
+      } else {
+        selected.delete(qs.id);
+      }
+      updateBulkBar();
+      // Sync "select all" checkbox
+      const selectAllCb = document.getElementById("select-all-cb");
+      if (selectAllCb) {
+        const allCheckboxes = document.querySelectorAll(".set-checkbox");
+        selectAllCb.checked = allCheckboxes.length > 0 && selected.size === allCheckboxes.length;
+        selectAllCb.indeterminate = selected.size > 0 && selected.size < allCheckboxes.length;
+      }
+    }
+
+    function toggleSelectAll(checked, sets) {
+      const allCheckboxes = document.querySelectorAll(".set-checkbox");
+      for (const cb of allCheckboxes) cb.checked = checked;
+      selected.clear();
+      if (checked) {
+        for (const qs of sets) {
+          selected.set(qs.id, { name: qs.name, questionCount: qs.questionCount || 0, isMeta: qs.isMeta });
+        }
+      }
+      updateBulkBar();
+    }
+
+    bulkCancelBtn.addEventListener("click", () => {
+      selected.clear();
+      const allCheckboxes = document.querySelectorAll(".set-checkbox");
+      for (const cb of allCheckboxes) cb.checked = false;
+      const selectAllCb = document.getElementById("select-all-cb");
+      if (selectAllCb) {
+        selectAllCb.checked = false;
+        selectAllCb.indeterminate = false;
+      }
+      updateBulkBar();
+    });
+
+    bulkDeleteBtn.addEventListener("click", async () => {
+      const totalQ = [...selected.values()].reduce((sum, s) => sum + (s.questionCount || 0), 0);
+      const setsWord = selected.size === 1 ? "set" : "sets";
+      const qWord = totalQ === 1 ? "question" : "questions";
+      if (!confirm(`Delete ${selected.size} ${setsWord} (${totalQ} ${qWord} total)? This cannot be undone.`)) return;
+
+      bulkDeleteBtn.disabled = true;
+      bulkDeleteBtn.textContent = "Deleting...";
+
+      let failed = 0;
+      for (const [id, info] of selected) {
+        try {
+          const endpoint = info.isMeta
+            ? `/api/meta-sets/${encodeURIComponent(id)}`
+            : `/api/question-sets/${encodeURIComponent(id)}`;
+          const res = await fetch(endpoint, { method: "DELETE" });
+          if (!res.ok) failed++;
+          expanded.delete(id);
+          if (editingMetaId === id) cancelMetaEdit();
+        } catch {
+          failed++;
+        }
+      }
+
+      selected.clear();
+      updateBulkBar();
+      bulkDeleteBtn.disabled = false;
+
+      if (failed > 0) alert(`${failed} ${failed === 1 ? "set" : "sets"} failed to delete.`);
+      load();
+    });
 
     // ── Meta set creation ──────────────────────────────────────
     const metaNameInput = document.getElementById("meta-name");
@@ -299,11 +421,38 @@ questions:
         updateMetaCreateBtn();
 
         if (sets.length === 0) {
+          selected.clear();
+          updateBulkBar();
           content.innerHTML = '<p class="empty">No question sets uploaded yet.</p>';
           return;
         }
 
+        // Clear stale selections (sets that no longer exist)
+        const currentIds = new Set(sets.map(s => s.id));
+        for (const id of selected.keys()) {
+          if (!currentIds.has(id)) selected.delete(id);
+        }
+        updateBulkBar();
+
         const container = document.createElement("div");
+
+        // Select-all bar
+        const selectBar = document.createElement("div");
+        selectBar.className = "select-all-bar";
+        const selectAllLabel = document.createElement("label");
+        const selectAllCb = document.createElement("input");
+        selectAllCb.type = "checkbox";
+        selectAllCb.id = "select-all-cb";
+        selectAllCb.className = "set-checkbox";
+        selectAllCb.checked = selected.size === sets.length && sets.length > 0;
+        selectAllCb.indeterminate = selected.size > 0 && selected.size < sets.length;
+        selectAllCb.addEventListener("change", () => toggleSelectAll(selectAllCb.checked, sets));
+        selectAllLabel.appendChild(selectAllCb);
+        const selectAllText = document.createElement("span");
+        selectAllText.textContent = "Select all";
+        selectAllLabel.appendChild(selectAllText);
+        selectBar.appendChild(selectAllLabel);
+        container.appendChild(selectBar);
 
         for (const qs of sets) {
           const card = document.createElement("div");
@@ -313,6 +462,14 @@ questions:
           header.style.cssText = "display:flex;justify-content:space-between;align-items:center;";
 
           const info = document.createElement("div");
+          info.style.cssText = "display:flex;align-items:center;gap:0.5rem;";
+
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.className = "set-checkbox";
+          checkbox.checked = selected.has(qs.id);
+          checkbox.addEventListener("change", () => toggleSelection(qs, checkbox));
+          info.appendChild(checkbox);
           if (qs.isMeta) {
             const badge = document.createElement("span");
             badge.textContent = "Collection";

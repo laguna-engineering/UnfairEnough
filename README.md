@@ -23,6 +23,94 @@ yarn
 
 All packages are consumed as TypeScript source — there's no build step for shared packages.
 
+## Architecture Diagrams
+
+### Hosted mode
+
+The Bun server is the central hub. It manages game rooms, serves the TV web build, the admin dashboard, and a REST API. The TV connects as a "host" client, phones connect as players. Everything goes through port 3000.
+
+```mermaid
+graph LR
+    subgraph Server["Bun Server :3000"]
+        WS["/ws — WebSocket"]
+        API["/api/* — REST API"]
+        Admin["/admin/ — Dashboard"]
+        Static["/* — TV web build"]
+    end
+
+    TV["TV Host<br/>(web or native app)"]
+    P1["Phone 1<br/>(native or web)"]
+    P2["Phone 2<br/>(native or web)"]
+    Browser["Admin Browser"]
+
+    TV -- "ws://.../ws?role=host" --> WS
+    P1 -- "ws://.../ws?role=player<br/>&roomCode=XXXX" --> WS
+    P2 -- "ws://.../ws?role=player<br/>&roomCode=XXXX" --> WS
+    Browser -- "http://.../admin/" --> Admin
+```
+
+The server creates a room when the host connects and returns a 4-character room code. Players join by entering that code (or scanning the QR shown on TV).
+
+When running in development, each app has its own Metro bundler:
+
+| Process | Default port | Notes |
+|---------|-------------|-------|
+| Bun server | `:3000` | WebSocket, REST API, admin dashboard, static files |
+| TV Metro bundler | `:8082` | Expo dev server for tv-host (always 8082 to avoid conflicts) |
+| Mobile Metro bundler | `:8081` | Expo dev server for mobile (Expo default) |
+
+### Local mode
+
+No server needed. The TV app itself runs a WebSocket server directly on the device using `react-native-tcp-socket`. The OS assigns a random available port.
+
+```mermaid
+graph LR
+    subgraph TV["TV Device (Apple TV / Android TV)"]
+        App["TV Host App"]
+        WSS["WebSocket Server<br/>:random port"]
+        DB["SQLite DB<br/>(expo-sqlite)"]
+        App --- WSS
+        App --- DB
+    end
+
+    P1["Phone 1"] -- "ws://&lt;tv-ip&gt;:port" --> WSS
+    P2["Phone 2"] -- "ws://&lt;tv-ip&gt;:port" --> WSS
+```
+
+Players connect to the TV's local IP address and port, shown on screen (along with a QR code). No admin dashboard is available in local mode — question sets are imported through the TV host UI.
+
+### Full hosted setup (example)
+
+A typical development session with all components running:
+
+```mermaid
+graph TB
+    subgraph LAN["Local Network"]
+        subgraph Dev["Dev Machine"]
+            Server["Bun Server<br/>:3000"]
+            MetroTV["TV Metro<br/>:8082"]
+            MetroMob["Mobile Metro<br/>:8081"]
+        end
+
+        AndroidTV["Android TV<br/>(native app)"]
+        WebTV["Browser tab<br/>(TV web build)"]
+        Phone["Phone<br/>(native app)"]
+        WebPlayer["Browser tab<br/>(mobile web)"]
+        AdminBrowser["Browser tab<br/>(admin dashboard)"]
+    end
+
+    MetroTV -. "JS bundle" .-> AndroidTV
+    MetroTV -. "JS bundle" .-> WebTV
+    MetroMob -. "JS bundle" .-> Phone
+    MetroMob -. "JS bundle" .-> WebPlayer
+
+    AndroidTV -- "ws :3000" --> Server
+    WebTV -- "ws :3000" --> Server
+    Phone -- "ws :3000" --> Server
+    WebPlayer -- "ws :3000" --> Server
+    AdminBrowser -- "http :3000/admin/" --> Server
+```
+
 ## Running in Hosted Mode
 
 This is the easiest way to get everything running. You need two terminals:
@@ -44,26 +132,7 @@ yarn tv web
 # Opens on a separate port; connect to the server URL shown in the UI
 ```
 
-### What connects to what (hosted mode)
-
-```
-┌─────────────┐       ws://<server>/ws?role=host         ┌──────────────┐
-│   TV Host   │◄──────────────────────────────────────►  │              │
-│  (web/app)  │                                          │  Bun Server  │
-└─────────────┘                                          │  :3000       │
-                                                         │              │
-┌─────────────┐       ws://<server>/ws?role=player       │  - Rooms     │
-│   Phone 1   │◄──────────────────────────────────────►  │  - Questions │
-├─────────────┤       &roomCode=XXXX                     │  - Scoring   │
-│   Phone 2   │◄──────────────────────────────────────►  │  - Profiles  │
-└─────────────┘                                          └──────────────┘
-```
-
-The server creates a room when the host connects and returns a 4-character room code. Players join by entering that code (or scanning the QR shown on TV).
-
 ## Running in Local Mode
-
-Local mode runs entirely on the TV device — no server needed. The TV app starts a WebSocket server on port 8080 using `react-native-tcp-socket`.
 
 ```bash
 # Prebuild native project (required once, or after dependency changes)
