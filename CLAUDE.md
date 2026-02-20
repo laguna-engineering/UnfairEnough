@@ -4,15 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Unfair Enough! is a multiplayer quiz game. The TV app doubles as a central dashboard **and** the game server — you can run the entire game locally with a TV as the server and native mobile apps on phones. There's also a hosted mode where the Bun server manages game rooms and serves the TV web build; the hosted version works with both native and web mobile clients.
+Unfair Enough! is a multiplayer quiz game. The TV app doubles as a central dashboard **and** the game server — you can run the entire game locally with a TV as the server and native mobile apps on phones. There's also a hosted mode where the Bun server manages game rooms; the hosted version works with both native and web mobile clients.
 
 ## Commands
 
 ```bash
 # Development
-yarn dev:server           # Bun server with hot reload (port 3000)
+yarn dev:server           # Bun server with hot reload (port 3000, proxies /mobile/ to Metro)
 yarn dev:tv               # TV host app (sets EXPO_TV=1)
-yarn dev:mobile           # Mobile app
+yarn dev:mobile           # Mobile app (Metro on port 8081)
 
 # Run specific workspace commands
 yarn tv <cmd>             # e.g. yarn tv ios, yarn tv web
@@ -41,7 +41,7 @@ yarn test:e2e:ui          # Run with Playwright UI
 
 ### Apps
 
-- **`apps/server/`** — Bun + Hono. Manages game rooms via WebSocket (`/ws?role=host|player&roomCode=XXXX`). Serves the TV host web build from `./public` as static files. This is the hosted-mode server.
+- **`apps/server/`** — Bun + Hono. Manages game rooms via WebSocket (`/ws?role=host|player&roomCode=XXXX`). Serves three context roots: `/mobile/` (dev proxy to Metro or static build), `/tv/` (TV host web build from `./public`), `/admin/` (dashboard). Root `/` redirects to `/mobile/`.
 - **`apps/tv-host/`** — Expo app using `react-native-tvos` fork. Builds for Apple TV, Android TV, and web. In local mode, uses `react-native-tcp-socket` to run a WebSocket server directly on the TV device. In hosted mode, connects to the Bun server as a host client. Landscape orientation.
 - **`apps/mobile/`** — Standard Expo app (iOS, Android, web). Connects to the game server (local or hosted) as a player. Has QR scanning via `expo-camera` and React Navigation stack. Portrait orientation.
 

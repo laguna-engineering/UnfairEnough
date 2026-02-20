@@ -15,7 +15,7 @@
     "prebuild:mobile": "yarn workspace @unfairenough/mobile expo prebuild --clean",
     "build:packages": "yarn workspaces foreach -A --topological run build",
     "server": "yarn workspace @unfairenough/server",
-    "dev:server": "yarn workspace @unfairenough/server dev",
+    "dev:server": "MOBILE_DEV_PORT=8081 yarn workspace @unfairenough/server dev",
     "lint": "biome check .",
     "lint:fix": "biome check --fix .",
     "format": "biome format --fix .",

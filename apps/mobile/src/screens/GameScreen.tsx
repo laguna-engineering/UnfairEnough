@@ -1,7 +1,7 @@
 import { colors, ScreenBackground } from '@unfairenough/ui';
 import type React from 'react';
 import { useEffect, useRef } from 'react';
-import { ActivityIndicator } from 'react-native';
+import { ActivityIndicator, Platform } from 'react-native';
 import { useGameState } from '../hooks/useGameState';
 import { getDeviceId, initDeviceId } from '../services/deviceId';
 import { CountdownScreen } from './CountdownScreen';
@@ -49,6 +49,17 @@ export const GameScreen: React.FC = () => {
       deviceIdReady.current = true;
     });
   }, []);
+
+  // Web: auto-connect when loaded with ?roomCode= in the URL
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const params = new URLSearchParams(window.location.search);
+    const roomCode = params.get('roomCode');
+    if (roomCode) {
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      connect(`${wsProtocol}//${window.location.host}/ws?role=player&roomCode=${roomCode}`);
+    }
+  }, [connect]);
 
   switch (phase) {
     case 'SCAN':

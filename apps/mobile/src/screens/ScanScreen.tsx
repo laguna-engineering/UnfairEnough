@@ -92,9 +92,8 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
     if (scanned) return;
     setScanned(true);
 
-    // Expect ws://IP:PORT format
-    if (data.startsWith('ws://')) {
-      // Extract host:port from ws://host:port/path
+    if (data.startsWith('ws://') || data.startsWith('wss://')) {
+      // Local mode: ws://IP:PORT
       try {
         const url = new URL(data);
         const address = url.port ? `${url.hostname}:${url.port}` : url.hostname;
@@ -103,6 +102,27 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
         // URL parsing failed, still connect
       }
       onConnect(data);
+    } else if (data.startsWith('http://') || data.startsWith('https://')) {
+      // Hosted mode: http://server/mobile/?roomCode=XXXX
+      try {
+        const url = new URL(data);
+        const roomCode = url.searchParams.get('roomCode');
+        const wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+        const address = url.port ? `${url.hostname}:${url.port}` : url.hostname;
+        addRecentServer(address).then(() => setRecentServers(getRecentServers()));
+        const wsUrl = roomCode
+          ? `${wsProtocol}//${url.host}/ws?role=player&roomCode=${roomCode}`
+          : `${wsProtocol}//${url.host}/ws?role=player`;
+        onConnect(wsUrl);
+      } catch {
+        if (Platform.OS === 'web') {
+          alert(t('scan.invalidQrMessage'));
+        } else {
+          const { Alert } = require('react-native');
+          Alert.alert(t('scan.invalidQrCode'), t('scan.invalidQrMessage'));
+        }
+        setTimeout(() => setScanned(false), 2000);
+      }
     } else {
       if (Platform.OS === 'web') {
         alert(t('scan.invalidQrMessage'));

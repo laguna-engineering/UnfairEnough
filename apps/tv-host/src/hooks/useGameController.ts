@@ -48,7 +48,7 @@ export function useGameController() {
   } else if (mode === 'hosted' && serverUrl && roomCode) {
     // Strip ws:// prefix if present, ensure http://
     const httpUrl = serverUrl.replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '');
-    qrUrl = `http://${httpUrl}?roomCode=${roomCode}`;
+    qrUrl = `http://${httpUrl}/mobile/?roomCode=${roomCode}`;
   }
 
   return {

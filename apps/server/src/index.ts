@@ -115,9 +115,68 @@ app.get(
 app.get('/admin', (c) => c.redirect('/admin/'));
 app.use('/admin/*', serveStatic({ root: './' }));
 
-// ── Static files (TV host web build) ──────────────────────────
-const staticDir = process.env.STATIC_DIR ?? './public';
-app.use('/*', serveStatic({ root: staticDir }));
+// ── TV host web build ────────────────────────────────────────
+const tvStaticDir = process.env.TV_STATIC_DIR ?? './public';
+app.get('/tv', (c) => c.redirect('/tv/'));
+app.use(
+  '/tv/*',
+  serveStatic({
+    root: tvStaticDir,
+    rewriteRequestPath: (p) => p.replace(/^\/tv/, ''),
+  }),
+);
+
+// ── Mobile web app ───────────────────────────────────────────
+const mobileDevPort = process.env.MOBILE_DEV_PORT;
+
+async function proxyToMetro(req: Request, path: string) {
+  try {
+    const url = new URL(path, `http://localhost:${mobileDevPort}`);
+    url.search = new URL(req.url).search;
+
+    const resp = await fetch(url.toString(), {
+      method: req.method,
+      headers: req.headers,
+      body: req.method !== 'GET' && req.method !== 'HEAD' ? req.body : undefined,
+    });
+
+    return new Response(resp.body, {
+      status: resp.status,
+      headers: resp.headers,
+    });
+  } catch {
+    return new Response(
+      '<html><body style="font-family:system-ui;padding:2rem"><h1>Mobile dev server not available</h1><p>Start it with <code>yarn dev:mobile</code></p></body></html>',
+      { status: 502, headers: { 'Content-Type': 'text/html' } },
+    );
+  }
+}
+
+if (mobileDevPort) {
+  // Dev mode: proxy to Expo Metro dev server
+  app.get('/mobile', (c) => c.redirect('/mobile/'));
+  app.all('/mobile/*', async (c) => {
+    const path = c.req.path.replace(/^\/mobile/, '') || '/';
+    return proxyToMetro(c.req.raw, path);
+  });
+
+  // Catch-all: also proxy to Metro for absolute-path assets (JS bundles, etc.)
+  app.get('/', (c) => c.redirect('/mobile/'));
+  app.all('/*', async (c) => proxyToMetro(c.req.raw, c.req.path));
+} else {
+  // Production: serve static mobile build
+  const mobileStaticDir = process.env.MOBILE_STATIC_DIR ?? './public-mobile';
+  app.get('/mobile', (c) => c.redirect('/mobile/'));
+  app.use(
+    '/mobile/*',
+    serveStatic({
+      root: mobileStaticDir,
+      rewriteRequestPath: (p) => p.replace(/^\/mobile/, ''),
+    }),
+  );
+
+  app.get('/', (c) => c.redirect('/mobile/'));
+}
 
 // ── Initialize database and start server ──────────────────────
 const port = Number(process.env.PORT) || 3000;
@@ -139,3 +198,6 @@ console.log(`Server listening on http://localhost:${port}`);
 if (localIp) {
   console.log(`  LAN: http://${localIp}:${port}`);
 }
+console.log(`  /mobile/  → ${mobileDevPort ? `proxy to Metro :${mobileDevPort}` : 'static build'}`);
+console.log(`  /tv/      → static from ${tvStaticDir}`);
+console.log('  /admin/   → admin dashboard');
