@@ -15,6 +15,8 @@ export type { ParseResult } from './import/yaml-parser';
 export { parseQuestionSetYaml } from './import/yaml-parser';
 // Migrations
 export { configurePragmas, runMigrations } from './migrations';
+export type { EventType } from './repositories/events';
+export * as eventsRepo from './repositories/events';
 export * as gamesRepo from './repositories/games';
 export * as playersRepo from './repositories/players';
 export * as playerTagScoresRepo from './repositories/playerTagScores';

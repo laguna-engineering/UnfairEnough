@@ -126,6 +126,7 @@ export const GameScreen: React.FC = () => {
           result={roundResult}
           playerId={playerInfo.playerId}
           confirmedAnswer={confirmedAnswer}
+          question={currentQuestion}
         />
       );
 

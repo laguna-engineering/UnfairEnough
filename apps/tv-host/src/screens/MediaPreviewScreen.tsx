@@ -1,23 +1,29 @@
 import { useTranslation } from '@unfairenough/i18n';
-import { Card, colors, ScreenBackground, spacing, typography } from '@unfairenough/ui';
+import { colors, ScreenBackground, spacing, typography } from '@unfairenough/ui';
 import type React from 'react';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { useGameController } from '../hooks/useGameController';
 
 export const MediaPreviewScreen: React.FC = () => {
   const { t } = useTranslation();
-  const { state, countdown } = useGameController();
-  const [_imageError, _setImageError] = useState(false);
+  const { state, countdown, mediaPreview, serverUrl, mode } = useGameController();
+  const [imageError, setImageError] = useState(false);
 
-  // The media info is stored in the gameSlice state when showMediaPreview is dispatched
-  // We get questionNumber and totalQuestions from the current game state
   const questionIndex = state.game.questionIndex;
   const totalQuestions = state.game.config.totalQuestions;
 
-  // The current question (if we have it from the questions array) may have media
-  // But in TV local mode, we access it via the Redux state
-  // The countdown in state.game.countdown is the preview duration countdown
+  // Build absolute URL for relative media paths
+  let imageUrl: string | null = null;
+  if (mediaPreview?.type === 'image' && mediaPreview.url) {
+    const url = mediaPreview.url;
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      imageUrl = url;
+    } else if (mode === 'hosted' && serverUrl) {
+      const host = serverUrl.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '');
+      imageUrl = `http://${host}/${url}`;
+    }
+  }
 
   return (
     <ScreenBackground style={styles.container}>
@@ -31,14 +37,18 @@ export const MediaPreviewScreen: React.FC = () => {
 
       {/* Media display area */}
       <View style={styles.mediaContainer}>
-        {/* In Phase 4, we only support image preview */}
-        {/* The URL would need to be accessible from the TV device */}
-        <Card style={styles.mediaCard} variant="elevated">
-          <Text style={styles.mediaLabel}>{t('mediaPreview.showingMedia')}</Text>
-          <View style={styles.countdownCircle}>
-            <Text style={styles.countdownNumber}>{countdown}</Text>
+        {imageUrl && !imageError ? (
+          <Image
+            source={{ uri: imageUrl }}
+            style={styles.image}
+            resizeMode="contain"
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <View style={styles.fallback}>
+            <Text style={styles.fallbackText}>{t('mediaPreview.showingMedia')}</Text>
           </View>
-        </Card>
+        )}
       </View>
     </ScreenBackground>
   );
@@ -52,7 +62,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   progress: {
     ...typography.h2,
@@ -67,29 +77,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  mediaCard: {
-    padding: spacing.xxl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 400,
-    minHeight: 300,
+  image: {
+    width: '80%',
+    height: '100%',
+    borderRadius: 16,
   },
-  mediaLabel: {
+  fallback: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fallbackText: {
     ...typography.h2,
     color: colors.textSecondary,
-    marginBottom: spacing.xl,
-  },
-  countdownCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 4,
-    borderColor: colors.accentYellow,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  countdownNumber: {
-    ...typography.displayLarge,
-    color: colors.accentYellow,
   },
 });

@@ -17,6 +17,7 @@ import {
   computeEffectiveDifficulty,
   computePlayerDifficulty,
   computeTagUpdates,
+  computeTimeBonusMultiplier,
   createStore,
   decayedScore,
   difficultyMultiplier,
@@ -65,6 +66,7 @@ class GameController implements IGameController {
   private questionPool: QuestionWithMeta[] = [];
   private usedQuestionIds = new Set<string>();
   private currentQuestionIndex = 0;
+  private activeQuestion: QuestionWithMeta | null = null;
   private questionStartTime = 0;
 
   // Tag-based personalization state
@@ -264,15 +266,7 @@ class GameController implements IGameController {
    * Get the current question — configured mode uses index, casual mode uses last used ID.
    */
   private getCurrentQuestion(): QuestionWithMeta | null {
-    const state = this.getState();
-    if (state.game.config.gameType === 'configured') {
-      return this.questionPool[this.currentQuestionIndex] ?? null;
-    }
-    // Casual mode: find by last used ID
-    const usedIds = [...this.usedQuestionIds];
-    const lastUsedId = usedIds[this.currentQuestionIndex];
-    if (!lastUsedId) return null;
-    return this.questionPool.find((q) => q.id === lastUsedId) ?? null;
+    return this.activeQuestion;
   }
 
   /**
@@ -316,6 +310,8 @@ class GameController implements IGameController {
       }
       this.usedQuestionIds.add(question.id);
     }
+
+    this.activeQuestion = question;
 
     // Compute per-player difficulties for this question
     this.computeRoundDifficulties(question);
@@ -478,22 +474,34 @@ class GameController implements IGameController {
     const players = playersSelectors.selectAll(state.players);
     const answers = state.game.answers;
 
+    const preRoundScores = players.map((p) => p.score);
+
     const playerResults: PlayerResult[] = players.map((player) => {
       const playerAnswer = answers[player.id];
       const isCorrect = playerAnswer?.answer === correctAnswer;
       let responseTimeMs: number | null = null;
-      let baseScore = 0;
+      let basePoints = 0;
+      let timeBonus = 0;
 
       if (playerAnswer) {
         responseTimeMs = playerAnswer.serverReceivedAt - this.questionStartTime;
-        baseScore = calculateScore(isCorrect, responseTimeMs, timeLimit);
+        ({ basePoints, timeBonus } = calculateScore(isCorrect, responseTimeMs, timeLimit));
       }
+
+      // Position-based time bonus multiplier (trailing players get a boost)
+      const tbMultiplier = computeTimeBonusMultiplier(
+        player.score,
+        preRoundScores,
+        this.currentQuestionIndex,
+        this.totalQuestionCount,
+      );
+      const adjustedScore = basePoints + timeBonus * tbMultiplier;
 
       // Apply difficulty multiplier
       const playerDifficulty =
         this.currentRoundDifficulties.get(player.id) ?? currentQuestion.difficulty ?? 3;
-      const multiplier = difficultyMultiplier(playerDifficulty);
-      const pointsEarned = Math.round(baseScore * multiplier);
+      const diffMultiplier = difficultyMultiplier(playerDifficulty);
+      const pointsEarned = Math.round(adjustedScore * diffMultiplier);
 
       // Update score in store
       if (pointsEarned > 0) {
@@ -510,8 +518,9 @@ class GameController implements IGameController {
         answer: playerAnswer?.answer ?? null,
         isCorrect,
         responseTimeMs,
-        baseScore,
-        difficultyMultiplier: multiplier,
+        baseScore: basePoints + timeBonus,
+        difficultyMultiplier: diffMultiplier,
+        timeBonusMultiplier: tbMultiplier,
         pointsEarned,
         totalScore: updatedPlayer?.score ?? player.score,
         difficulty: playerDifficulty,
@@ -530,7 +539,14 @@ class GameController implements IGameController {
       rank: r.rank,
     }));
 
-    this.store.dispatch(showRoundResults({ results: playerResults, rankings }));
+    this.store.dispatch(
+      showRoundResults({
+        results: playerResults,
+        rankings,
+        correctAnswer,
+        tags: currentQuestion.tags.length > 0 ? currentQuestion.tags : undefined,
+      }),
+    );
 
     // Broadcast results with tags
     wsServer.broadcast({
@@ -698,6 +714,7 @@ class GameController implements IGameController {
     this.questionPool = [];
     this.usedQuestionIds.clear();
     this.currentQuestionIndex = 0;
+    this.activeQuestion = null;
     this.isMetaSet = false;
     this.playerTagScores.clear();
     this.currentRoundDifficulties.clear();

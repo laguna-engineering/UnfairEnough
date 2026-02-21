@@ -68,6 +68,7 @@ export function useGameController() {
     serverPort: state.game.serverPort,
     localIp: state.game.localIp,
     countdown: state.game.countdown,
+    mediaPreview: state.game.mediaPreview,
     currentQuestion: state.game.currentQuestion,
     roundResults: state.game.roundResults,
     roundTags: state.game.roundTags,

@@ -155,6 +155,21 @@ interface Migration {
   sql: string;
 }
 
+const MIGRATION_V8 = `
+CREATE TABLE IF NOT EXISTS events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id TEXT,
+  room_code TEXT,
+  event_type TEXT NOT NULL,
+  player_id TEXT,
+  data TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_events_game ON events(game_id);
+CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
+CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
+`;
+
 const migrations: Migration[] = [
   { version: 1, sql: MIGRATION_V1 },
   { version: 2, sql: MIGRATION_V2 },
@@ -163,6 +178,7 @@ const migrations: Migration[] = [
   { version: 5, sql: MIGRATION_V5 },
   { version: 6, sql: MIGRATION_V6 },
   { version: 7, sql: MIGRATION_V7 },
+  { version: 8, sql: MIGRATION_V8 },
 ];
 
 /**

@@ -54,11 +54,16 @@ export {
 } from './utils/questionSelection';
 // Utilities
 export {
+  BASE_POINTS,
   calculateScore,
+  computeCatchUpInfluence,
+  computeTimeBonusMultiplier,
   getPositionSuffix,
+  MAX_TIME_BONUS,
   type PlayerScore,
   type RankedPlayer,
   rankPlayers,
+  type ScoreBreakdown,
 } from './utils/scoring';
 export {
   computeEffectiveDifficulty,

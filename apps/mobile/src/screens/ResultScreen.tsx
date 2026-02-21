@@ -1,6 +1,6 @@
 import { useTranslation } from '@unfairenough/i18n';
 import { Card, colors, ScreenBackground, spacing, typography } from '@unfairenough/ui';
-import type { AnswerKey, RoundResult } from '@unfairenough/ws-protocol';
+import type { AnswerKey, Question, RoundResult } from '@unfairenough/ws-protocol';
 import type React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -8,12 +8,14 @@ interface ResultScreenProps {
   result: RoundResult;
   playerId: string;
   confirmedAnswer: AnswerKey | null;
+  question: Question | null;
 }
 
 export const ResultScreen: React.FC<ResultScreenProps> = ({
   result,
   playerId,
   confirmedAnswer,
+  question,
 }) => {
   const { t } = useTranslation();
   const myResult = result.playerResults.find((r) => r.playerId === playerId);
@@ -68,7 +70,10 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
         {/* Correct Answer */}
         <View style={styles.correctAnswerContainer}>
           <Text style={styles.correctLabel}>{t('game.correctAnswerIs')}</Text>
-          <Text style={styles.correctAnswer}>{result.correctAnswer}</Text>
+          <Text style={styles.correctAnswer}>
+            {question?.options.find((o) => o.key === result.correctAnswer)?.text ??
+              result.correctAnswer}
+          </Text>
         </View>
 
         {/* Rank */}

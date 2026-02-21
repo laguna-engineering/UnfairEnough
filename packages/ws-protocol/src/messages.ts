@@ -106,6 +106,7 @@ export interface PlayerResult {
   responseTimeMs: number | null;
   baseScore: number;
   difficultyMultiplier: number;
+  timeBonusMultiplier?: number;
   pointsEarned: number;
   totalScore: number;
   difficulty?: number;

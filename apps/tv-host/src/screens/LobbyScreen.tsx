@@ -22,7 +22,7 @@ import { ImportQuestionsModal } from './ImportQuestionsModal';
 // TV safe zone padding (5% of 1080p)
 const TV_SAFE_HORIZONTAL = 96;
 const TV_SAFE_VERTICAL = 54;
-const QR_SIZE = 240;
+const QR_SIZE = 200;
 
 const LANGUAGES: { code: SupportedLanguage; label: string }[] = [
   { code: 'en', label: 'EN' },
@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   title: {
     ...typography.displayMedium,
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     flexDirection: 'row',
-    gap: spacing.xxl,
+    gap: spacing.xl,
   },
   qrSection: {
     flex: 0.42,
@@ -453,12 +453,12 @@ const styles = StyleSheet.create({
   },
   playersSection: {
     flex: 0.58,
-    justifyContent: 'center',
+    justifyContent: 'space-between',
   },
   playersCard: {
     padding: spacing.lg,
-    marginBottom: spacing.lg,
-    minHeight: 160,
+    marginBottom: spacing.md,
+    minHeight: 120,
   },
   playersTitle: {
     ...typography.h2,
@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   gameModeContainer: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   gameModeHeader: {
     flexDirection: 'row',

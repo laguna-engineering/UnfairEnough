@@ -1,5 +1,11 @@
 import type { DbAdapter, QuestionWithMeta } from '@unfairenough/db';
-import { gamesRepo, playersRepo, playerTagScoresRepo, questionsRepo } from '@unfairenough/db';
+import {
+  eventsRepo,
+  gamesRepo,
+  playersRepo,
+  playerTagScoresRepo,
+  questionsRepo,
+} from '@unfairenough/db';
 import type {
   AnswerKey,
   ClientMessage,
@@ -16,7 +22,11 @@ import {
   buildQuestionPool,
   selectNextQuestion,
 } from '../../../packages/game-logic/src/utils/questionSelection';
-import { calculateScore, rankPlayers } from '../../../packages/game-logic/src/utils/scoring';
+import {
+  calculateScore,
+  computeTimeBonusMultiplier,
+  rankPlayers,
+} from '../../../packages/game-logic/src/utils/scoring';
 import {
   computeEffectiveDifficulty,
   computePlayerDifficulty,
@@ -43,7 +53,7 @@ const COLORS = [
   '#FD79A8',
 ];
 
-const DEFAULT_QUESTION_TIME_LIMIT = 10;
+const DEFAULT_QUESTION_TIME_LIMIT = 15;
 const MAX_PLAYERS = 12;
 
 const TOTAL_QUESTIONS = 10;
@@ -80,6 +90,7 @@ export class GameRoom {
   private questionPool: QuestionWithMeta[] = [];
   private usedQuestionIds = new Set<string>();
   private currentQuestionIndex = 0;
+  private activeQuestion: QuestionWithMeta | null = null;
   private questionStartTime = 0;
   private answers = new Map<string, PlayerAnswer>();
   private positionHistory: PositionSnapshot[] = [];
@@ -95,6 +106,9 @@ export class GameRoom {
   private isMetaSet = false;
   private configuredTotalQuestions: number | null = null;
   private configuredTimeLimit: number | null = null;
+
+  // Serialization — prevent startGame from racing with configureGame
+  private configurePromise: Promise<void> | null = null;
 
   // Timers
   private countdownTimer: ReturnType<typeof setInterval> | null = null;
@@ -245,6 +259,8 @@ export class GameRoom {
       type: 'PLAYER_JOINED',
       payload: { playerId, name: playerName, color, emoji: playerEmoji },
     });
+
+    this.logEvent('PLAYER_JOINED', playerId, { name: playerName, profileId });
 
     return playerId;
   }
@@ -401,7 +417,7 @@ export class GameRoom {
         }
         break;
       case 'CONFIGURE_GAME':
-        this.configureGame(message.payload);
+        this.configurePromise = this.configureGame(message.payload);
         break;
     }
   }
@@ -533,6 +549,12 @@ export class GameRoom {
     if (this.phase !== 'LOBBY') return;
     if (this.players.size === 0) return;
 
+    // Wait for any pending configureGame to finish before reading game config
+    if (this.configurePromise) {
+      await this.configurePromise;
+      this.configurePromise = null;
+    }
+
     // Load tag scores early — needed for both pool building and per-round selection
     await this.loadPlayerTagScores();
 
@@ -584,6 +606,12 @@ export class GameRoom {
       .catch((err) => console.error('Failed to create game session:', err));
 
     this.phase = 'COUNTDOWN';
+    this.logEvent('GAME_STARTED', null, {
+      gameType: this.gameType,
+      playerCount: this.players.size,
+      totalQuestions: this.totalQuestionCount,
+      questionSetId: this.questionSetId,
+    });
 
     let countdown = COUNTDOWN_SECONDS;
     this.broadcast({ type: 'GAME_STARTING', payload: { countdown } });
@@ -624,6 +652,8 @@ export class GameRoom {
       q = this.selectQuestionForRound(remaining);
       this.usedQuestionIds.add(q.id);
     }
+
+    this.activeQuestion = q;
 
     // Compute per-player difficulties for this question
     this.computeRoundDifficulties(q);
@@ -675,6 +705,15 @@ export class GameRoom {
     };
 
     this.broadcast({ type: 'QUESTION', payload });
+
+    this.logEvent('QUESTION_SENT', null, {
+      questionId: q.id,
+      text: q.text,
+      correctAnswer: q.correctAnswer,
+      options: q.options,
+      timeLimit,
+      questionNumber: this.currentQuestionIndex + 1,
+    });
 
     let remaining = timeLimit;
     this.questionTimer = setInterval(() => {
@@ -743,16 +782,41 @@ export class GameRoom {
   }
 
   private handleAnswer(ws: ServerWebSocket<WSData>, questionId: string, answer: AnswerKey): void {
-    if (this.phase !== 'QUESTION') return;
+    if (this.phase !== 'QUESTION') {
+      this.logEvent('ANSWER_RECEIVED', ws.data.playerId ?? null, {
+        questionId,
+        answer,
+        rejected: true,
+        reason: `phase is ${this.phase}, expected QUESTION`,
+      });
+      return;
+    }
 
     const q = this.getCurrentQuestion();
-    if (!q || q.id !== questionId) return;
+    if (!q || q.id !== questionId) {
+      this.logEvent('ANSWER_RECEIVED', ws.data.playerId ?? null, {
+        questionId,
+        answer,
+        rejected: true,
+        reason: `questionId mismatch: expected ${q?.id ?? 'none'}, got ${questionId}`,
+      });
+      return;
+    }
 
     const playerId = ws.data.playerId;
     if (!playerId || this.answers.has(playerId)) return;
 
     const serverReceivedAt = Date.now();
     this.answers.set(playerId, { answer, serverReceivedAt });
+
+    const isCorrect = answer === q.correctAnswer;
+    this.logEvent('ANSWER_RECEIVED', playerId, {
+      questionId,
+      answer,
+      correctAnswer: q.correctAnswer,
+      isCorrect,
+      responseTimeMs: serverReceivedAt - this.questionStartTime,
+    });
 
     this.sendTo(ws, {
       type: 'ANSWER_ACK',
@@ -788,23 +852,34 @@ export class GameRoom {
     const timeLimit = this.configuredTimeLimit ?? q.timeLimit ?? DEFAULT_QUESTION_TIME_LIMIT;
 
     const playerResults: PlayerResult[] = [];
+    const preRoundScores = [...this.players.values()].map((p) => p.score);
 
     for (const player of this.players.values()) {
       const ans = this.answers.get(player.playerId);
       const isCorrect = ans?.answer === correctAnswer;
       let responseTimeMs: number | null = null;
-      let baseScore = 0;
+      let basePoints = 0;
+      let timeBonus = 0;
 
       if (ans) {
         responseTimeMs = ans.serverReceivedAt - this.questionStartTime;
-        baseScore = calculateScore(isCorrect, responseTimeMs, timeLimit);
+        ({ basePoints, timeBonus } = calculateScore(isCorrect, responseTimeMs, timeLimit));
       }
+
+      // Position-based time bonus multiplier (trailing players get a boost)
+      const tbMultiplier = computeTimeBonusMultiplier(
+        player.score,
+        preRoundScores,
+        this.currentQuestionIndex,
+        this.totalQuestionCount,
+      );
+      const adjustedScore = basePoints + timeBonus * tbMultiplier;
 
       // Apply difficulty multiplier
       const playerDifficulty =
         this.currentRoundDifficulties.get(player.playerId) ?? q.difficulty ?? 3;
-      const multiplier = difficultyMultiplier(playerDifficulty);
-      const pointsEarned = Math.round(baseScore * multiplier);
+      const diffMultiplier = difficultyMultiplier(playerDifficulty);
+      const pointsEarned = Math.round(adjustedScore * diffMultiplier);
 
       if (pointsEarned > 0) {
         player.score += pointsEarned;
@@ -816,8 +891,9 @@ export class GameRoom {
         answer: ans?.answer ?? null,
         isCorrect,
         responseTimeMs,
-        baseScore,
-        difficultyMultiplier: multiplier,
+        baseScore: basePoints + timeBonus,
+        difficultyMultiplier: diffMultiplier,
+        timeBonusMultiplier: tbMultiplier,
         pointsEarned,
         totalScore: player.score,
         difficulty: playerDifficulty,
@@ -935,6 +1011,12 @@ export class GameRoom {
       },
     });
 
+    this.logEvent('GAME_ENDED', null, {
+      winner: winner.name,
+      winnerScore: winner.score,
+      rankings: rankings.map((r) => ({ name: r.name, score: r.score, rank: r.rank })),
+    });
+
     // Record game end and update player stats (async, don't block)
     this.recordGameEnd(winner, rankings).catch((err) =>
       console.error('Failed to record game end:', err),
@@ -1042,15 +1124,7 @@ export class GameRoom {
   }
 
   private getCurrentQuestion(): QuestionWithMeta | null {
-    if (this.gameType === 'configured' || this.questionPool.length === 0) {
-      return this.questions[this.currentQuestionIndex] ?? null;
-    }
-    // Casual mode: the last used question is tracked via usedQuestionIds
-    // Find the question that was selected for this round
-    const usedIds = [...this.usedQuestionIds];
-    const lastUsedId = usedIds[this.currentQuestionIndex];
-    if (!lastUsedId) return null;
-    return this.questionPool.find((q) => q.id === lastUsedId) ?? null;
+    return this.activeQuestion;
   }
 
   private async updateTagScoresAfterRound(
@@ -1097,12 +1171,14 @@ export class GameRoom {
     this.currentQuestionIndex = 0;
     this.answers.clear();
     this.positionHistory = [];
+    this.activeQuestion = null;
     this.gameId = null;
     this.gameType = 'casual';
     this.questionSetId = null;
     this.isMetaSet = false;
     this.configuredTotalQuestions = null;
     this.configuredTimeLimit = null;
+    this.configurePromise = null;
     this.playerTagScores.clear();
     this.currentRoundDifficulties.clear();
 
@@ -1177,5 +1253,23 @@ export class GameRoom {
     }
     this.players.clear();
     this.hostWs = null;
+  }
+
+  // ── Event logging ───────────────────────────────────────────
+
+  private logEvent(
+    eventType: Parameters<typeof eventsRepo.logEvent>[1]['eventType'],
+    playerId: string | null,
+    data?: Record<string, unknown>,
+  ): void {
+    eventsRepo
+      .logEvent(this.db, {
+        gameId: this.gameId,
+        roomCode: this.roomCode,
+        eventType,
+        playerId,
+        data,
+      })
+      .catch((err) => console.error('Failed to log event:', err));
   }
 }

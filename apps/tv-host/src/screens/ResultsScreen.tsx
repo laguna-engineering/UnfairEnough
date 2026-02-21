@@ -56,9 +56,7 @@ export const ResultsScreen: React.FC = () => {
 
   if (!currentQuestion) return null;
 
-  // Get correct answer from the first result that was correct
-  const correctAnswer =
-    roundResults.find((r) => r.isCorrect)?.answer || currentQuestion.options[2]?.key;
+  const correctAnswer = state.game.correctAnswer ?? currentQuestion.options[0]?.key;
 
   return (
     <ScreenBackground style={styles.container}>
@@ -112,14 +110,11 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    flexDirection: 'row',
-    gap: spacing.xl,
+    gap: spacing.lg,
   },
   correctAnswerCard: {
-    padding: spacing.xl,
+    padding: spacing.lg,
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    minWidth: 280,
   },
   correctLabel: {
     ...typography.h3,

@@ -5,6 +5,7 @@ import { serveStatic, upgradeWebSocket, websocket } from 'hono/bun';
 import { cors } from 'hono/cors';
 import { initDatabase } from './db';
 import { createRoom, destroyRoom, getRoom, setDbAdapter } from './roomManager';
+import eventsRoutes from './routes/events';
 import gamesRoutes from './routes/games';
 import metaSetsRoutes from './routes/metaSets';
 import playersRoutes from './routes/players';
@@ -37,6 +38,7 @@ app.route('/api/meta-sets', metaSetsRoutes);
 app.route('/api/players', playersRoutes);
 app.route('/api/games', gamesRoutes);
 app.route('/api/tags', tagsRoutes);
+app.route('/api/events', eventsRoutes);
 
 // ── WebSocket endpoint ─────────────────────────────────────────
 app.get(
@@ -142,6 +144,9 @@ app.get('/api/music', async (c) => {
 
 app.use('/music/*', serveStatic({ root: './' }));
 
+// ── Question media (images) ─────────────────────────────────
+app.use('/media/*', serveStatic({ root: '../../questions/' }));
+
 // ── Admin dashboard ──────────────────────────────────────────
 app.get('/admin', (c) => c.redirect('/admin/'));
 app.use('/admin/*', serveStatic({ root: './' }));
@@ -170,9 +175,14 @@ async function proxyToMetro(req: Request, path: string) {
       body: req.method !== 'GET' && req.method !== 'HEAD' ? req.body : undefined,
     });
 
+    const headers = new Headers(resp.headers);
+    headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    headers.set('Pragma', 'no-cache');
+    headers.set('Expires', '0');
+
     return new Response(resp.body, {
       status: resp.status,
-      headers: resp.headers,
+      headers,
     });
   } catch {
     return new Response(

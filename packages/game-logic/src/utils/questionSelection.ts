@@ -1,3 +1,4 @@
+import { computeCatchUpInfluence } from './scoring';
 import { computePlayerDifficulty } from './tagScoring';
 
 // ── Minimal interface — decouples game-logic from DB schema ──────────
@@ -193,13 +194,7 @@ export function selectNextQuestion<T extends SelectableQuestion>(
 
   const { players, playerTagScores, roundIndex, totalRounds } = context;
 
-  // Phase ramp — default to full catch-up for backward compatibility
-  let catchUpInfluence: number;
-  if (roundIndex !== undefined && totalRounds !== undefined && totalRounds > 0) {
-    catchUpInfluence = Math.min(1, Math.max(0, roundIndex / (totalRounds * 0.75)));
-  } else {
-    catchUpInfluence = 1;
-  }
+  const catchUpInfluence = computeCatchUpInfluence(roundIndex, totalRounds);
 
   // Single player or zero influence → random
   if (players.length <= 1 || catchUpInfluence === 0) {

@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.md,
   },
   progress: {
     ...typography.h2,
@@ -102,23 +102,23 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   questionCard: {
-    padding: spacing.xl,
-    marginBottom: spacing.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
     alignItems: 'center',
   },
   questionText: {
-    ...typography.displayMedium,
+    ...typography.h1,
     color: colors.textPrimary,
     textAlign: 'center',
   },
   optionsGrid: {
     flex: 1,
     justifyContent: 'center',
-    gap: spacing.lg,
+    gap: spacing.md,
   },
   optionsRow: {
     flexDirection: 'row',
-    gap: spacing.lg,
+    gap: spacing.md,
   },
   optionCard: {
     flex: 1,
@@ -127,14 +127,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
     borderLeftWidth: 6,
-    padding: spacing.lg,
+    padding: spacing.md,
   },
   optionKey: {
-    ...typography.displayMedium,
-    marginRight: spacing.lg,
+    ...typography.h1,
+    marginRight: spacing.md,
   },
   optionText: {
-    ...typography.h2,
+    ...typography.h3,
     color: colors.textPrimary,
     flex: 1,
   },

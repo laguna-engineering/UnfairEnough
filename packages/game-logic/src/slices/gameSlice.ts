@@ -50,10 +50,12 @@ export interface GameConfig {
 interface GameState {
   phase: GamePhase;
   currentQuestion: (Question & { serverTimestamp: number }) | null;
+  mediaPreview: { type: 'image' | 'audio' | 'video'; url: string } | null;
   questionIndex: number;
   countdown: number;
   answers: Record<string, Answer>;
   roundResults: PlayerResult[];
+  correctAnswer: AnswerKey | null;
   roundTags: string[];
   rankings: PlayerRanking[];
   positionHistory: PositionSnapshot[];
@@ -66,10 +68,12 @@ interface GameState {
 const initialState: GameState = {
   phase: 'LOBBY',
   currentQuestion: null,
+  mediaPreview: null,
   questionIndex: 0,
   countdown: 0,
   answers: {},
   roundResults: [],
+  correctAnswer: null,
   roundTags: [],
   rankings: [],
   positionHistory: [],
@@ -107,12 +111,14 @@ const gameSlice = createSlice({
       if (!isValidTransition(state.phase, 'MEDIA_PREVIEW')) return;
       state.phase = 'MEDIA_PREVIEW';
       state.countdown = action.payload.duration;
+      state.mediaPreview = action.payload.media;
     },
 
     showQuestion(state, action: PayloadAction<Question & { serverTimestamp: number }>) {
       if (!isValidTransition(state.phase, 'QUESTION')) return;
       state.phase = 'QUESTION';
       state.currentQuestion = action.payload;
+      state.mediaPreview = null;
       state.countdown = action.payload.timeLimit;
       state.answers = {};
     },
@@ -147,12 +153,14 @@ const gameSlice = createSlice({
       action: PayloadAction<{
         results: PlayerResult[];
         rankings: PlayerRanking[];
+        correctAnswer: AnswerKey;
         tags?: string[];
       }>,
     ) {
       if (!isValidTransition(state.phase, 'RESULTS')) return;
       state.phase = 'RESULTS';
       state.roundResults = action.payload.results;
+      state.correctAnswer = action.payload.correctAnswer;
       state.roundTags = action.payload.tags ?? [];
       state.rankings = action.payload.rankings;
       state.positionHistory.push({
@@ -170,6 +178,7 @@ const gameSlice = createSlice({
       if (state.phase !== 'RESULTS') return;
       state.questionIndex += 1;
       state.roundResults = [];
+      state.correctAnswer = null;
       state.roundTags = [];
       // Phase stays at RESULTS — showQuestion or showMediaPreview will handle the transition
       // Keep rankings (last round's) and positionHistory (cumulative)
@@ -197,6 +206,7 @@ const gameSlice = createSlice({
       state.countdown = 0;
       state.answers = {};
       state.roundResults = [];
+      state.correctAnswer = null;
       state.roundTags = [];
       state.rankings = [];
       state.positionHistory = [];

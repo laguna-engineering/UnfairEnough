@@ -166,11 +166,6 @@ export function useGameState() {
   }, []);
 
   const reset = useCallback(() => {
-    wsClient.disconnect();
-    setPhase('SCAN');
-    setPlayerInfo(null);
-    setIdentifiedProfile(null);
-    setAvailableProfiles([]);
     setCurrentQuestion(null);
     setSelectedAnswer(null);
     setConfirmedAnswer(null);
@@ -178,7 +173,7 @@ export function useGameState() {
     setGameResult(null);
     setMediaPreview(null);
     setError(null);
-    languageOverridden.current = false;
+    setPhase('WAITING');
   }, []);
 
   const setLanguageOverride = useCallback((lang: SupportedLanguage) => {

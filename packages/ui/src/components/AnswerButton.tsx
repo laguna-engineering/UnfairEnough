@@ -125,14 +125,14 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   keyLabel: {
-    ...typography.h2,
+    ...typography.h3,
     color: colors.textPrimary,
-    width: 40,
+    width: 32,
     textAlign: 'center',
-    marginRight: spacing.md,
+    marginRight: spacing.sm,
   },
   text: {
-    ...typography.body,
+    ...typography.bodySmall,
     color: colors.textPrimary,
     flex: 1,
   },

@@ -39,7 +39,7 @@ function advanceToFirstQuestion(store: ReturnType<typeof createStore>) {
 /** Walk the store from QUESTION → REVEALING → RESULTS */
 function advanceToResults(store: ReturnType<typeof createStore>) {
   store.dispatch(startRevealing());
-  store.dispatch(showRoundResults({ results: [], rankings: [] }));
+  store.dispatch(showRoundResults({ results: [], rankings: [], correctAnswer: 'A' }));
 }
 
 describe('gameSlice question transitions', () => {
