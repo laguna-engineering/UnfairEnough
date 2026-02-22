@@ -1,6 +1,8 @@
 import { computeCatchUpInfluence } from './scoring';
 import { computePlayerDifficulty } from './tagScoring';
 
+const normalizeTag = (t: string) => t.toLowerCase().trim();
+
 // ── Minimal interface — decouples game-logic from DB schema ──────────
 
 export interface SelectableQuestion {
@@ -59,7 +61,7 @@ export function buildQuestionPool<T extends SelectableQuestion>(
       for (const [, tagScores] of playerTagScores!) {
         if (tagScores.size === 0) continue;
         const relevant = q.tags
-          .map((t) => tagScores.get(t.toLowerCase().trim()))
+          .map((t) => tagScores.get(normalizeTag(t)))
           .filter((s): s is number => s !== undefined);
         if (relevant.length > 0) {
           totalScore += relevant.reduce((a, b) => a + b, 0) / relevant.length;
@@ -111,7 +113,7 @@ function selectDiverse<T extends SelectableQuestion>(
     const candidates: number[] = [];
 
     for (let i = 0; i < remaining.length; i++) {
-      const newTags = remaining[i].tags.filter((t) => !usedTags.has(t.toLowerCase().trim())).length;
+      const newTags = remaining[i].tags.filter((t) => !usedTags.has(normalizeTag(t))).length;
       if (newTags > bestNewTags) {
         bestNewTags = newTags;
         candidates.length = 0;
@@ -147,7 +149,7 @@ function selectDiverse<T extends SelectableQuestion>(
     const picked = remaining[pickIdx];
     selected.push(picked);
     for (const tag of picked.tags) {
-      usedTags.add(tag.toLowerCase().trim());
+      usedTags.add(normalizeTag(tag));
     }
     const pickedDiff = picked.difficulty ?? 3;
     difficultyCounts.set(pickedDiff, (difficultyCounts.get(pickedDiff) ?? 0) + 1);
@@ -155,14 +157,6 @@ function selectDiverse<T extends SelectableQuestion>(
   }
 
   return selected;
-}
-
-// ── Thematic-set detection ───────────────────────────────────────────
-
-/** True when every question in the set shares a single tag universe (only 1 unique tag). */
-export function isThematicSet(questions: SelectableQuestion[]): boolean {
-  const allTags = new Set(questions.flatMap((q) => q.tags.map((t) => t.toLowerCase().trim())));
-  return allTags.size <= 1;
 }
 
 // ── Per-round selection ──────────────────────────────────────────────
@@ -179,7 +173,6 @@ export interface RoundSelectionContext {
   roundIndex?: number; // 0-based current round; omit for full catch-up (backward compat)
   totalRounds?: number;
   previousQuestionTags?: string[]; // tags of the last served question
-  isThematic?: boolean; // skip tag-avoidance for single-tag sets
 }
 
 /**
@@ -203,18 +196,19 @@ export function selectNextQuestion<T extends SelectableQuestion>(
   if (remainingPool.length <= 1) return remainingPool[0];
 
   // ── Tag-avoidance filter ──────────────────────────────────
-  const { previousQuestionTags, isThematic } = context;
+  // When all remaining candidates overlap (e.g. thematic single-tag sets),
+  // the filter naturally falls back to the full pool — no special-casing needed.
+  const { previousQuestionTags } = context;
   let pool = remainingPool;
 
-  if (!isThematic && previousQuestionTags && previousQuestionTags.length > 0) {
-    const prevTags = new Set(previousQuestionTags.map((t) => t.toLowerCase().trim()));
+  if (previousQuestionTags && previousQuestionTags.length > 0) {
+    const prevTags = new Set(previousQuestionTags.map((t) => normalizeTag(t)));
     const filtered = remainingPool.filter(
-      (q) => !q.tags.some((t) => prevTags.has(t.toLowerCase().trim())),
+      (q) => !q.tags.some((t) => prevTags.has(normalizeTag(t))),
     );
     if (filtered.length > 0) {
       pool = filtered;
     }
-    // else: all candidates overlap → keep full remainingPool (fallback)
   }
 
   if (pool.length === 1) return pool[0];

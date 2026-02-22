@@ -124,9 +124,12 @@ questions:
       </details>
     </div>
 
-    <div class="card">
-      <h2 style="margin-top:0">Create Meta Set</h2>
-      <p style="font-size:0.85rem;color:#666;margin:0 0 0.75rem;">
+    <div class="card" id="meta-form-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+        <h2 style="margin:0" id="meta-form-title">Create Meta Set</h2>
+        <button id="meta-cancel-btn" style="display:none;" class="toggle-btn">Cancel</button>
+      </div>
+      <p id="meta-form-desc" style="font-size:0.85rem;color:#666;margin:0 0 0.75rem;">
         A meta set is a collection of question sets. When selected in a game, questions from all child sets are mixed together.
       </p>
       <div style="display:flex;flex-direction:column;gap:0.5rem;">
@@ -319,6 +322,19 @@ questions:
     const metaChildPicker = document.getElementById("meta-child-picker");
     const metaCreateBtn = document.getElementById("meta-create-btn");
     const metaStatus = document.getElementById("meta-status");
+    const metaFormCard = document.getElementById("meta-form-card");
+    const metaFormTitle = document.getElementById("meta-form-title");
+    const metaFormDesc = document.getElementById("meta-form-desc");
+    const metaCancelBtn = document.getElementById("meta-cancel-btn");
+
+    metaCancelBtn.addEventListener("click", () => {
+      cancelMetaEdit();
+      // Re-render picker without selections
+      fetchJson("/api/question-sets").then(data => {
+        renderChildPicker(data.sets || []);
+        updateMetaCreateBtn();
+      });
+    });
 
     function updateMetaCreateBtn() {
       const name = metaNameInput.value.trim();
@@ -392,19 +408,33 @@ questions:
       metaNameInput.value = metaSet.name;
       metaDescInput.value = metaSet.description || "";
       metaCreateBtn.textContent = "Save Changes";
+      metaFormTitle.textContent = `Editing: ${metaSet.name}`;
+      metaFormDesc.textContent = "Check or uncheck sets below to change what's included in this collection.";
+      metaCancelBtn.style.display = "";
+      metaFormCard.style.borderColor = "#7c3aed";
+      metaFormCard.style.boxShadow = "0 0 0 2px rgba(124,58,237,0.25)";
+      metaStatus.textContent = "";
       // Re-render picker with selections
       fetchJson("/api/question-sets").then(data => {
         renderChildPicker(data.sets || [], childIds);
         updateMetaCreateBtn();
       });
       // Scroll to form
-      metaNameInput.scrollIntoView({ behavior: "smooth" });
+      metaFormCard.scrollIntoView({ behavior: "smooth" });
       metaNameInput.focus();
     }
 
     function cancelMetaEdit() {
       editingMetaId = null;
+      metaNameInput.value = "";
+      metaDescInput.value = "";
       metaCreateBtn.textContent = "Create Meta Set";
+      metaFormTitle.textContent = "Create Meta Set";
+      metaFormDesc.textContent = "A meta set is a collection of question sets. When selected in a game, questions from all child sets are mixed together.";
+      metaCancelBtn.style.display = "none";
+      metaFormCard.style.borderColor = "";
+      metaFormCard.style.boxShadow = "";
+      metaStatus.textContent = "";
       updateMetaCreateBtn();
     }
 
@@ -497,9 +527,13 @@ questions:
             const editBtn = document.createElement("button");
             editBtn.textContent = "Edit";
             editBtn.onclick = async () => {
-              const metaData = await fetchJson(`/api/meta-sets/${encodeURIComponent(qs.id)}`);
-              const childIds = (metaData.children || []).map(c => c.id);
-              startMetaEdit(qs, childIds);
+              try {
+                const metaData = await fetchJson(`/api/meta-sets/${encodeURIComponent(qs.id)}`);
+                const childIds = (metaData.children || []).map(c => c.id);
+                startMetaEdit(qs, childIds);
+              } catch (err) {
+                alert(`Failed to load meta set: ${err.message}`);
+              }
             };
             actions.appendChild(editBtn);
           }

@@ -23,7 +23,6 @@ import {
   difficultyMultiplier,
   ELO_BASELINE,
   endGame,
-  isThematicSet,
   nextQuestion,
   playersSelectors,
   type RootState,
@@ -65,7 +64,6 @@ class GameController implements IGameController {
 
   // Question state — keep full QuestionWithMeta for tags, difficulty, etc.
   private questionPool: QuestionWithMeta[] = [];
-  private isThematicQuestionSet = false;
   private usedQuestionIds = new Set<string>();
   private currentQuestionIndex = 0;
   private activeQuestion: QuestionWithMeta | null = null;
@@ -215,7 +213,6 @@ class GameController implements IGameController {
       return;
     }
 
-    this.isThematicQuestionSet = isThematicSet(this.questionPool);
     this.currentQuestionIndex = 0;
     this.usedQuestionIds.clear();
 
@@ -301,7 +298,8 @@ class GameController implements IGameController {
 
       const players = this.buildSelectionPlayers();
       if (players.length === 0) {
-        // No profiled players — random pick
+        // No profiled players — random pick (tag avoidance is skipped; it requires
+        // selectNextQuestion which needs at least one profiled player for scoring)
         question = remaining[Math.floor(Math.random() * remaining.length)];
       } else {
         question = selectNextQuestion(remaining, {
@@ -310,7 +308,6 @@ class GameController implements IGameController {
           roundIndex: this.currentQuestionIndex,
           totalRounds: this.totalQuestionCount,
           previousQuestionTags: this.activeQuestion?.tags,
-          isThematic: this.isThematicQuestionSet,
         });
       }
       this.usedQuestionIds.add(question.id);
@@ -717,7 +714,6 @@ class GameController implements IGameController {
     this.clearAllTimers();
     this.store.dispatch(resetGame());
     this.questionPool = [];
-    this.isThematicQuestionSet = false;
     this.usedQuestionIds.clear();
     this.currentQuestionIndex = 0;
     this.activeQuestion = null;

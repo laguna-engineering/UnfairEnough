@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { QuestionWithMeta } from '@unfairenough/db';
 import type { RoundSelectionContext, SelectableQuestion } from '../utils/questionSelection';
-import { buildQuestionPool, isThematicSet, selectNextQuestion } from '../utils/questionSelection';
+import { buildQuestionPool, selectNextQuestion } from '../utils/questionSelection';
 
 function makeQuestion(id: string, tags: string[] = [], difficulty = 3): QuestionWithMeta {
   return {
@@ -514,7 +514,7 @@ describe('buildQuestionPool', () => {
 // ── selectNextQuestion — tag avoidance ──────────────────────────────
 
 describe('selectNextQuestion — tag avoidance', () => {
-  const baseContext: Omit<RoundSelectionContext, 'previousQuestionTags' | 'isThematic'> = {
+  const baseContext: Omit<RoundSelectionContext, 'previousQuestionTags'> = {
     players: [
       { profileId: 'p1', name: 'Alice', currentScore: 200 },
       { profileId: 'p2', name: 'Bob', currentScore: 800 },
@@ -558,26 +558,6 @@ describe('selectNextQuestion — tag avoidance', () => {
     }
     // Both should be selected (fallback to full pool)
     expect(results.size).toBe(2);
-  });
-
-  test('thematic set skips tag-avoidance filter', () => {
-    const q1 = makeMinimalQuestion('q1', ['geography']);
-    const q2 = makeMinimalQuestion('q2', ['geography']);
-    const q3 = makeMinimalQuestion('q3', ['geography']);
-    const pool = [q1, q2, q3];
-
-    const results = new Set<string>();
-    for (let i = 0; i < 100; i++) {
-      results.add(
-        selectNextQuestion(pool, {
-          ...baseContext,
-          previousQuestionTags: ['geography'],
-          isThematic: true,
-        }).id,
-      );
-    }
-    // All 3 should be candidates (filter not applied)
-    expect(results.size).toBe(3);
   });
 
   test('no previousQuestionTags → no filtering', () => {
@@ -643,40 +623,5 @@ describe('selectNextQuestion — tag avoidance', () => {
     }
     // science should be preferred due to catch-up
     expect(scienceCount).toBeGreaterThan(100);
-  });
-});
-
-// ── isThematicSet ───────────────────────────────────────────────────
-
-describe('isThematicSet', () => {
-  test('single tag across all questions → true', () => {
-    const questions = [
-      makeMinimalQuestion('q1', ['geography']),
-      makeMinimalQuestion('q2', ['geography']),
-      makeMinimalQuestion('q3', ['geography']),
-    ];
-    expect(isThematicSet(questions)).toBe(true);
-  });
-
-  test('multiple different tags → false', () => {
-    const questions = [
-      makeMinimalQuestion('q1', ['geography']),
-      makeMinimalQuestion('q2', ['history']),
-    ];
-    expect(isThematicSet(questions)).toBe(false);
-  });
-
-  test('empty tags → true (0 unique tags ≤ 1)', () => {
-    const questions = [makeMinimalQuestion('q1', []), makeMinimalQuestion('q2', [])];
-    expect(isThematicSet(questions)).toBe(true);
-  });
-
-  test('multi-tag questions with shared tag but varying others → false', () => {
-    const questions = [
-      makeMinimalQuestion('q1', ['trivia', 'science']),
-      makeMinimalQuestion('q2', ['trivia', 'history']),
-      makeMinimalQuestion('q3', ['trivia', 'gaming']),
-    ];
-    expect(isThematicSet(questions)).toBe(false);
   });
 });

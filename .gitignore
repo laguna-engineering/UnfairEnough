@@ -45,3 +45,6 @@ apps/server/music/*
 # Claude
 .claude/*.local.json
 .claude/.lint-cache.json
+
+*.parquet
+*.log

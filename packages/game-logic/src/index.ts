@@ -46,7 +46,6 @@ export {
 export { type AppDispatch, type AppStore, createStore, type RootState } from './store';
 export {
   buildQuestionPool,
-  isThematicSet,
   type PoolBuildContext,
   type RoundSelectionContext,
   type RoundSelectionPlayer,

@@ -1,6 +1,6 @@
 import { colors, ScreenBackground } from '@unfairenough/ui';
 import type React from 'react';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { ActivityIndicator, Platform } from 'react-native';
 import { useGameState } from '../hooks/useGameState';
 import { getDeviceId, initDeviceId } from '../services/deviceId';

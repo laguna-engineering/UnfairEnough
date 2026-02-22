@@ -296,7 +296,7 @@ describe('answer edge cases', () => {
   it('records no answer for player who did not respond', async () => {
     const { room, players } = await setupGameAndStartQuestion(2);
     const player0 = players[0];
-    const player1 = players[1];
+    const _player1 = players[1];
 
     const questionMsg = findMessage(player0, 'QUESTION');
 
