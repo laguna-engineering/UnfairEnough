@@ -62,6 +62,33 @@ export function computeTimeBonusMultiplier(
   return 1.0 + catchUpInfluence * (targetMultiplier - 1.0);
 }
 
+// ── Lifetime handicap ───────────────────────────────────────────────
+
+/**
+ * Compute a lifetime-score handicap multiplier for a player.
+ * Uses log-compressed scores to map the player's deviation from the room
+ * average into a [0.90, 1.10] range — higher lifetime scorers get penalised,
+ * lower scorers get a boost.
+ */
+export function computeLifetimeHandicap(
+  playerLifetimeScore: number,
+  allLifetimeScores: number[],
+): number {
+  if (allLifetimeScores.length <= 1) return 1;
+
+  const logs = allLifetimeScores.map((s) => Math.log(1 + Math.max(0, s)));
+  const mean = logs.reduce((a, b) => a + b, 0) / logs.length;
+  const playerLog = Math.log(1 + Math.max(0, playerLifetimeScore));
+  const maxDev = Math.max(...logs.map((l) => Math.abs(l - mean)));
+
+  if (maxDev === 0) return 1; // all equal
+
+  // deviation: +1 for highest scorer, -1 for lowest
+  const deviation = (playerLog - mean) / maxDev;
+  // Map [-1, 1] → [1.10, 0.90]  (higher deviation = lower multiplier)
+  return Math.min(1.1, Math.max(0.9, 1.0 - 0.1 * deviation));
+}
+
 // ── Ranking utilities ───────────────────────────────────────────────
 
 export interface PlayerScore {

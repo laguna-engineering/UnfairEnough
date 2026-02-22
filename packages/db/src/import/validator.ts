@@ -15,6 +15,7 @@ export interface QuestionInput {
   type?: 'multiple_choice' | 'true_false';
   category?: string;
   tags?: string[];
+  hideTags?: boolean;
   timeLimit?: number;
   media?: MediaInput;
   options: QuestionOptionInput[];
@@ -196,6 +197,7 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
           ? qObj.difficulty
           : undefined,
       explanation: typeof qObj.explanation === 'string' ? qObj.explanation : undefined,
+      hideTags: qObj.hideTags === true ? true : undefined,
     });
   }
 

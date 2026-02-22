@@ -22,6 +22,8 @@
     "clean:modules:reinstall": "rm -rf node_modules apps/*/node_modules packages/*/node_modules && yarn install",
     "test:e2e": "npx playwright test",
     "test:e2e:ui": "npx playwright test --ui",
+    "release:install": "EXPO_TV=1 yarn tv android --variant release",
+    "release:tvos:install": "EXPO_TV=1 yarn tv ios --configuration Release",
     "android": "expo run:android",
     "ios": "expo run:ios"
   },

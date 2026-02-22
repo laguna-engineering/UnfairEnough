@@ -170,6 +170,10 @@ CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
 CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
 `;
 
+const MIGRATION_V9 = `
+ALTER TABLE questions ADD COLUMN hide_tags INTEGER NOT NULL DEFAULT 0;
+`;
+
 const migrations: Migration[] = [
   { version: 1, sql: MIGRATION_V1 },
   { version: 2, sql: MIGRATION_V2 },
@@ -179,6 +183,7 @@ const migrations: Migration[] = [
   { version: 6, sql: MIGRATION_V6 },
   { version: 7, sql: MIGRATION_V7 },
   { version: 8, sql: MIGRATION_V8 },
+  { version: 9, sql: MIGRATION_V9 },
 ];
 
 /**

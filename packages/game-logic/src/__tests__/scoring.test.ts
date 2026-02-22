@@ -3,6 +3,7 @@ import {
   BASE_POINTS,
   calculateScore,
   computeCatchUpInfluence,
+  computeLifetimeHandicap,
   computeTimeBonusMultiplier,
   MAX_TIME_BONUS,
 } from '../utils/scoring';
@@ -130,6 +131,63 @@ describe('computeTimeBonusMultiplier', () => {
   });
 });
 
+// ── computeLifetimeHandicap ──────────────────────────────────────────
+
+describe('computeLifetimeHandicap', () => {
+  test('single player returns 1.0', () => {
+    expect(computeLifetimeHandicap(5000, [5000])).toBe(1);
+  });
+
+  test('all equal returns 1.0', () => {
+    expect(computeLifetimeHandicap(1000, [1000, 1000, 1000])).toBe(1);
+  });
+
+  test('all zero returns 1.0', () => {
+    expect(computeLifetimeHandicap(0, [0, 0, 0])).toBe(1);
+  });
+
+  test('highest scorer gets ~0.90', () => {
+    const scores = [0, 500, 2000, 10000];
+    const result = computeLifetimeHandicap(10000, scores);
+    expect(result).toBeCloseTo(0.9, 1);
+    expect(result).toBeGreaterThanOrEqual(0.9);
+    expect(result).toBeLessThanOrEqual(1.0);
+  });
+
+  test('lowest scorer gets ~1.10', () => {
+    const scores = [0, 500, 2000, 10000];
+    const result = computeLifetimeHandicap(0, scores);
+    expect(result).toBeGreaterThanOrEqual(1.0);
+    expect(result).toBeLessThanOrEqual(1.1);
+  });
+
+  test('middle player gets ~1.0', () => {
+    const scores = [0, 5000, 10000];
+    const result = computeLifetimeHandicap(5000, scores);
+    expect(result).toBeGreaterThanOrEqual(0.95);
+    expect(result).toBeLessThanOrEqual(1.05);
+  });
+
+  test('clamped to [0.90, 1.10]', () => {
+    // Even with extreme spread the result must stay in range
+    const scores = [0, 1_000_000];
+    expect(computeLifetimeHandicap(1_000_000, scores)).toBeGreaterThanOrEqual(0.9);
+    expect(computeLifetimeHandicap(1_000_000, scores)).toBeLessThanOrEqual(1.1);
+    expect(computeLifetimeHandicap(0, scores)).toBeGreaterThanOrEqual(0.9);
+    expect(computeLifetimeHandicap(0, scores)).toBeLessThanOrEqual(1.1);
+  });
+
+  test('two-player symmetric: boosts cancel out', () => {
+    const scores = [100, 5000];
+    const low = computeLifetimeHandicap(100, scores);
+    const high = computeLifetimeHandicap(5000, scores);
+    // Their deviations from mean are equal and opposite → multipliers symmetric around 1.0
+    expect(low + high).toBeCloseTo(2.0, 5);
+    expect(low).toBeGreaterThan(1.0);
+    expect(high).toBeLessThan(1.0);
+  });
+});
+
 // ── Integration: 5-round game simulation ────────────────────────────
 
 describe('integration: 5-round scoring', () => {
@@ -178,5 +236,38 @@ describe('integration: 5-round scoring', () => {
 
     // The trailer's bonus should increase over rounds as catch-up ramps
     expect(trailerBonuses[3]).toBeGreaterThan(trailerBonuses[2]);
+  });
+});
+
+// ── Integration: 5-round game with lifetime handicap ─────────────────
+
+describe('integration: 5-round scoring with lifetime handicap', () => {
+  test('veteran earns less per round than newcomer (catch-up neutralised)', () => {
+    const totalRounds = 5;
+    const timeLimit = 15;
+    const responseTimeMs = 5000;
+
+    // Lifetime scores: player 0 is a veteran (50k), player 1 is new (0)
+    const lifetimeScores = [50000, 0];
+    const scores = [0, 0];
+
+    for (let round = 0; round < totalRounds; round++) {
+      for (let p = 0; p < 2; p++) {
+        const { basePoints, timeBonus } = calculateScore(true, responseTimeMs, timeLimit);
+        // Use tbMult=1 (neutralise catch-up) to isolate lifetime handicap
+        const adjustedScore = basePoints + timeBonus;
+
+        const lifetimeHandicap = computeLifetimeHandicap(lifetimeScores[p], lifetimeScores);
+        const pointsEarned = Math.round(adjustedScore * lifetimeHandicap);
+        scores[p] += pointsEarned;
+      }
+    }
+
+    // Newcomer should end with a higher score than the veteran
+    expect(scores[1]).toBeGreaterThan(scores[0]);
+    // But the difference should be modest (lifetime handicap is 0.9–1.1)
+    const ratio = scores[1] / scores[0];
+    expect(ratio).toBeGreaterThan(1.0);
+    expect(ratio).toBeLessThan(1.25);
   });
 });

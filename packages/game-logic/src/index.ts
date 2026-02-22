@@ -57,6 +57,7 @@ export {
   BASE_POINTS,
   calculateScore,
   computeCatchUpInfluence,
+  computeLifetimeHandicap,
   computeTimeBonusMultiplier,
   getPositionSuffix,
   MAX_TIME_BONUS,

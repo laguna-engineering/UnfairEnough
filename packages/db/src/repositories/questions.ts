@@ -27,6 +27,7 @@ function rowToQuestionWithMeta(row: QuestionRow): QuestionWithMeta {
     playerDifficulty: row.player_difficulty ? JSON.parse(row.player_difficulty) : null,
     difficulty: row.difficulty,
     explanation: row.explanation,
+    hideTags: row.hide_tags === 1,
     timesAsked: row.times_asked,
     lastAskedAt: row.last_asked_at,
   };
@@ -76,8 +77,8 @@ export async function importQuestionSet(
     const questionId = generateId();
     await db.run(
       `INSERT INTO questions (id, set_id, original_id, type, text, category, tags, time_limit,
-        media_type, media_url, media_preview_duration, options, correct_answer, player_difficulty, difficulty, explanation)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        media_type, media_url, media_preview_duration, options, correct_answer, player_difficulty, difficulty, explanation, hide_tags)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         questionId,
         setId,
@@ -95,6 +96,7 @@ export async function importQuestionSet(
         q.playerDifficulty ? JSON.stringify(q.playerDifficulty) : null,
         q.difficulty ?? 3,
         q.explanation ?? null,
+        q.hideTags ? 1 : 0,
       ],
     );
   }

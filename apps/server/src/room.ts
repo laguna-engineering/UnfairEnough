@@ -24,6 +24,7 @@ import {
 } from '../../../packages/game-logic/src/utils/questionSelection';
 import {
   calculateScore,
+  computeLifetimeHandicap,
   computeTimeBonusMultiplier,
   rankPlayers,
 } from '../../../packages/game-logic/src/utils/scoring';
@@ -163,6 +164,7 @@ export class GameRoom {
     let playerName = name;
     let playerColor: string | undefined;
     let playerEmoji: string | undefined;
+    let lifetimeScore = 0;
 
     if (claimProfileId && deviceId) {
       // Claiming a pre-created profile
@@ -181,6 +183,7 @@ export class GameRoom {
           playerName = profile.displayName;
           playerColor = profile.avatarColor;
           playerEmoji = profile.avatarEmoji ?? undefined;
+          lifetimeScore = profile.totalScore;
           await playersRepo.updateLastSeen(this.db, profile.id);
         }
       } catch (err) {
@@ -193,6 +196,7 @@ export class GameRoom {
           profileId = existingProfile.id;
           playerColor = existingProfile.avatarColor;
           playerEmoji = existingProfile.avatarEmoji ?? undefined;
+          lifetimeScore = existingProfile.totalScore;
           // Update name if changed, and touch last_seen_at
           if (existingProfile.displayName !== name) {
             await playersRepo.updateDisplayName(this.db, existingProfile.id, name);
@@ -245,6 +249,7 @@ export class GameRoom {
       ws,
       deviceId,
       profileId,
+      lifetimeScore,
       isConnected: true,
     });
 
@@ -459,6 +464,7 @@ export class GameRoom {
               questionNumber: this.currentQuestionIndex + 1,
               totalQuestions: this.totalQuestionCount,
               serverTimestamp: this.questionStartTime,
+              tags: !q.hideTags && q.tags.length > 0 ? q.tags : undefined,
               media: q.media
                 ? { type: q.media.type, url: q.media.url, previewDuration: q.media.previewDuration }
                 : undefined,
@@ -694,6 +700,8 @@ export class GameRoom {
     this.answers.clear();
     this.questionStartTime = Date.now();
 
+    const tags = !q.hideTags && q.tags.length > 0 ? q.tags : undefined;
+
     const payload = {
       id: q.id,
       text: q.text,
@@ -703,6 +711,7 @@ export class GameRoom {
       questionNumber: this.currentQuestionIndex + 1,
       totalQuestions: this.totalQuestionCount,
       serverTimestamp: this.questionStartTime,
+      tags,
       media: q.media
         ? { type: q.media.type, url: q.media.url, previewDuration: q.media.previewDuration }
         : undefined,
@@ -863,6 +872,7 @@ export class GameRoom {
 
     const playerResults: PlayerResult[] = [];
     const preRoundScores = [...this.players.values()].map((p) => p.score);
+    const allLifetimeScores = [...this.players.values()].map((p) => p.lifetimeScore);
 
     for (const player of this.players.values()) {
       const ans = this.answers.get(player.playerId);
@@ -885,11 +895,12 @@ export class GameRoom {
       );
       const adjustedScore = basePoints + timeBonus * tbMultiplier;
 
-      // Apply difficulty multiplier
+      // Apply difficulty multiplier and lifetime handicap
       const playerDifficulty =
         this.currentRoundDifficulties.get(player.playerId) ?? q.difficulty ?? 3;
       const diffMultiplier = difficultyMultiplier(playerDifficulty);
-      const pointsEarned = Math.round(adjustedScore * diffMultiplier);
+      const lifetimeHandicap = computeLifetimeHandicap(player.lifetimeScore, allLifetimeScores);
+      const pointsEarned = Math.round(adjustedScore * diffMultiplier * lifetimeHandicap);
 
       if (pointsEarned > 0) {
         player.score += pointsEarned;
@@ -904,6 +915,7 @@ export class GameRoom {
         baseScore: basePoints + timeBonus,
         difficultyMultiplier: diffMultiplier,
         timeBonusMultiplier: tbMultiplier,
+        lifetimeHandicap,
         pointsEarned,
         totalScore: player.score,
         difficulty: playerDifficulty,

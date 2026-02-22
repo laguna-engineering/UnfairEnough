@@ -15,6 +15,7 @@ import {
   buildQuestionPool,
   calculateScore,
   computeEffectiveDifficulty,
+  computeLifetimeHandicap,
   computePlayerDifficulty,
   computeTagUpdates,
   computeTimeBonusMultiplier,
@@ -52,6 +53,7 @@ import { wsServer } from './WebSocketServer';
 interface LocalPlayerProfile {
   profileId: string;
   deviceId: string;
+  lifetimeScore: number;
 }
 
 class GameController implements IGameController {
@@ -129,7 +131,11 @@ class GameController implements IGameController {
       const db = getDb();
       const existing = await playersRepo.findByDeviceId(db, deviceId);
       if (existing) {
-        this.playerProfiles.set(playerId, { profileId: existing.id, deviceId });
+        this.playerProfiles.set(playerId, {
+          profileId: existing.id,
+          deviceId,
+          lifetimeScore: existing.totalScore,
+        });
         if (existing.displayName !== name) {
           await playersRepo.updateDisplayName(db, existing.id, name);
         } else {
@@ -139,7 +145,7 @@ class GameController implements IGameController {
         const profileId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const player = playersSelectors.selectById(this.store.getState().players, playerId);
         await playersRepo.createPlayer(db, profileId, name, player?.color ?? '#FFFFFF', deviceId);
-        this.playerProfiles.set(playerId, { profileId, deviceId });
+        this.playerProfiles.set(playerId, { profileId, deviceId, lifetimeScore: 0 });
       }
     } catch (err) {
       console.error('Player profile resolution failed:', err);
@@ -387,6 +393,8 @@ class GameController implements IGameController {
     const state = this.getState();
     const timeLimit = state.game.config.questionTimeLimit;
 
+    const tags = !question.hideTags && question.tags.length > 0 ? question.tags : undefined;
+
     const questionPayload = {
       id: question.id,
       text: question.text,
@@ -395,6 +403,7 @@ class GameController implements IGameController {
       questionNumber: this.currentQuestionIndex + 1,
       totalQuestions: this.totalQuestionCount,
       serverTimestamp: Date.now(),
+      tags,
     };
 
     this.questionStartTime = Date.now();
@@ -477,6 +486,7 @@ class GameController implements IGameController {
     const answers = state.game.answers;
 
     const preRoundScores = players.map((p) => p.score);
+    const allLifetimeScores = players.map((p) => this.playerProfiles.get(p.id)?.lifetimeScore ?? 0);
 
     const playerResults: PlayerResult[] = players.map((player) => {
       const playerAnswer = answers[player.id];
@@ -499,11 +509,13 @@ class GameController implements IGameController {
       );
       const adjustedScore = basePoints + timeBonus * tbMultiplier;
 
-      // Apply difficulty multiplier
+      // Apply difficulty multiplier and lifetime handicap
       const playerDifficulty =
         this.currentRoundDifficulties.get(player.id) ?? currentQuestion.difficulty ?? 3;
       const diffMultiplier = difficultyMultiplier(playerDifficulty);
-      const pointsEarned = Math.round(adjustedScore * diffMultiplier);
+      const playerLifetimeScore = this.playerProfiles.get(player.id)?.lifetimeScore ?? 0;
+      const lifetimeHandicap = computeLifetimeHandicap(playerLifetimeScore, allLifetimeScores);
+      const pointsEarned = Math.round(adjustedScore * diffMultiplier * lifetimeHandicap);
 
       // Update score in store
       if (pointsEarned > 0) {
@@ -523,6 +535,7 @@ class GameController implements IGameController {
         baseScore: basePoints + timeBonus,
         difficultyMultiplier: diffMultiplier,
         timeBonusMultiplier: tbMultiplier,
+        lifetimeHandicap,
         pointsEarned,
         totalScore: updatedPlayer?.score ?? player.score,
         difficulty: playerDifficulty,
@@ -657,10 +670,31 @@ class GameController implements IGameController {
       },
     });
 
+    // Record game stats for all profiled players (fire-and-forget)
+    this.recordGameEnd(winner).catch((err) => console.error('Failed to record game end:', err));
+
     // Increment games_played on all tag scores for decay tracking
     this.incrementTagGamesPlayed().catch((err) =>
       console.error('Failed to increment tag games played:', err),
     );
+  }
+
+  /**
+   * Record game-end stats for all profiled players (lifetime score + wins).
+   */
+  private async recordGameEnd(winner: { id: string }): Promise<void> {
+    const db = getDb();
+    const state = this.getState();
+    const players = playersSelectors.selectAll(state.players);
+
+    for (const player of players) {
+      const profile = this.playerProfiles.get(player.id);
+      if (!profile) continue;
+      await playersRepo.incrementGames(db, profile.profileId, player.score);
+      if (player.id === winner.id) {
+        await playersRepo.incrementWins(db, profile.profileId);
+      }
+    }
   }
 
   /**

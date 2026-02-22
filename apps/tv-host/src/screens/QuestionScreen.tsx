@@ -50,6 +50,17 @@ export const QuestionScreen: React.FC = () => {
         <Text style={styles.questionText}>{currentQuestion.text}</Text>
       </Card>
 
+      {/* Tags */}
+      {currentQuestion.tags && currentQuestion.tags.length > 0 && (
+        <View style={styles.tagsRow}>
+          {currentQuestion.tags.map((tag) => (
+            <View key={tag} style={styles.tagPill}>
+              <Text style={styles.tagText}>{tag}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
       {/* Answer Options - WWTBAM Style */}
       <View style={styles.optionsGrid}>
         <View style={styles.optionsRow}>
@@ -103,13 +114,30 @@ const styles = StyleSheet.create({
   },
   questionCard: {
     padding: spacing.lg,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     alignItems: 'center',
   },
   questionText: {
     ...typography.h1,
     color: colors.textPrimary,
     textAlign: 'center',
+  },
+  tagsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  tagPill: {
+    backgroundColor: `${colors.accentPurple}33`,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs / 2,
+  },
+  tagText: {
+    ...typography.label,
+    color: colors.textSecondary,
   },
   optionsGrid: {
     flex: 1,

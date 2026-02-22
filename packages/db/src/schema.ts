@@ -39,6 +39,7 @@ export interface QuestionRow {
   player_difficulty: string | null; // JSON object
   difficulty: number;
   explanation: string | null;
+  hide_tags: number;
   times_asked: number;
   last_asked_at: string | null;
   created_at: string;
@@ -123,6 +124,7 @@ export interface QuestionWithMeta {
   playerDifficulty: Record<string, number> | null;
   difficulty: number;
   explanation: string | null;
+  hideTags: boolean;
   timesAsked: number;
   lastAskedAt: string | null;
 }

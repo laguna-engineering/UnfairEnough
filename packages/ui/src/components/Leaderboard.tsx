@@ -71,8 +71,10 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
             {showPoints && entry.pointsEarned !== undefined && entry.pointsEarned > 0 && (
               <Text style={styles.pointsEarned}>
                 +{entry.pointsEarned}
-                {entry.difficultyMultiplier !== undefined && entry.difficultyMultiplier > 1.005
-                  ? ` (x${entry.difficultyMultiplier.toFixed(2)})`
+                {entry.difficultyMultiplier !== undefined && entry.difficultyMultiplier > 1.0
+                  ? entry.difficultyMultiplier > 1.05
+                    ? ' ⭐⭐'
+                    : ' ⭐'
                   : ''}
               </Text>
             )}

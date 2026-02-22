@@ -19,6 +19,7 @@ export interface RoomPlayer {
   ws: ServerWebSocket<WSData> | null;
   deviceId?: string;
   profileId?: string;
+  lifetimeScore: number;
   isConnected: boolean;
   disconnectTimer?: Timer;
 }

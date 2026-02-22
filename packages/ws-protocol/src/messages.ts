@@ -88,6 +88,7 @@ export interface Question {
   timeLimit: number;
   questionNumber: number;
   totalQuestions: number;
+  tags?: string[];
   media?: {
     type: 'image' | 'audio' | 'video';
     url: string;
@@ -111,6 +112,7 @@ export interface PlayerResult {
   baseScore: number;
   difficultyMultiplier: number;
   timeBonusMultiplier?: number;
+  lifetimeHandicap?: number;
   pointsEarned: number;
   totalScore: number;
   difficulty?: number;
