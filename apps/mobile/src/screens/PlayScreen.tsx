@@ -9,8 +9,8 @@ import {
   typography,
 } from '@unfairenough/ui';
 import type { AnswerKey, Question } from '@unfairenough/ws-protocol';
-import type React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Animated, StyleSheet, Text, View } from 'react-native';
 
 interface PlayScreenProps {
   question: Question & { serverTimestamp: number };
@@ -26,6 +26,25 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({
   onSubmitAnswer,
 }) => {
   const { t } = useTranslation();
+  const [showPeekGuard, setShowPeekGuard] = useState(false);
+  const [peekGuardOpacity] = useState(() => new Animated.Value(0));
+
+  useEffect(() => {
+    if (!confirmedAnswer) {
+      setShowPeekGuard(false);
+      peekGuardOpacity.setValue(0);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setShowPeekGuard(true);
+      Animated.timing(peekGuardOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [confirmedAnswer, peekGuardOpacity]);
 
   const getAnswerState = (key: AnswerKey): AnswerState => {
     if (confirmedAnswer === key) return 'selected';
@@ -82,6 +101,17 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({
           ))}
         </View>
       </View>
+
+      {/* Peek guard — hides the selected answer from nearby players */}
+      {showPeekGuard && (
+        <Animated.View
+          style={[styles.peekGuard, { opacity: peekGuardOpacity }]}
+          pointerEvents="none"
+        >
+          <Text style={styles.peekGuardEmoji}>🙈</Text>
+          <Text style={styles.peekGuardText}>{t('game.answerSubmitted')}</Text>
+        </Animated.View>
+      )}
     </ScreenBackground>
   );
 };
@@ -129,5 +159,20 @@ const styles = StyleSheet.create({
   answerButton: {
     flex: 1,
     minHeight: 100,
+  },
+  peekGuard: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  peekGuardEmoji: {
+    fontSize: 80,
+    marginBottom: spacing.md,
+  },
+  peekGuardText: {
+    ...typography.h2,
+    color: colors.success,
   },
 });
