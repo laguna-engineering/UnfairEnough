@@ -10,6 +10,7 @@ import {
   endGame,
   nextQuestion,
   type RootState,
+  receiveAnswer,
   removePlayer,
   resetGame,
   resetScores,
@@ -211,6 +212,17 @@ export class HostedGameController implements IGameController {
       case 'TICK':
         this.store.dispatch(setCountdown(message.payload.remaining));
         break;
+
+      case 'PLAYER_ANSWERED': {
+        const { playerId: answeredId, questionId: answeredQId } = message.payload;
+        const currentQ = this.store.getState().game.currentQuestion;
+        if (currentQ?.id === answeredQId) {
+          this.store.dispatch(
+            receiveAnswer({ playerId: answeredId, answer: 'A', serverReceivedAt: Date.now() }),
+          );
+        }
+        break;
+      }
 
       case 'REVEALING':
         this.store.dispatch(startRevealing());

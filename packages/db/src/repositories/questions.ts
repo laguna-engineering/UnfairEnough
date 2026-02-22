@@ -301,15 +301,21 @@ export async function getMetaSetChildIds(db: DbAdapter, metaSetId: string): Prom
 export async function getQuestionsByMetaSet(
   db: DbAdapter,
   metaSetId: string,
+  limit?: number,
 ): Promise<QuestionWithMeta[]> {
-  const rows = await db.all<QuestionRow>(
-    `SELECT q.* FROM questions q
+  let sql = `SELECT q.* FROM questions q
      JOIN meta_set_children msc ON q.set_id = msc.child_set_id
      JOIN question_sets cs ON cs.id = msc.child_set_id AND cs.deleted_at IS NULL
      WHERE msc.meta_set_id = ?
-     ORDER BY q.last_asked_at IS NOT NULL, q.last_asked_at ASC, RANDOM()`,
-    [metaSetId],
-  );
+     ORDER BY q.last_asked_at IS NOT NULL, q.last_asked_at ASC, RANDOM()`;
+  const params: (string | number)[] = [metaSetId];
+
+  if (limit) {
+    sql += ' LIMIT ?';
+    params.push(limit);
+  }
+
+  const rows = await db.all<QuestionRow>(sql, params);
   return rows.map(rowToQuestionWithMeta);
 }
 

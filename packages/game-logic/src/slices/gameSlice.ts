@@ -50,7 +50,12 @@ export interface GameConfig {
 interface GameState {
   phase: GamePhase;
   currentQuestion: (Question & { serverTimestamp: number }) | null;
-  mediaPreview: { type: 'image' | 'audio' | 'video'; url: string } | null;
+  mediaPreview: {
+    type: 'image' | 'audio' | 'video';
+    url: string;
+    questionNumber: number;
+    totalQuestions: number;
+  } | null;
   questionIndex: number;
   countdown: number;
   answers: Record<string, Answer>;
@@ -111,7 +116,11 @@ const gameSlice = createSlice({
       if (!isValidTransition(state.phase, 'MEDIA_PREVIEW')) return;
       state.phase = 'MEDIA_PREVIEW';
       state.countdown = action.payload.duration;
-      state.mediaPreview = action.payload.media;
+      state.mediaPreview = {
+        ...action.payload.media,
+        questionNumber: action.payload.questionNumber,
+        totalQuestions: action.payload.totalQuestions,
+      };
     },
 
     showQuestion(state, action: PayloadAction<Question & { serverTimestamp: number }>) {

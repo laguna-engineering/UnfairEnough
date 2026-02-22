@@ -153,6 +153,8 @@ export function buildPreviewState(phase: GamePhase): RootState {
           mediaPreview: {
             type: 'image',
             url: PREVIEW_IMAGE_URI,
+            questionNumber: 1,
+            totalQuestions: 10,
           },
           countdown: 5,
         },

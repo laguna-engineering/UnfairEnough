@@ -10,8 +10,8 @@ export const MediaPreviewScreen: React.FC = () => {
   const { state, countdown, mediaPreview, serverUrl, mode } = useGameController();
   const [imageError, setImageError] = useState(false);
 
-  const questionIndex = state.game.questionIndex;
-  const totalQuestions = state.game.config.totalQuestions;
+  const questionNumber = mediaPreview?.questionNumber ?? state.game.questionIndex + 1;
+  const totalQuestions = mediaPreview?.totalQuestions ?? state.game.config.totalQuestions;
 
   // Build absolute URL for relative media paths
   let imageUrl: string | null = null;
@@ -30,7 +30,7 @@ export const MediaPreviewScreen: React.FC = () => {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.progress}>
-          {t('game.question', { current: questionIndex + 1, total: totalQuestions })}
+          {t('game.question', { current: questionNumber, total: totalQuestions })}
         </Text>
         <Text style={styles.countdown}>{t('mediaPreview.questionIn', { seconds: countdown })}</Text>
       </View>

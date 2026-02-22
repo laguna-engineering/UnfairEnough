@@ -6,6 +6,7 @@ import { useFonts } from '@expo-google-fonts/sniglet/useFonts';
 import type { GamePhase } from '@unfairenough/game-logic';
 import { changeLanguage, type SupportedLanguage } from '@unfairenough/i18n';
 import Constants from 'expo-constants';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -20,6 +21,8 @@ import '@unfairenough/i18n';
 
 const defaultLang = Constants.expoConfig?.extra?.defaultLang;
 if (defaultLang) changeLanguage(defaultLang as SupportedLanguage);
+
+SplashScreen.preventAutoHideAsync();
 
 const VALID_PREVIEW_PHASES: GamePhase[] = [
   'LOBBY',
@@ -47,6 +50,20 @@ export default function App() {
     Nunito_600SemiBold,
     Nunito_700Bold,
   });
+  const [splashMinElapsed, setSplashMinElapsed] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSplashMinElapsed(true), 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const ready = fontsLoaded && splashMinElapsed;
+
+  useEffect(() => {
+    if (ready) {
+      SplashScreen.hideAsync();
+    }
+  }, [ready]);
 
   const webPreviewPhase = getWebPreviewPhase();
   const [screen, setScreen] = useState<AppScreen>(
@@ -113,7 +130,7 @@ export default function App() {
     setScreen(Platform.OS === 'web' ? 'connect' : 'mode_select');
   }, []);
 
-  if (!fontsLoaded) return null;
+  if (!ready) return null;
 
   let content: React.ReactNode;
   let controller: IGameController;

@@ -24,6 +24,7 @@ export type ServerMessage =
   | { type: 'QUESTION'; payload: Question & { serverTimestamp: number } }
   | { type: 'TICK'; payload: { remaining: number } }
   | { type: 'ANSWER_ACK'; payload: { questionId: string; serverReceivedAt: number } }
+  | { type: 'PLAYER_ANSWERED'; payload: { playerId: string; questionId: string } }
   | { type: 'MEDIA_PREVIEW'; payload: MediaPreviewPayload }
   | { type: 'REVEALING' }
   | { type: 'ROUND_END'; payload: RoundResult }

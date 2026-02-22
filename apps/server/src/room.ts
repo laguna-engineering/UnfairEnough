@@ -572,16 +572,12 @@ export class GameRoom {
       let rawPool: QuestionWithMeta[];
 
       if (this.isMetaSet && this.questionSetId) {
-        // Meta set: load all questions from child sets (ordered by freshness)
-        const allMetaQuestions = await questionsRepo.getQuestionsByMetaSet(
+        // Meta set: load freshest questions from child sets (ordered by last_asked_at)
+        rawPool = await questionsRepo.getQuestionsByMetaSet(
           this.db,
           this.questionSetId,
+          requestedCount * 3,
         );
-        // Trim to 3× requested to prefer least-recently-asked questions
-        rawPool =
-          allMetaQuestions.length > requestedCount * 3
-            ? allMetaQuestions.slice(0, requestedCount * 3)
-            : allMetaQuestions;
       } else {
         // Casual mode: load 3× from the general pool
         rawPool = await questionsRepo.getRandomQuestions(this.db, requestedCount * 3);
@@ -829,6 +825,12 @@ export class GameRoom {
     this.sendTo(ws, {
       type: 'ANSWER_ACK',
       payload: { questionId, serverReceivedAt },
+    });
+
+    // Notify the host so TV can update the answered count
+    this.sendToHost({
+      type: 'PLAYER_ANSWERED',
+      payload: { playerId, questionId },
     });
 
     // Check if all connected players answered

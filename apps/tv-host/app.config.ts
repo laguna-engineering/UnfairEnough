@@ -36,6 +36,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   newArchEnabled: true,
   plugins: [
     [
+      'expo-splash-screen',
+      {
+        backgroundColor: '#aed8ff',
+        image: './assets/images/splash.png',
+        imageWidth: 800,
+      },
+    ],
+    [
       '@react-native-tvos/config-tv',
       {
         androidTVBanner: './assets/images/icon-1920x720.png',
@@ -54,17 +62,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: 'com.unfairenough.tvhost',
     edgeToEdgeEnabled: true,
-    splash: {
-      image: './assets/images/icon-800x480.png',
-      resizeMode: 'contain',
-      backgroundColor: '#1a1a2e',
-    },
   },
   ios: {
     bundleIdentifier: 'com.unfairenough.tvhost',
-    splash: {
-      backgroundColor: '#1a1a2e',
-    },
   },
   extra: {
     defaultLang: env.DEFAULT_LANG || 'en',
