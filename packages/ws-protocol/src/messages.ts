@@ -150,7 +150,8 @@ export type HostMessage =
   | { type: 'START_GAME' }
   | { type: 'RESET_GAME' }
   | { type: 'SET_LANGUAGE'; payload: { language: string } }
-  | { type: 'CONFIGURE_GAME'; payload: ConfigureGamePayload };
+  | { type: 'CONFIGURE_GAME'; payload: ConfigureGamePayload }
+  | { type: 'MEDIA_LOADED' };
 
 export interface ConfigureGamePayload {
   gameType: 'casual' | 'configured';

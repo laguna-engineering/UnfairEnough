@@ -43,6 +43,7 @@ function rowToQuestionSetWithMeta(row: QuestionSetRow): QuestionSetWithMeta {
     tags: row.tags ? JSON.parse(row.tags) : [],
     questionCount: row.question_count,
     isMeta: row.is_meta === 1,
+    availableInCasual: row.available_in_casual !== 0,
     deletedAt: row.deleted_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -60,8 +61,8 @@ export async function importQuestionSet(
   generateId: () => string,
 ): Promise<string> {
   await db.run(
-    `INSERT INTO question_sets (id, name, author, description, default_time_limit, tags, question_count)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO question_sets (id, name, author, description, default_time_limit, tags, question_count, available_in_casual)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       setId,
       input.name,
@@ -70,6 +71,7 @@ export async function importQuestionSet(
       input.defaultTimeLimit ?? 10,
       input.tags ? JSON.stringify(input.tags) : null,
       input.questions.length,
+      input.availableInCasual === false ? 0 : 1,
     ],
   );
 
@@ -109,9 +111,11 @@ export async function getRandomQuestions(
   count: number,
   excludeSetIds?: string[],
 ): Promise<QuestionWithMeta[]> {
-  let sql = `SELECT * FROM questions WHERE set_id IS NULL OR set_id NOT IN (
+  let sql = `SELECT * FROM questions WHERE (set_id IS NULL OR set_id NOT IN (
     SELECT id FROM question_sets WHERE deleted_at IS NOT NULL
-  )`;
+  )) AND (set_id IS NULL OR set_id NOT IN (
+    SELECT id FROM question_sets WHERE available_in_casual = 0
+  ))`;
   const params: (string | number)[] = [];
 
   if (excludeSetIds && excludeSetIds.length > 0) {

@@ -43,6 +43,10 @@ export class PreviewGameController implements IGameController {
     changeLanguage(language);
   }
 
+  notifyMediaLoaded(): void {
+    // No-op
+  }
+
   cleanup(): void {
     // No-op
   }

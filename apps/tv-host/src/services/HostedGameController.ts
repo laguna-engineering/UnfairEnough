@@ -86,6 +86,10 @@ export class HostedGameController implements IGameController {
     this.send({ type: 'SET_LANGUAGE', payload: { language } });
   }
 
+  notifyMediaLoaded(): void {
+    this.send({ type: 'MEDIA_LOADED' });
+  }
+
   getConnectionState(): ConnectionState {
     return this.connectionState;
   }

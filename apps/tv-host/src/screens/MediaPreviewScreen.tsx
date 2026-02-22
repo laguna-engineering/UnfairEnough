@@ -1,13 +1,14 @@
 import { useTranslation } from '@unfairenough/i18n';
 import { colors, ScreenBackground, spacing, typography } from '@unfairenough/ui';
 import type React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { useGameController } from '../hooks/useGameController';
 
 export const MediaPreviewScreen: React.FC = () => {
   const { t } = useTranslation();
-  const { state, countdown, mediaPreview, serverUrl, mode } = useGameController();
+  const { state, countdown, mediaPreview, serverUrl, mode, notifyMediaLoaded } =
+    useGameController();
   const [imageError, setImageError] = useState(false);
 
   const questionNumber = mediaPreview?.questionNumber ?? state.game.questionIndex + 1;
@@ -24,6 +25,13 @@ export const MediaPreviewScreen: React.FC = () => {
       imageUrl = `http://${host}/${url}`;
     }
   }
+
+  // If no image URL could be resolved, notify immediately so the timer isn't blocked
+  useEffect(() => {
+    if (!imageUrl || imageError) {
+      notifyMediaLoaded();
+    }
+  }, [imageUrl, imageError, notifyMediaLoaded]);
 
   return (
     <ScreenBackground style={styles.container}>
@@ -42,7 +50,11 @@ export const MediaPreviewScreen: React.FC = () => {
             source={{ uri: imageUrl }}
             style={styles.image}
             resizeMode="contain"
-            onError={() => setImageError(true)}
+            onLoad={notifyMediaLoaded}
+            onError={() => {
+              setImageError(true);
+              notifyMediaLoaded();
+            }}
           />
         ) : (
           <View style={styles.fallback}>

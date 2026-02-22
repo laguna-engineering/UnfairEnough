@@ -116,7 +116,13 @@ export class GameRoom {
   private questionTimer: ReturnType<typeof setInterval> | null = null;
   private revealTimeout: ReturnType<typeof setTimeout> | null = null;
   private resultsTimeout: ReturnType<typeof setTimeout> | null = null;
+  private mediaLoadWaitTimeout: ReturnType<typeof setTimeout> | null = null;
   private mediaPreviewTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  // Media load tracking — wait for host TV to signal image loaded
+  private waitingForMediaLoad = false;
+  private pendingMediaQuestion: QuestionWithMeta | null = null;
+  private pendingPreviewDuration = 0;
 
   constructor(roomCode: string, db: DbAdapter) {
     this.roomCode = roomCode;
@@ -424,6 +430,9 @@ export class GameRoom {
       case 'CONFIGURE_GAME':
         this.configurePromise = this.configureGame(message.payload);
         break;
+      case 'MEDIA_LOADED':
+        this.onMediaLoaded();
+        break;
     }
   }
 
@@ -562,7 +571,10 @@ export class GameRoom {
     }
 
     // Load tag scores early — needed for both pool building and per-round selection
-    await this.loadPlayerTagScores();
+    // Skip for casual games: no historical data used
+    if (this.gameType === 'configured') {
+      await this.loadPlayerTagScores();
+    }
 
     // Load questions based on game configuration
     if (this.gameType === 'configured' && this.questionSetId && !this.isMetaSet) {
@@ -589,10 +601,16 @@ export class GameRoom {
         rawPool = await questionsRepo.getRandomQuestions(this.db, requestedCount * 3);
       }
 
-      this.questionPool = buildQuestionPool(rawPool, {
-        nRounds: requestedCount,
-        playerTagScores: this.playerTagScores,
-      });
+      if (this.gameType === 'casual') {
+        // Casual: completely random (DB already orders by freshness + random)
+        this.questionPool = rawPool;
+      } else {
+        // Meta set: use adaptive selection pipeline
+        this.questionPool = buildQuestionPool(rawPool, {
+          nRounds: requestedCount,
+          playerTagScores: this.playerTagScores,
+        });
+      }
       this.questions = this.questionPool.slice(0, requestedCount);
     }
     if (this.questions.length === 0 && this.questionPool.length === 0) return;
@@ -601,19 +619,21 @@ export class GameRoom {
     this.positionHistory = [];
     this.usedQuestionIds.clear();
 
-    // Create game session in DB
-    this.gameId = crypto.randomUUID();
-    gamesRepo
-      .createGame(
-        this.db,
-        this.gameId,
-        this.roomCode,
-        this.gameType,
-        this.players.size,
-        this.totalQuestionCount,
-        this.questionSetId ?? undefined,
-      )
-      .catch((err) => console.error('Failed to create game session:', err));
+    // Create game session in DB (configured games only)
+    if (this.gameType === 'configured') {
+      this.gameId = crypto.randomUUID();
+      gamesRepo
+        .createGame(
+          this.db,
+          this.gameId,
+          this.roomCode,
+          this.gameType,
+          this.players.size,
+          this.totalQuestionCount,
+          this.questionSetId ?? undefined,
+        )
+        .catch((err) => console.error('Failed to create game session:', err));
+    }
 
     this.phase = 'COUNTDOWN';
     this.logEvent('GAME_STARTED', null, {
@@ -645,15 +665,8 @@ export class GameRoom {
 
     let q: QuestionWithMeta;
 
-    if ((this.gameType === 'configured' && !this.isMetaSet) || this.questionPool.length === 0) {
-      // Configured mode (non-meta): use authored order
-      if (this.currentQuestionIndex >= this.questions.length) {
-        this.endGame();
-        return;
-      }
-      q = this.questions[this.currentQuestionIndex];
-    } else {
-      // Casual mode: dynamically select from remaining pool
+    if (this.isMetaSet && this.questionPool.length > 0) {
+      // Meta set: dynamically select from remaining pool using catch-up logic
       const remaining = this.questionPool.filter((qn) => !this.usedQuestionIds.has(qn.id));
       if (remaining.length === 0) {
         this.endGame();
@@ -661,6 +674,13 @@ export class GameRoom {
       }
       q = this.selectQuestionForRound(remaining);
       this.usedQuestionIds.add(q.id);
+    } else {
+      // Configured (authored order) or casual (random from DB)
+      if (this.currentQuestionIndex >= this.questions.length) {
+        this.endGame();
+        return;
+      }
+      q = this.questions[this.currentQuestionIndex];
     }
 
     this.activeQuestion = q;
@@ -683,14 +703,46 @@ export class GameRoom {
         },
       });
 
-      // After preview duration, send the actual question
-      this.mediaPreviewTimeout = setTimeout(() => {
-        this.mediaPreviewTimeout = null;
-        this.sendQuestion(q);
-      }, previewDuration * 1000);
+      // Wait for the host TV to signal the image has loaded (max 5s),
+      // then start the actual preview countdown.
+      this.waitingForMediaLoad = true;
+      this.pendingMediaQuestion = q;
+      this.pendingPreviewDuration = previewDuration;
+
+      this.mediaLoadWaitTimeout = setTimeout(() => {
+        this.mediaLoadWaitTimeout = null;
+        this.startPreviewCountdown();
+      }, 5000);
     } else {
       this.sendQuestion(q);
     }
+  }
+
+  /** Host TV signals that the media preview image finished loading. */
+  private onMediaLoaded(): void {
+    if (!this.waitingForMediaLoad) return;
+    if (this.mediaLoadWaitTimeout) {
+      clearTimeout(this.mediaLoadWaitTimeout);
+      this.mediaLoadWaitTimeout = null;
+    }
+    this.startPreviewCountdown();
+  }
+
+  /** Begin the preview countdown after the image loaded (or the load wait timed out). */
+  private startPreviewCountdown(): void {
+    if (!this.waitingForMediaLoad) return;
+    this.waitingForMediaLoad = false;
+
+    const q = this.pendingMediaQuestion;
+    const previewDuration = this.pendingPreviewDuration;
+    this.pendingMediaQuestion = null;
+
+    if (!q) return;
+
+    this.mediaPreviewTimeout = setTimeout(() => {
+      this.mediaPreviewTimeout = null;
+      this.sendQuestion(q);
+    }, previewDuration * 1000);
   }
 
   private sendQuestion(q: QuestionWithMeta): void {
@@ -950,7 +1002,12 @@ export class GameRoom {
       },
     });
 
-    // Record round results and update tag scores (async, don't block gameplay)
+    // Track question usage (fire-and-forget)
+    questionsRepo
+      .markQuestionAsked(this.db, q.id)
+      .catch((err) => console.error('Failed to update question usage:', err));
+
+    // Record round results and update tag scores (configured games only)
     if (this.gameId) {
       const gameId = this.gameId;
       const roundNumber = this.currentQuestionIndex + 1;
@@ -976,11 +1033,6 @@ export class GameRoom {
       gamesRepo
         .insertRoundResults(this.db, gameId, roundResults)
         .catch((err) => console.error('Failed to insert round results:', err));
-
-      // Track question usage (fire-and-forget)
-      questionsRepo
-        .markQuestionAsked(this.db, q.id)
-        .catch((err) => console.error('Failed to update question usage:', err));
 
       // Update tag scores for profiled players (fire-and-forget + update in-memory)
       this.updateTagScoresAfterRound(q, playerResults).catch((err) =>
@@ -1039,10 +1091,12 @@ export class GameRoom {
       rankings: rankings.map((r) => ({ name: r.name, score: r.score, rank: r.rank })),
     });
 
-    // Record game end and update player stats (async, don't block)
-    this.recordGameEnd(winner, rankings).catch((err) =>
-      console.error('Failed to record game end:', err),
-    );
+    // Record game end and update player stats (configured games only)
+    if (this.gameId) {
+      this.recordGameEnd(winner, rankings).catch((err) =>
+        console.error('Failed to record game end:', err),
+      );
+    }
   }
 
   private async recordGameEnd(
@@ -1257,6 +1311,12 @@ export class GameRoom {
       clearTimeout(this.resultsTimeout);
       this.resultsTimeout = null;
     }
+    if (this.mediaLoadWaitTimeout) {
+      clearTimeout(this.mediaLoadWaitTimeout);
+      this.mediaLoadWaitTimeout = null;
+    }
+    this.waitingForMediaLoad = false;
+    this.pendingMediaQuestion = null;
     if (this.mediaPreviewTimeout) {
       clearTimeout(this.mediaPreviewTimeout);
       this.mediaPreviewTimeout = null;

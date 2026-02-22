@@ -31,6 +31,7 @@ export interface QuestionSetInput {
   description?: string;
   defaultTimeLimit?: number;
   tags?: string[];
+  availableInCasual?: boolean;
   questions: QuestionInput[];
 }
 
@@ -206,6 +207,8 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
     author: typeof obj.author === 'string' ? obj.author : undefined,
     description: typeof obj.description === 'string' ? obj.description : undefined,
     defaultTimeLimit,
+    availableInCasual:
+      typeof obj.availableInCasual === 'boolean' ? obj.availableInCasual : undefined,
     tags: Array.isArray(obj.tags)
       ? [
           ...new Set(

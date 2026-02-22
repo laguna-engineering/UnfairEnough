@@ -174,6 +174,10 @@ const MIGRATION_V9 = `
 ALTER TABLE questions ADD COLUMN hide_tags INTEGER NOT NULL DEFAULT 0;
 `;
 
+const MIGRATION_V10 = `
+ALTER TABLE question_sets ADD COLUMN available_in_casual INTEGER NOT NULL DEFAULT 1;
+`;
+
 const migrations: Migration[] = [
   { version: 1, sql: MIGRATION_V1 },
   { version: 2, sql: MIGRATION_V2 },
@@ -184,6 +188,7 @@ const migrations: Migration[] = [
   { version: 7, sql: MIGRATION_V7 },
   { version: 8, sql: MIGRATION_V8 },
   { version: 9, sql: MIGRATION_V9 },
+  { version: 10, sql: MIGRATION_V10 },
 ];
 
 /**

@@ -559,7 +559,7 @@ describe('player identity in answers', () => {
     const results = roundEnd.payload.playerResults;
 
     // Map results by playerId
-    const byId = new Map(results.map((r: any) => [r.playerId, r]));
+    const byId = new Map<string, any>(results.map((r: any) => [r.playerId, r]));
 
     // Alice answered B
     expect(byId.get(aliceId).answer).toBe('B');

@@ -30,6 +30,11 @@
       "items": { "type": "string" },
       "description": "Tags for categorizing the set"
     },
+    "availableInCasual": {
+      "type": "boolean",
+      "description": "Whether questions from this set appear in casual/random games (default: true)",
+      "default": true
+    },
     "questions": {
       "type": "array",
       "description": "List of questions",

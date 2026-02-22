@@ -40,6 +40,10 @@ export function useGameController() {
     [controller],
   );
 
+  const notifyMediaLoaded = useCallback(() => {
+    controller.notifyMediaLoaded();
+  }, [controller]);
+
   // Build the QR URL based on mode
   const { roomCode, localIp, serverPort } = state.game;
   let qrUrl: string | null = null;
@@ -60,6 +64,7 @@ export function useGameController() {
     resetGame,
     configureGame,
     setLanguage,
+    notifyMediaLoaded,
     mode: mode as GameMode,
     qrUrl,
     serverUrl,

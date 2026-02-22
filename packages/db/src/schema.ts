@@ -11,6 +11,7 @@ export interface QuestionSetRow {
   tags: string | null; // JSON array
   question_count: number;
   is_meta: number; // 0 or 1
+  available_in_casual: number; // 0 or 1
   deleted_at: string | null; // soft delete
   created_at: string;
   updated_at: string;
@@ -138,6 +139,7 @@ export interface QuestionSetWithMeta {
   tags: string[];
   questionCount: number;
   isMeta: boolean;
+  availableInCasual: boolean;
   childSetIds?: string[];
   deletedAt: string | null;
   createdAt: string;

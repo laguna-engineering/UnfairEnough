@@ -60,9 +60,15 @@ class GameController implements IGameController {
   private store = createStore();
   private countdownTimer: ReturnType<typeof setInterval> | null = null;
   private questionTimer: ReturnType<typeof setInterval> | null = null;
+  private mediaLoadWaitTimeout: ReturnType<typeof setTimeout> | null = null;
   private mediaPreviewTimeout: ReturnType<typeof setTimeout> | null = null;
   private revealTimeout: ReturnType<typeof setTimeout> | null = null;
   private resultsTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  // Media load tracking — wait for image to render before starting preview countdown
+  private waitingForMediaLoad = false;
+  private pendingMediaQuestion: QuestionWithMeta | null = null;
+  private pendingPreviewDuration = 0;
 
   // Question state — keep full QuestionWithMeta for tags, difficulty, etc.
   private questionPool: QuestionWithMeta[] = [];
@@ -190,8 +196,10 @@ class GameController implements IGameController {
     const state = this.getState();
     const { gameType, questionSetId, totalQuestions } = state.game.config;
 
-    // Load tag scores for profiled players
-    await this.loadPlayerTagScores();
+    // Load tag scores for profiled players (configured games only)
+    if (gameType === 'configured') {
+      await this.loadPlayerTagScores();
+    }
 
     if (gameType === 'configured' && questionSetId && !this.isMetaSet) {
       // Regular configured set: serve in authored order
@@ -208,10 +216,16 @@ class GameController implements IGameController {
         rawPool = await questionsRepo.getRandomQuestions(db, totalQuestions * 3);
       }
 
-      this.questionPool = buildQuestionPool(rawPool, {
-        nRounds: totalQuestions,
-        playerTagScores: this.playerTagScores,
-      });
+      if (gameType === 'casual') {
+        // Casual: completely random (DB already orders by freshness + random)
+        this.questionPool = rawPool;
+      } else {
+        // Meta set: use adaptive selection pipeline
+        this.questionPool = buildQuestionPool(rawPool, {
+          nRounds: totalQuestions,
+          playerTagScores: this.playerTagScores,
+        });
+      }
     }
 
     if (this.questionPool.length === 0) {
@@ -284,18 +298,10 @@ class GameController implements IGameController {
       return;
     }
 
-    const state = this.getState();
     let question: QuestionWithMeta;
 
-    if (state.game.config.gameType === 'configured' && !this.isMetaSet) {
-      // Configured mode (non-meta): use authored order
-      if (this.currentQuestionIndex >= this.questionPool.length) {
-        this.endGame();
-        return;
-      }
-      question = this.questionPool[this.currentQuestionIndex];
-    } else {
-      // Casual mode: dynamically select from remaining pool
+    if (this.isMetaSet) {
+      // Meta set: dynamically select from remaining pool using catch-up logic
       const remaining = this.questionPool.filter((q) => !this.usedQuestionIds.has(q.id));
       if (remaining.length === 0) {
         this.endGame();
@@ -304,8 +310,6 @@ class GameController implements IGameController {
 
       const players = this.buildSelectionPlayers();
       if (players.length === 0) {
-        // No profiled players — random pick (tag avoidance is skipped; it requires
-        // selectNextQuestion which needs at least one profiled player for scoring)
         question = remaining[Math.floor(Math.random() * remaining.length)];
       } else {
         question = selectNextQuestion(remaining, {
@@ -317,6 +321,13 @@ class GameController implements IGameController {
         });
       }
       this.usedQuestionIds.add(question.id);
+    } else {
+      // Configured (authored order) or casual (random from DB)
+      if (this.currentQuestionIndex >= this.questionPool.length) {
+        this.endGame();
+        return;
+      }
+      question = this.questionPool[this.currentQuestionIndex];
     }
 
     this.activeQuestion = question;
@@ -339,10 +350,16 @@ class GameController implements IGameController {
       this.store.dispatch(showMediaPreview(previewPayload));
       wsServer.broadcast({ type: 'MEDIA_PREVIEW', payload: previewPayload });
 
-      this.mediaPreviewTimeout = setTimeout(() => {
-        this.mediaPreviewTimeout = null;
-        this.sendQuestion(question);
-      }, previewDuration * 1000);
+      // Wait for the TV to signal the image has loaded (max 5s),
+      // then start the actual preview countdown.
+      this.waitingForMediaLoad = true;
+      this.pendingMediaQuestion = question;
+      this.pendingPreviewDuration = previewDuration;
+
+      this.mediaLoadWaitTimeout = setTimeout(() => {
+        this.mediaLoadWaitTimeout = null;
+        this.startPreviewCountdown();
+      }, 5000);
     } else {
       this.sendQuestion(question);
     }
@@ -384,6 +401,38 @@ class GameController implements IGameController {
         this.currentRoundDifficulties.set(player.id, absoluteDifficulty);
       }
     }
+  }
+
+  /**
+   * Signal that the media preview image has finished loading on the TV.
+   * Starts the preview countdown immediately instead of waiting for the 5s load timeout.
+   */
+  notifyMediaLoaded(): void {
+    if (!this.waitingForMediaLoad) return;
+    if (this.mediaLoadWaitTimeout) {
+      clearTimeout(this.mediaLoadWaitTimeout);
+      this.mediaLoadWaitTimeout = null;
+    }
+    this.startPreviewCountdown();
+  }
+
+  /**
+   * Begin the preview countdown after the image has loaded (or the load wait timed out).
+   */
+  private startPreviewCountdown(): void {
+    if (!this.waitingForMediaLoad) return;
+    this.waitingForMediaLoad = false;
+
+    const question = this.pendingMediaQuestion;
+    const previewDuration = this.pendingPreviewDuration;
+    this.pendingMediaQuestion = null;
+
+    if (!question) return;
+
+    this.mediaPreviewTimeout = setTimeout(() => {
+      this.mediaPreviewTimeout = null;
+      this.sendQuestion(question);
+    }, previewDuration * 1000);
   }
 
   /**
@@ -576,15 +625,17 @@ class GameController implements IGameController {
       },
     });
 
-    // Update tag scores for profiled players (async, don't block gameplay)
-    this.updateTagScoresAfterRound(currentQuestion, playerResults).catch((err) =>
-      console.error('Failed to update tag scores:', err),
-    );
-
     // Track question usage (fire-and-forget)
     questionsRepo
       .markQuestionAsked(getDb(), currentQuestion.id)
       .catch((err) => console.error('Failed to update question usage:', err));
+
+    // Update tag scores for profiled players (configured games only)
+    if (this.getState().game.config.gameType === 'configured') {
+      this.updateTagScoresAfterRound(currentQuestion, playerResults).catch((err) =>
+        console.error('Failed to update tag scores:', err),
+      );
+    }
 
     // Move to next question after showing results
     this.resultsTimeout = setTimeout(() => {
@@ -670,13 +721,13 @@ class GameController implements IGameController {
       },
     });
 
-    // Record game stats for all profiled players (fire-and-forget)
-    this.recordGameEnd(winner).catch((err) => console.error('Failed to record game end:', err));
-
-    // Increment games_played on all tag scores for decay tracking
-    this.incrementTagGamesPlayed().catch((err) =>
-      console.error('Failed to increment tag games played:', err),
-    );
+    // Record game stats and update tag decay (configured games only)
+    if (state.game.config.gameType === 'configured') {
+      this.recordGameEnd(winner).catch((err) => console.error('Failed to record game end:', err));
+      this.incrementTagGamesPlayed().catch((err) =>
+        console.error('Failed to increment tag games played:', err),
+      );
+    }
   }
 
   /**
@@ -772,6 +823,12 @@ class GameController implements IGameController {
   private clearAllTimers(): void {
     this.clearCountdownTimer();
     this.clearQuestionTimer();
+    if (this.mediaLoadWaitTimeout) {
+      clearTimeout(this.mediaLoadWaitTimeout);
+      this.mediaLoadWaitTimeout = null;
+    }
+    this.waitingForMediaLoad = false;
+    this.pendingMediaQuestion = null;
     if (this.mediaPreviewTimeout) {
       clearTimeout(this.mediaPreviewTimeout);
       this.mediaPreviewTimeout = null;
