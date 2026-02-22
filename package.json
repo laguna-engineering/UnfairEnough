@@ -21,7 +21,9 @@
     "format": "biome format --fix .",
     "clean:modules:reinstall": "rm -rf node_modules apps/*/node_modules packages/*/node_modules && yarn install",
     "test:e2e": "npx playwright test",
-    "test:e2e:ui": "npx playwright test --ui"
+    "test:e2e:ui": "npx playwright test --ui",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "resolutions": {
     "react": "19.1.0",
@@ -36,5 +38,11 @@
   "packageManager": "yarn@1.22.22",
   "engines": {
     "node": ">=24.0.0"
+  },
+  "version": "1.0.0",
+  "dependencies": {
+    "expo": "~54.0.33",
+    "react": "19.1.0",
+    "react-native": "0.81.5"
   }
 }

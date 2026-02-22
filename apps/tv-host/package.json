@@ -35,7 +35,7 @@
     "expo-linear-gradient": "^15.0.8",
     "expo-localization": "~16.0.0",
     "expo-network": "^8.0.8",
-    "expo-splash-screen": "~31.0.10",
+    "expo-modules-core": "~3.0.29",
     "expo-sqlite": "~15.1.2",
     "expo-status-bar": "~3.0.8",
     "i18next": "^24.0.0",
@@ -58,6 +58,11 @@
     "install": {
       "exclude": [
         "react-native"
+      ]
+    },
+    "autolinking": {
+      "exclude": [
+        "expo-splash-screen"
       ]
     }
   }
