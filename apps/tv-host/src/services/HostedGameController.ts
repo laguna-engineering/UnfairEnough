@@ -8,6 +8,7 @@ import {
   addPlayer,
   createStore,
   endGame,
+  nextQuestion,
   type RootState,
   removePlayer,
   resetGame,
@@ -194,10 +195,16 @@ export class HostedGameController implements IGameController {
       }
 
       case 'MEDIA_PREVIEW':
+        if (this.store.getState().game.phase === 'RESULTS') {
+          this.store.dispatch(nextQuestion());
+        }
         this.store.dispatch(showMediaPreview(message.payload));
         break;
 
       case 'QUESTION':
+        if (this.store.getState().game.phase === 'RESULTS') {
+          this.store.dispatch(nextQuestion());
+        }
         this.store.dispatch(showQuestion(message.payload));
         break;
 
