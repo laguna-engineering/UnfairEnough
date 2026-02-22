@@ -194,22 +194,23 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   winnerCard: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.xxl,
+    paddingVertical: spacing.lg,
     alignItems: 'center',
     marginBottom: spacing.xl,
   },
   winnerLabel: {
-    ...typography.h3,
+    ...typography.h2,
     color: colors.accentYellow,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
   winnerName: {
-    ...typography.h1,
+    ...typography.displayMedium,
     color: colors.textPrimary,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
   winnerScore: {
-    ...typography.h3,
+    ...typography.h2,
     color: colors.accentYellow,
   },
   podium: {

@@ -21,6 +21,7 @@ const styles = StyleSheet.create({
   container: {
     justifyContent: 'center',
     alignItems: 'center',
+    padding: spacing.xxl,
   },
   label: {
     ...typography.displayMedium,

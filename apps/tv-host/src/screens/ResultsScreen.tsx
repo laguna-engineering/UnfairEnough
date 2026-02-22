@@ -106,14 +106,16 @@ export const ResultsScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: {
-    padding: spacing.xl,
+    paddingTop: spacing.xl,
+    paddingHorizontal: spacing.xl,
   },
   content: {
     flex: 1,
     gap: spacing.lg,
   },
   correctAnswerCard: {
-    padding: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
     alignItems: 'center',
   },
   correctLabel: {
@@ -126,12 +128,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   answerKey: {
-    ...typography.displayLarge,
+    ...typography.displayMedium,
     marginRight: spacing.lg,
   },
   answerText: {
-    ...typography.displayMedium,
+    ...typography.h1,
     color: colors.textPrimary,
+    flexShrink: 1,
   },
   tagsRow: {
     flexDirection: 'row',
