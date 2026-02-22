@@ -26,7 +26,6 @@ export const GameOverScreen: React.FC = () => {
 
   const winner = rankings[0];
   const podium = rankings.slice(0, 3);
-  const rest = rankings.slice(3);
 
   const getRankColor = (rank: number) => {
     switch (rank) {
@@ -97,7 +96,7 @@ export const GameOverScreen: React.FC = () => {
                   name={podium[1].name}
                   color={getRankColor(2)}
                   emoji={emojiById.get(podium[1].id)}
-                  size="large"
+                  size="medium"
                   showScore
                   score={podium[1].score}
                 />
@@ -112,7 +111,7 @@ export const GameOverScreen: React.FC = () => {
                   name={podium[0].name}
                   color={getRankColor(1)}
                   emoji={emojiById.get(podium[0].id)}
-                  size="large"
+                  size="medium"
                   showScore
                   score={podium[0].score}
                 />
@@ -127,7 +126,7 @@ export const GameOverScreen: React.FC = () => {
                   name={podium[2].name}
                   color={getRankColor(3)}
                   emoji={emojiById.get(podium[2].id)}
-                  size="large"
+                  size="medium"
                   showScore
                   score={podium[2].score}
                 />
@@ -135,45 +134,30 @@ export const GameOverScreen: React.FC = () => {
               </View>
             )}
           </View>
-
-          {/* Remaining Players - 3-column grid */}
-          {rest.length > 0 && (
-            <View style={styles.restGrid}>
-              {rest.map((player) => (
-                <Card key={player.id} style={styles.restCard}>
-                  <Text style={styles.restRank}>#{player.rank}</Text>
-                  <Text style={styles.restName} numberOfLines={1}>
-                    {player.name}
-                  </Text>
-                  <Text style={styles.restScore}>{player.score}</Text>
-                </Card>
-              ))}
-            </View>
-          )}
         </View>
 
-        {/* Position Chart */}
-        {chartHistory.length > 1 && (
-          <View style={styles.rightColumn}>
-            <Text style={styles.chartTitle}>{t('results.positionChart')}</Text>
-            <PositionChart
-              players={chartPlayers}
-              positionHistory={chartHistory}
-              width={chartWidth * 0.45}
-              height={280}
-            />
-          </View>
-        )}
-      </View>
+        <View style={styles.rightColumn}>
+          {/* Position Chart */}
+          {chartHistory.length > 1 && (
+            <>
+              <Text style={styles.chartTitle}>{t('results.positionChart')}</Text>
+              <PositionChart
+                players={chartPlayers}
+                positionHistory={chartHistory}
+                width={chartWidth * 0.4}
+                height={230}
+              />
+            </>
+          )}
 
-      {/* Play Again Button */}
-      <View style={styles.buttonContainer}>
-        <Button
-          title={t('results.playAgain')}
-          onPress={resetGame}
-          size="large"
-          style={styles.playAgainButton}
-        />
+          {/* Play Again Button */}
+          <Button
+            title={t('results.playAgain')}
+            onPress={resetGame}
+            size="large"
+            style={styles.playAgainButton}
+          />
+        </View>
       </View>
     </ScreenBackground>
   );
@@ -210,9 +194,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   winnerCard: {
-    padding: spacing.lg,
+    padding: spacing.md,
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
   winnerLabel: {
     ...typography.h3,
@@ -220,26 +204,26 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   winnerName: {
-    ...typography.displayMedium,
+    ...typography.h1,
     color: colors.textPrimary,
     marginBottom: spacing.xs,
   },
   winnerScore: {
-    ...typography.h2,
+    ...typography.h3,
     color: colors.accentYellow,
   },
   podium: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'center',
-    gap: spacing.lg,
-    marginBottom: spacing.lg,
+    gap: spacing.md,
+    marginBottom: spacing.md,
   },
   podiumSpot: {
     alignItems: 'center',
   },
   firstPlace: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   secondPlace: {
     marginBottom: spacing.md,
@@ -251,36 +235,8 @@ const styles = StyleSheet.create({
     ...typography.h2,
     marginTop: spacing.sm,
   },
-  restGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  restCard: {
-    padding: spacing.sm,
-    alignItems: 'center',
-    minWidth: 100,
-    width: '30%',
-  },
-  restRank: {
-    ...typography.h3,
-    color: colors.textSecondary,
-  },
-  restName: {
-    ...typography.bodySmall,
-    color: colors.textPrimary,
-    marginVertical: spacing.xs,
-    textAlign: 'center',
-  },
-  restScore: {
-    ...typography.label,
-    color: colors.accentYellow,
-  },
-  buttonContainer: {
-    marginTop: spacing.lg,
-  },
   playAgainButton: {
     minWidth: 200,
+    marginTop: spacing.lg,
   },
 });
