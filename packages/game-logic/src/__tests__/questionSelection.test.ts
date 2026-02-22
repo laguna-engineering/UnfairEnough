@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { QuestionWithMeta } from '@unfairenough/db';
 import type { RoundSelectionContext, SelectableQuestion } from '../utils/questionSelection';
-import { buildQuestionPool, selectNextQuestion } from '../utils/questionSelection';
+import { buildQuestionPool, isThematicSet, selectNextQuestion } from '../utils/questionSelection';
 
 function makeQuestion(id: string, tags: string[] = [], difficulty = 3): QuestionWithMeta {
   return {
@@ -508,5 +508,175 @@ describe('buildQuestionPool', () => {
     // All three unique difficulties available (1, 3, 5) should be represented
     const uniqueDiffs = new Set(diffs);
     expect(uniqueDiffs.size).toBe(3);
+  });
+});
+
+// ── selectNextQuestion — tag avoidance ──────────────────────────────
+
+describe('selectNextQuestion — tag avoidance', () => {
+  const baseContext: Omit<RoundSelectionContext, 'previousQuestionTags' | 'isThematic'> = {
+    players: [
+      { profileId: 'p1', name: 'Alice', currentScore: 200 },
+      { profileId: 'p2', name: 'Bob', currentScore: 800 },
+    ],
+    playerTagScores: new Map(),
+  };
+
+  test('avoids same-tag question when alternatives exist', () => {
+    const qA = makeMinimalQuestion('A', ['gaming']);
+    const qB = makeMinimalQuestion('B', ['science']);
+    const qC = makeMinimalQuestion('C', ['gaming', 'history']);
+    const pool = [qA, qB, qC];
+
+    const counts = new Map<string, number>();
+    for (let i = 0; i < 100; i++) {
+      const q = selectNextQuestion(pool, {
+        ...baseContext,
+        previousQuestionTags: ['gaming'],
+      });
+      counts.set(q.id, (counts.get(q.id) ?? 0) + 1);
+    }
+    // Only B has no gaming overlap
+    expect(counts.get('B')).toBe(100);
+    expect(counts.get('A') ?? 0).toBe(0);
+    expect(counts.get('C') ?? 0).toBe(0);
+  });
+
+  test('fallback when all candidates overlap with previous tags', () => {
+    const q1 = makeMinimalQuestion('q1', ['gaming']);
+    const q2 = makeMinimalQuestion('q2', ['gaming']);
+    const pool = [q1, q2];
+
+    const results = new Set<string>();
+    for (let i = 0; i < 50; i++) {
+      results.add(
+        selectNextQuestion(pool, {
+          ...baseContext,
+          previousQuestionTags: ['gaming'],
+        }).id,
+      );
+    }
+    // Both should be selected (fallback to full pool)
+    expect(results.size).toBe(2);
+  });
+
+  test('thematic set skips tag-avoidance filter', () => {
+    const q1 = makeMinimalQuestion('q1', ['geography']);
+    const q2 = makeMinimalQuestion('q2', ['geography']);
+    const q3 = makeMinimalQuestion('q3', ['geography']);
+    const pool = [q1, q2, q3];
+
+    const results = new Set<string>();
+    for (let i = 0; i < 100; i++) {
+      results.add(
+        selectNextQuestion(pool, {
+          ...baseContext,
+          previousQuestionTags: ['geography'],
+          isThematic: true,
+        }).id,
+      );
+    }
+    // All 3 should be candidates (filter not applied)
+    expect(results.size).toBe(3);
+  });
+
+  test('no previousQuestionTags → no filtering', () => {
+    const qA = makeMinimalQuestion('A', ['gaming']);
+    const qB = makeMinimalQuestion('B', ['science']);
+    const qC = makeMinimalQuestion('C', ['gaming', 'history']);
+    const pool = [qA, qB, qC];
+
+    const results = new Set<string>();
+    for (let i = 0; i < 100; i++) {
+      results.add(selectNextQuestion(pool, baseContext).id);
+    }
+    // All 3 should be selected over multiple runs
+    expect(results.size).toBe(3);
+  });
+
+  test('multi-tag overlap: only non-overlapping question selected', () => {
+    const q1 = makeMinimalQuestion('q1', ['science']);
+    const q2 = makeMinimalQuestion('q2', ['history', 'art']);
+    const q3 = makeMinimalQuestion('q3', ['gaming']);
+    const pool = [q1, q2, q3];
+
+    const counts = new Map<string, number>();
+    for (let i = 0; i < 100; i++) {
+      const q = selectNextQuestion(pool, {
+        ...baseContext,
+        previousQuestionTags: ['gaming', 'history'],
+      });
+      counts.set(q.id, (counts.get(q.id) ?? 0) + 1);
+    }
+    // Only q1 ("science") has no overlap with ["gaming", "history"]
+    expect(counts.get('q1')).toBe(100);
+    expect(counts.get('q2') ?? 0).toBe(0);
+    expect(counts.get('q3') ?? 0).toBe(0);
+  });
+
+  test('catch-up scoring still works after tag-avoidance filtering', () => {
+    // Alice trails, is great at science → catch-up should prefer science Q
+    // Previous question was gaming → gaming candidates removed
+    const scienceQ = makeMinimalQuestion('science', ['science']);
+    const historyQ = makeMinimalQuestion('history', ['history']);
+    const gamingQ = makeMinimalQuestion('gaming', ['gaming']);
+    const pool = [scienceQ, historyQ, gamingQ];
+
+    const context: RoundSelectionContext = {
+      players: [
+        { profileId: 'alice', name: 'Alice', currentScore: 200 },
+        { profileId: 'bob', name: 'Bob', currentScore: 800 },
+      ],
+      playerTagScores: new Map([
+        ['alice', new Map([['science', 1800]])],
+        ['bob', new Map([['history', 1800]])],
+      ]),
+      previousQuestionTags: ['gaming'],
+    };
+
+    let scienceCount = 0;
+    for (let i = 0; i < 200; i++) {
+      const q = selectNextQuestion(pool, context);
+      if (q.id === 'science') scienceCount++;
+      // gaming should never be selected (filtered out)
+      expect(q.id).not.toBe('gaming');
+    }
+    // science should be preferred due to catch-up
+    expect(scienceCount).toBeGreaterThan(100);
+  });
+});
+
+// ── isThematicSet ───────────────────────────────────────────────────
+
+describe('isThematicSet', () => {
+  test('single tag across all questions → true', () => {
+    const questions = [
+      makeMinimalQuestion('q1', ['geography']),
+      makeMinimalQuestion('q2', ['geography']),
+      makeMinimalQuestion('q3', ['geography']),
+    ];
+    expect(isThematicSet(questions)).toBe(true);
+  });
+
+  test('multiple different tags → false', () => {
+    const questions = [
+      makeMinimalQuestion('q1', ['geography']),
+      makeMinimalQuestion('q2', ['history']),
+    ];
+    expect(isThematicSet(questions)).toBe(false);
+  });
+
+  test('empty tags → true (0 unique tags ≤ 1)', () => {
+    const questions = [makeMinimalQuestion('q1', []), makeMinimalQuestion('q2', [])];
+    expect(isThematicSet(questions)).toBe(true);
+  });
+
+  test('multi-tag questions with shared tag but varying others → false', () => {
+    const questions = [
+      makeMinimalQuestion('q1', ['trivia', 'science']),
+      makeMinimalQuestion('q2', ['trivia', 'history']),
+      makeMinimalQuestion('q3', ['trivia', 'gaming']),
+    ];
+    expect(isThematicSet(questions)).toBe(false);
   });
 });

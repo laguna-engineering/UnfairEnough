@@ -157,6 +157,14 @@ function selectDiverse<T extends SelectableQuestion>(
   return selected;
 }
 
+// ── Thematic-set detection ───────────────────────────────────────────
+
+/** True when every question in the set shares a single tag universe (only 1 unique tag). */
+export function isThematicSet(questions: SelectableQuestion[]): boolean {
+  const allTags = new Set(questions.flatMap((q) => q.tags.map((t) => t.toLowerCase().trim())));
+  return allTags.size <= 1;
+}
+
 // ── Per-round selection ──────────────────────────────────────────────
 
 export interface RoundSelectionPlayer {
@@ -170,6 +178,8 @@ export interface RoundSelectionContext {
   playerTagScores: Map<string, Map<string, number>>; // profileId -> tag -> decayed score
   roundIndex?: number; // 0-based current round; omit for full catch-up (backward compat)
   totalRounds?: number;
+  previousQuestionTags?: string[]; // tags of the last served question
+  isThematic?: boolean; // skip tag-avoidance for single-tag sets
 }
 
 /**
@@ -192,13 +202,30 @@ export function selectNextQuestion<T extends SelectableQuestion>(
 ): T {
   if (remainingPool.length <= 1) return remainingPool[0];
 
+  // ── Tag-avoidance filter ──────────────────────────────────
+  const { previousQuestionTags, isThematic } = context;
+  let pool = remainingPool;
+
+  if (!isThematic && previousQuestionTags && previousQuestionTags.length > 0) {
+    const prevTags = new Set(previousQuestionTags.map((t) => t.toLowerCase().trim()));
+    const filtered = remainingPool.filter(
+      (q) => !q.tags.some((t) => prevTags.has(t.toLowerCase().trim())),
+    );
+    if (filtered.length > 0) {
+      pool = filtered;
+    }
+    // else: all candidates overlap → keep full remainingPool (fallback)
+  }
+
+  if (pool.length === 1) return pool[0];
+
   const { players, playerTagScores, roundIndex, totalRounds } = context;
 
   const catchUpInfluence = computeCatchUpInfluence(roundIndex, totalRounds);
 
   // Single player or zero influence → random
   if (players.length <= 1 || catchUpInfluence === 0) {
-    return remainingPool[Math.floor(random() * remainingPool.length)];
+    return pool[Math.floor(random() * pool.length)];
   }
 
   // Identify trailing players (below average score)
@@ -207,13 +234,13 @@ export function selectNextQuestion<T extends SelectableQuestion>(
 
   // All tied, first round, or everyone trailing → random
   if (trailingPlayers.length === 0 || trailingPlayers.length === players.length) {
-    return remainingPool[Math.floor(random() * remainingPool.length)];
+    return pool[Math.floor(random() * pool.length)];
   }
 
   const leadingPlayers = players.filter((p) => p.currentScore >= avgScore);
 
   // Score each candidate question
-  const scored = remainingPool.map((q) => {
+  const scored = pool.map((q) => {
     const tags = q.tags ?? [];
 
     let catchUpScore = 0;

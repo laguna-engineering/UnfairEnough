@@ -20,6 +20,7 @@ import { generatePlayerId, parseClientMessage } from '@unfairenough/ws-protocol'
 import type { ServerWebSocket } from 'bun';
 import {
   buildQuestionPool,
+  isThematicSet,
   selectNextQuestion,
 } from '../../../packages/game-logic/src/utils/questionSelection';
 import {
@@ -88,6 +89,7 @@ export class GameRoom {
   // Game state
   private questions: QuestionWithMeta[] = [];
   private questionPool: QuestionWithMeta[] = [];
+  private isThematicQuestionSet = false;
   private usedQuestionIds = new Set<string>();
   private currentQuestionIndex = 0;
   private activeQuestion: QuestionWithMeta | null = null;
@@ -586,6 +588,10 @@ export class GameRoom {
       this.questions = this.questionPool.slice(0, requestedCount);
     }
     if (this.questions.length === 0 && this.questionPool.length === 0) return;
+
+    // Detect thematic sets (single unique tag) to skip tag-avoidance filtering
+    const questionSource = this.questionPool.length > 0 ? this.questionPool : this.questions;
+    this.isThematicQuestionSet = isThematicSet(questionSource);
 
     this.currentQuestionIndex = 0;
     this.positionHistory = [];
@@ -1096,6 +1102,8 @@ export class GameRoom {
       playerTagScores: this.playerTagScores,
       roundIndex: this.currentQuestionIndex,
       totalRounds: this.totalQuestionCount,
+      previousQuestionTags: this.activeQuestion?.tags,
+      isThematic: this.isThematicQuestionSet,
     });
   }
 
@@ -1167,6 +1175,7 @@ export class GameRoom {
     this.phase = 'LOBBY';
     this.questions = [];
     this.questionPool = [];
+    this.isThematicQuestionSet = false;
     this.usedQuestionIds.clear();
     this.currentQuestionIndex = 0;
     this.answers.clear();

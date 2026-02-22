@@ -23,6 +23,7 @@ import {
   difficultyMultiplier,
   ELO_BASELINE,
   endGame,
+  isThematicSet,
   nextQuestion,
   playersSelectors,
   type RootState,
@@ -64,6 +65,7 @@ class GameController implements IGameController {
 
   // Question state — keep full QuestionWithMeta for tags, difficulty, etc.
   private questionPool: QuestionWithMeta[] = [];
+  private isThematicQuestionSet = false;
   private usedQuestionIds = new Set<string>();
   private currentQuestionIndex = 0;
   private activeQuestion: QuestionWithMeta | null = null;
@@ -213,6 +215,7 @@ class GameController implements IGameController {
       return;
     }
 
+    this.isThematicQuestionSet = isThematicSet(this.questionPool);
     this.currentQuestionIndex = 0;
     this.usedQuestionIds.clear();
 
@@ -306,6 +309,8 @@ class GameController implements IGameController {
           playerTagScores: this.playerTagScores,
           roundIndex: this.currentQuestionIndex,
           totalRounds: this.totalQuestionCount,
+          previousQuestionTags: this.activeQuestion?.tags,
+          isThematic: this.isThematicQuestionSet,
         });
       }
       this.usedQuestionIds.add(question.id);
@@ -712,6 +717,7 @@ class GameController implements IGameController {
     this.clearAllTimers();
     this.store.dispatch(resetGame());
     this.questionPool = [];
+    this.isThematicQuestionSet = false;
     this.usedQuestionIds.clear();
     this.currentQuestionIndex = 0;
     this.activeQuestion = null;
