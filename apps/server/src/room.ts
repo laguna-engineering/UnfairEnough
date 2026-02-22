@@ -525,7 +525,7 @@ export class GameRoom {
 
       this.sendToHost({
         type: 'GAME_CONFIGURED',
-        payload: { gameType: 'configured', questionCount },
+        payload: { gameType: 'configured', questionCount, questionSetId: payload.questionSetId },
       });
     } else {
       this.gameType = 'casual';
@@ -572,8 +572,16 @@ export class GameRoom {
       let rawPool: QuestionWithMeta[];
 
       if (this.isMetaSet && this.questionSetId) {
-        // Meta set: load all questions from child sets
-        rawPool = await questionsRepo.getQuestionsByMetaSet(this.db, this.questionSetId);
+        // Meta set: load all questions from child sets (ordered by freshness)
+        const allMetaQuestions = await questionsRepo.getQuestionsByMetaSet(
+          this.db,
+          this.questionSetId,
+        );
+        // Trim to 3× requested to prefer least-recently-asked questions
+        rawPool =
+          allMetaQuestions.length > requestedCount * 3
+            ? allMetaQuestions.slice(0, requestedCount * 3)
+            : allMetaQuestions;
       } else {
         // Casual mode: load 3× from the general pool
         rawPool = await questionsRepo.getRandomQuestions(this.db, requestedCount * 3);

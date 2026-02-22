@@ -195,8 +195,13 @@ class GameController implements IGameController {
       let rawPool: QuestionWithMeta[];
 
       if (this.isMetaSet && questionSetId) {
-        // Meta set: load all questions from child sets
-        rawPool = await questionsRepo.getQuestionsByMetaSet(db, questionSetId);
+        // Meta set: load all questions from child sets (ordered by freshness)
+        const allMetaQuestions = await questionsRepo.getQuestionsByMetaSet(db, questionSetId);
+        // Trim to 3× requested to prefer least-recently-asked questions
+        rawPool =
+          allMetaQuestions.length > totalQuestions * 3
+            ? allMetaQuestions.slice(0, totalQuestions * 3)
+            : allMetaQuestions;
       } else {
         // Casual mode: load 3× from the general pool
         rawPool = await questionsRepo.getRandomQuestions(db, totalQuestions * 3);

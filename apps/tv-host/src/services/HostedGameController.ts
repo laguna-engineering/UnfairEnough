@@ -241,6 +241,7 @@ export class HostedGameController implements IGameController {
         this.store.dispatch(
           updateConfig({
             gameType: message.payload.gameType as 'casual' | 'configured',
+            questionSetId: message.payload.questionSetId,
             totalQuestions: message.payload.questionCount,
           }),
         );

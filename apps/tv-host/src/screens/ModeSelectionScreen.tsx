@@ -20,6 +20,7 @@ export const ModeSelectionScreen: React.FC<Props> = ({ onSelectLocal, onSelectHo
 
       <View style={styles.cardsRow}>
         <Pressable
+          hasTVPreferredFocus
           style={(state) => [
             styles.cardWrapper,
             (state as any).focused && styles.focused,

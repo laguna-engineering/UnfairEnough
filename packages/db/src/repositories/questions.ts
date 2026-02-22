@@ -307,7 +307,7 @@ export async function getQuestionsByMetaSet(
      JOIN meta_set_children msc ON q.set_id = msc.child_set_id
      JOIN question_sets cs ON cs.id = msc.child_set_id AND cs.deleted_at IS NULL
      WHERE msc.meta_set_id = ?
-     ORDER BY RANDOM()`,
+     ORDER BY q.last_asked_at IS NOT NULL, q.last_asked_at ASC, RANDOM()`,
     [metaSetId],
   );
   return rows.map(rowToQuestionWithMeta);

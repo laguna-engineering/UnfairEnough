@@ -28,7 +28,10 @@ export type ServerMessage =
   | { type: 'REVEALING' }
   | { type: 'ROUND_END'; payload: RoundResult }
   | { type: 'GAME_OVER'; payload: GameResult }
-  | { type: 'GAME_CONFIGURED'; payload: { gameType: string; questionCount: number } }
+  | {
+      type: 'GAME_CONFIGURED';
+      payload: { gameType: string; questionCount: number; questionSetId?: string };
+    }
   | { type: 'PONG' }
   | { type: 'ERROR'; payload: { code: string; message: string } };
 

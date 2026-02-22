@@ -133,26 +133,15 @@ const MOCK_QUESTION_SETS: QuestionSetWithMeta[] = [
 
 export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
   const { t, i18n } = useTranslation();
-  const {
-    state,
-    startGame,
-    configureGame,
-    setLanguage,
-    roomCode,
-    qrUrl,
-    gameConfig,
-    mode,
-    serverUrl,
-    serverPort,
-    localIp,
-  } = useGameController();
+  const { state, startGame, configureGame, setLanguage, qrUrl, gameConfig, mode, serverUrl } =
+    useGameController();
   const [selectedMode, setSelectedMode] = useState<'casual' | 'configured'>(
     gameConfig.gameType ?? 'casual',
   );
   const [showImportModal, setShowImportModal] = useState(false);
   const [questionSets, setQuestionSets] = useState<QuestionSetWithMeta[]>(MOCK_QUESTION_SETS);
   const [totalQuestions, setTotalQuestions] = useState(
-    MOCK_QUESTION_SETS.reduce((sum, s) => sum + s.questionCount, 0),
+    MOCK_QUESTION_SETS.filter((s) => !s.isMeta).reduce((sum, s) => sum + s.questionCount, 0),
   );
 
   const loadQuestionSets = useCallback(async () => {
@@ -170,10 +159,9 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
         if (res.ok) {
           const data = await res.json();
           setQuestionSets(data.sets || []);
-          const total = (data.sets || []).reduce(
-            (sum: number, s: QuestionSetWithMeta) => sum + (s.questionCount ?? 0),
-            0,
-          );
+          const total = (data.sets || [])
+            .filter((s: QuestionSetWithMeta) => !s.isMeta)
+            .reduce((sum: number, s: QuestionSetWithMeta) => sum + (s.questionCount ?? 0), 0);
           setTotalQuestions(total);
         }
       }
@@ -432,17 +420,6 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                     color={colors.background}
                   />
                 </View>
-                <View style={styles.codeContainer}>
-                  <Text style={styles.codeLabel}>
-                    {t('lobby.orEnterCode', { code: '' }).replace(': ', '')}
-                  </Text>
-                  <Text style={styles.roomCode}>{roomCode}</Text>
-                  {mode === 'local' && localIp && serverPort ? (
-                    <Text style={styles.addressText}>
-                      {localIp}:{serverPort}
-                    </Text>
-                  ) : null}
-                </View>
               </>
             ) : (
               <View style={styles.loadingContainer}>
@@ -556,26 +533,6 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     backgroundColor: 'white',
     borderRadius: borderRadius.md,
-  },
-  codeContainer: {
-    marginTop: spacing.md,
-    alignItems: 'center',
-  },
-  codeLabel: {
-    ...typography.label,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  roomCode: {
-    ...typography.h2,
-    color: colors.accentYellow,
-    letterSpacing: 4,
-  },
-  addressText: {
-    ...typography.label,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    fontFamily: 'monospace',
   },
   loadingContainer: {
     width: QR_SIZE,
