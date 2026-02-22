@@ -1,11 +1,12 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import type React from 'react';
+import { forwardRef } from 'react';
 import {
   ActivityIndicator,
   Pressable,
   StyleSheet,
   Text,
   type TextStyle,
+  type View,
   type ViewStyle,
 } from 'react-native';
 import { colors, gradients } from '../theme/colors';
@@ -21,97 +22,123 @@ export interface ButtonProps {
   loading?: boolean;
   style?: ViewStyle;
   textStyle?: TextStyle;
+  hasTVPreferredFocus?: boolean;
+  nextFocusUp?: number;
+  nextFocusDown?: number;
+  nextFocusLeft?: number;
+  nextFocusRight?: number;
 }
 
-export const Button: React.FC<ButtonProps> = ({
-  title,
-  onPress,
-  variant = 'primary',
-  size = 'medium',
-  disabled = false,
-  loading = false,
-  style,
-  textStyle,
-}) => {
-  const getGradientColors = () => {
-    if (variant === 'primary') return gradients.primary;
-    if (variant === 'secondary') return gradients.secondary;
-    return null;
-  };
+export const Button = forwardRef<View, ButtonProps>(
+  (
+    {
+      title,
+      onPress,
+      variant = 'primary',
+      size = 'medium',
+      disabled = false,
+      loading = false,
+      style,
+      textStyle,
+      hasTVPreferredFocus,
+      nextFocusUp,
+      nextFocusDown,
+      nextFocusLeft,
+      nextFocusRight,
+    },
+    ref,
+  ) => {
+    const getGradientColors = () => {
+      if (variant === 'primary') return gradients.primary;
+      if (variant === 'secondary') return gradients.secondary;
+      return null;
+    };
 
-  const getBackgroundColor = () => {
-    if (disabled) return colors.card;
-    if (variant === 'outline') return 'transparent';
-    return colors.primary;
-  };
+    const getBackgroundColor = () => {
+      if (disabled) return colors.card;
+      if (variant === 'outline') return 'transparent';
+      return colors.primary;
+    };
 
-  const getTextColor = () => {
-    if (disabled) return colors.textSecondary;
-    if (variant === 'outline') return colors.primary;
-    return colors.textPrimary;
-  };
+    const getTextColor = () => {
+      if (disabled) return colors.textSecondary;
+      if (variant === 'outline') return colors.primary;
+      return colors.textPrimary;
+    };
 
-  const getSizeStyles = (): ViewStyle => {
-    switch (size) {
-      case 'small':
-        return { paddingVertical: spacing.sm, paddingHorizontal: spacing.md };
-      case 'large':
-        return { paddingVertical: spacing.lg, paddingHorizontal: spacing.xl };
-      default:
-        return { paddingVertical: spacing.md, paddingHorizontal: spacing.lg };
+    const getSizeStyles = (): ViewStyle => {
+      switch (size) {
+        case 'small':
+          return { paddingVertical: spacing.sm, paddingHorizontal: spacing.md };
+        case 'large':
+          return { paddingVertical: spacing.lg, paddingHorizontal: spacing.xl };
+        default:
+          return { paddingVertical: spacing.md, paddingHorizontal: spacing.lg };
+      }
+    };
+
+    const content = loading ? (
+      <ActivityIndicator color={getTextColor()} />
+    ) : (
+      <Text style={[typography.button, { color: getTextColor() }, textStyle]}>{title}</Text>
+    );
+
+    const tvProps = {
+      hasTVPreferredFocus,
+      nextFocusUp,
+      nextFocusDown,
+      nextFocusLeft,
+      nextFocusRight,
+    };
+    const gradientColors = !disabled ? getGradientColors() : null;
+
+    if (gradientColors) {
+      return (
+        <Pressable
+          ref={ref}
+          onPress={onPress}
+          disabled={disabled || loading}
+          {...tvProps}
+          style={(state) => [
+            styles.gradientWrapper,
+            style,
+            (state as any).focused && styles.focused,
+            state.pressed && styles.pressed,
+          ]}
+        >
+          <LinearGradient
+            colors={gradientColors}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={[styles.gradientInner, getSizeStyles()]}
+          >
+            {content}
+          </LinearGradient>
+        </Pressable>
+      );
     }
-  };
 
-  const content = loading ? (
-    <ActivityIndicator color={getTextColor()} />
-  ) : (
-    <Text style={[typography.button, { color: getTextColor() }, textStyle]}>{title}</Text>
-  );
-
-  const gradientColors = !disabled ? getGradientColors() : null;
-
-  if (gradientColors) {
     return (
       <Pressable
-        onPress={onPress}
-        disabled={disabled || loading}
+        ref={ref}
         style={(state) => [
-          styles.gradientWrapper,
+          styles.button,
+          getSizeStyles(),
+          { backgroundColor: getBackgroundColor() },
+          variant === 'outline' && styles.outline,
           style,
           (state as any).focused && styles.focused,
           state.pressed && styles.pressed,
         ]}
+        onPress={onPress}
+        disabled={disabled || loading}
+        {...tvProps}
       >
-        <LinearGradient
-          colors={gradientColors}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={[styles.gradientInner, getSizeStyles()]}
-        >
-          {content}
-        </LinearGradient>
+        {content}
       </Pressable>
     );
-  }
-
-  return (
-    <Pressable
-      style={(state) => [
-        styles.button,
-        getSizeStyles(),
-        { backgroundColor: getBackgroundColor() },
-        variant === 'outline' && styles.outline,
-        style,
-        (state as any).focused && styles.focused,
-        state.pressed && styles.pressed,
-      ]}
-      onPress={onPress}
-      disabled={disabled || loading}
-    >
-      {content}
-    </Pressable>
-  );
-};
+  },
+);
 
 const styles = StyleSheet.create({
   button: {

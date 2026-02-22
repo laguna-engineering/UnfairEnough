@@ -12,8 +12,8 @@ import {
   typography,
 } from '@unfairenough/ui';
 import type React from 'react';
-import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { findNodeHandle, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useGameController } from '../hooks/useGameController';
 import { getDb } from '../services/database';
@@ -204,6 +204,28 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
     [configureGame],
   );
 
+  // TV focus refs
+  const casualRef = useRef<View>(null);
+  const configuredRef = useRef<View>(null);
+  const startRef = useRef<View>(null);
+  const enRef = useRef<View>(null);
+  const [focusTags, setFocusTags] = useState<{
+    configured?: number;
+    start?: number;
+    en?: number;
+  }>({});
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setFocusTags({
+        configured: findNodeHandle(configuredRef.current) ?? undefined,
+        start: findNodeHandle(startRef.current) ?? undefined,
+        en: findNodeHandle(enRef.current) ?? undefined,
+      });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
   const players = playersSelectors.selectAll(state.players);
   const playerCount = players.length;
   const canStart = playerCount >= state.game.config.minPlayers;
@@ -232,11 +254,14 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
             {LANGUAGES.map((lang) => (
               <Pressable
                 key={lang.code}
+                ref={lang.code === 'en' ? enRef : undefined}
                 onPress={() => handleLanguageChange(lang.code)}
+                nextFocusDown={focusTags.start}
                 style={(state) => [
                   styles.languageButton,
                   i18n.language === lang.code && styles.languageButtonActive,
                   (state as any).focused && styles.focused,
+                  (state as any).focused && styles.focusedScale,
                   state.pressed && styles.pressed,
                 ]}
               >
@@ -265,7 +290,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
             </Text>
 
             <View style={styles.playersList}>
-              {players.slice(0, playerCount > 8 ? 7 : 8).map((player) => (
+              {players.slice(0, playerCount > 7 ? 6 : 7).map((player) => (
                 <PlayerAvatar
                   key={player.id}
                   name={player.name}
@@ -274,9 +299,9 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                   size="small"
                 />
               ))}
-              {playerCount > 8 && (
+              {playerCount > 7 && (
                 <View style={styles.overflowBadge}>
-                  <Text style={styles.overflowText}>+{playerCount - 7}</Text>
+                  <Text style={styles.overflowText}>+{playerCount - 6}</Text>
                 </View>
               )}
               {players.length === 0 && (
@@ -295,6 +320,8 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
             </View>
             <View style={styles.gameModeButtons}>
               <Pressable
+                ref={casualRef}
+                hasTVPreferredFocus
                 onPress={() => handleModeChange('casual')}
                 style={(state) => [
                   styles.gameModeButton,
@@ -313,7 +340,9 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                 </Text>
               </Pressable>
               <Pressable
+                ref={configuredRef}
                 onPress={() => handleModeChange('configured')}
+                nextFocusRight={focusTags.start}
                 style={(state) => [
                   styles.gameModeButton,
                   selectedMode === 'configured' && styles.gameModeButtonActive,
@@ -359,6 +388,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                     <Pressable
                       key={set.id}
                       onPress={() => configureGame('configured', set.id)}
+                      nextFocusRight={focusTags.start}
                       style={(pressState) => [
                         styles.setCard,
                         set.isMeta && styles.setCardMeta,
@@ -424,11 +454,14 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
           {/* Start Button */}
           <View style={styles.startButtonContainer}>
             <Button
+              ref={startRef}
               title={t('lobby.startGame')}
               onPress={startGame}
               disabled={!canStart}
               size="large"
               style={styles.startButton}
+              nextFocusLeft={focusTags.configured}
+              nextFocusUp={focusTags.en}
             />
             {!canStart && playerCount > 0 && (
               <Text style={styles.hintText}>
@@ -459,7 +492,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xl,
   },
   title: {
     ...typography.displayMedium,
@@ -701,6 +734,9 @@ const styles = StyleSheet.create({
   },
   focused: {
     borderColor: colors.primary,
+  },
+  focusedScale: {
+    transform: [{ scale: 1.1 }],
   },
   pressed: {
     opacity: 0.8,
