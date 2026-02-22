@@ -717,7 +717,6 @@ class GameController implements IGameController {
     this.usedQuestionIds.clear();
     this.currentQuestionIndex = 0;
     this.activeQuestion = null;
-    this.isMetaSet = false;
     this.playerTagScores.clear();
     this.currentRoundDifficulties.clear();
   }

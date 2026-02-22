@@ -1175,11 +1175,6 @@ export class GameRoom {
     this.positionHistory = [];
     this.activeQuestion = null;
     this.gameId = null;
-    this.gameType = 'casual';
-    this.questionSetId = null;
-    this.isMetaSet = false;
-    this.configuredTotalQuestions = null;
-    this.configuredTimeLimit = null;
     this.configurePromise = null;
     this.playerTagScores.clear();
     this.currentRoundDifficulties.clear();
