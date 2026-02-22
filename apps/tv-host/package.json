@@ -4,11 +4,18 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "start": "EXPO_TV=1 expo start --port 8082",
+    "start": "EXPO_TV=1 expo start --dev-client --port 8082",
     "android": "EXPO_TV=1 expo run:android --port 8082",
     "ios": "EXPO_TV=1 expo run:ios --port 8082",
     "web": "expo start --web --port 8082",
-    "prebuild": "EXPO_TV=1 expo prebuild --clean"
+    "prebuild": "EXPO_TV=1 expo prebuild --clean",
+    "preview:lobby": "adb -s ${ADB_SERIAL:-emulator-5554} shell am force-stop com.unfairenough.tvhost && adb -s ${ADB_SERIAL:-emulator-5554} shell am start -a android.intent.action.VIEW -d 'unfairenough-tv://preview?phase=LOBBY'",
+    "preview:countdown": "adb -s ${ADB_SERIAL:-emulator-5554} shell am force-stop com.unfairenough.tvhost && adb -s ${ADB_SERIAL:-emulator-5554} shell am start -a android.intent.action.VIEW -d 'unfairenough-tv://preview?phase=COUNTDOWN'",
+    "preview:media": "adb -s ${ADB_SERIAL:-emulator-5554} shell am force-stop com.unfairenough.tvhost && adb -s ${ADB_SERIAL:-emulator-5554} shell am start -a android.intent.action.VIEW -d 'unfairenough-tv://preview?phase=MEDIA_PREVIEW'",
+    "preview:question": "adb -s ${ADB_SERIAL:-emulator-5554} shell am force-stop com.unfairenough.tvhost && adb -s ${ADB_SERIAL:-emulator-5554} shell am start -a android.intent.action.VIEW -d 'unfairenough-tv://preview?phase=QUESTION'",
+    "preview:revealing": "adb -s ${ADB_SERIAL:-emulator-5554} shell am force-stop com.unfairenough.tvhost && adb -s ${ADB_SERIAL:-emulator-5554} shell am start -a android.intent.action.VIEW -d 'unfairenough-tv://preview?phase=REVEALING'",
+    "preview:results": "adb -s ${ADB_SERIAL:-emulator-5554} shell am force-stop com.unfairenough.tvhost && adb -s ${ADB_SERIAL:-emulator-5554} shell am start -a android.intent.action.VIEW -d 'unfairenough-tv://preview?phase=RESULTS'",
+    "preview:gameover": "adb -s ${ADB_SERIAL:-emulator-5554} shell am force-stop com.unfairenough.tvhost && adb -s ${ADB_SERIAL:-emulator-5554} shell am start -a android.intent.action.VIEW -d 'unfairenough-tv://preview?phase=GAME_OVER'"
   },
   "dependencies": {
     "@expo-google-fonts/nunito": "^0.4.2",
