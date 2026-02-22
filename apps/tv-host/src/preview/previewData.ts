@@ -75,42 +75,43 @@ function buildMockAnswers(): Record<
   };
 }
 
-const sampleQ = sampleQuestions[0];
-const MOCK_QUESTION = {
-  id: sampleQ.id,
-  text: sampleQ.text,
-  options: sampleQ.options,
-  timeLimit: 15,
-  questionNumber: 5,
-  totalQuestions: 10,
-  serverTimestamp: Date.now(),
-};
+function buildMockQuestion() {
+  const q = sampleQuestions[0];
+  return {
+    id: q.id,
+    text: q.text,
+    options: q.options,
+    timeLimit: 15,
+    questionNumber: 5,
+    totalQuestions: 10,
+    serverTimestamp: Date.now(),
+  };
+}
 
 export function buildPreviewState(phase: GamePhase): RootState {
   const players = buildPlayersState();
   const rankings = buildRankings();
   const positionHistory = buildPositionHistory();
   const roundResults = buildRoundResults();
+  const mockQuestion = buildMockQuestion();
+  const correctAnswer = sampleQuestions[0].correctAnswer;
 
-  const baseGame = {
+  const baseGame: RootState['game'] = {
     phase,
-    currentQuestion: null as typeof MOCK_QUESTION | null,
-    mediaPreview: null as { type: 'image' | 'audio' | 'video'; url: string } | null,
+    currentQuestion: null,
+    mediaPreview: null,
     questionIndex: 4,
     countdown: 0,
-    answers: {} as Record<
-      string,
-      { playerId: string; answer: AnswerKey; serverReceivedAt: number }
-    >,
-    roundResults: [] as typeof roundResults,
-    correctAnswer: null as AnswerKey | null,
-    roundTags: [] as string[],
-    rankings: [] as typeof rankings,
-    positionHistory: [] as typeof positionHistory,
+    answers: {},
+    roundResults: [],
+    correctAnswer: null,
+    roundTags: [],
+    rankings: [],
+    positionHistory: [],
     config: { totalQuestions: 10, questionTimeLimit: 15, minPlayers: 1 },
     roomCode: 'PREV',
-    serverPort: null as number | null,
-    localIp: null as string | null,
+    serverPort: null,
+    localIp: null,
   };
 
   switch (phase) {
@@ -143,7 +144,7 @@ export function buildPreviewState(phase: GamePhase): RootState {
       return {
         game: {
           ...baseGame,
-          currentQuestion: MOCK_QUESTION,
+          currentQuestion: mockQuestion,
           countdown: 12,
           answers: buildMockAnswers(),
         },
@@ -154,9 +155,9 @@ export function buildPreviewState(phase: GamePhase): RootState {
       return {
         game: {
           ...baseGame,
-          currentQuestion: MOCK_QUESTION,
+          currentQuestion: mockQuestion,
           countdown: 0,
-          correctAnswer: sampleQ.correctAnswer,
+          correctAnswer,
           roundResults,
           rankings,
         },
@@ -167,8 +168,8 @@ export function buildPreviewState(phase: GamePhase): RootState {
       return {
         game: {
           ...baseGame,
-          currentQuestion: MOCK_QUESTION,
-          correctAnswer: sampleQ.correctAnswer,
+          currentQuestion: mockQuestion,
+          correctAnswer,
           roundResults,
           roundTags: ['geography', 'capitals'],
           rankings,

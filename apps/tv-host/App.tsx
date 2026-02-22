@@ -11,7 +11,6 @@ import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Platform } from 'react-native';
 import { GameModeProvider } from './src/context/GameModeContext';
-import { PreviewGameController } from './src/preview/PreviewGameController';
 import { ConnectScreen } from './src/screens/ConnectScreen';
 import { GameScreen } from './src/screens/GameScreen';
 import { ModeSelectionScreen } from './src/screens/ModeSelectionScreen';
@@ -56,8 +55,10 @@ export default function App() {
   const [hostedServerUrl, setHostedServerUrl] = useState<string>('');
   const [hostedMobileBaseUrl, setHostedMobileBaseUrl] = useState<string | null>(null);
   const hostedControllerRef = useRef<HostedGameController | null>(null);
-  const previewControllerRef = useRef<PreviewGameController | null>(
-    webPreviewPhase ? new PreviewGameController(webPreviewPhase) : null,
+  const previewControllerRef = useRef<IGameController | null>(
+    webPreviewPhase
+      ? new (require('./src/preview/PreviewGameController').PreviewGameController)(webPreviewPhase)
+      : null,
   );
 
   // Android TV: detect preview intent URI asynchronously
@@ -70,6 +71,7 @@ export default function App() {
         if (parsed.hostname !== 'preview') return;
         const phase = parsed.searchParams.get('phase') as GamePhase | null;
         if (phase && VALID_PREVIEW_PHASES.includes(phase)) {
+          const { PreviewGameController } = require('./src/preview/PreviewGameController');
           previewControllerRef.current = new PreviewGameController(phase);
           setScreen('preview');
         }
