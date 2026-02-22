@@ -3,13 +3,15 @@ import { Nunito_600SemiBold } from '@expo-google-fonts/nunito/600SemiBold';
 import { Nunito_700Bold } from '@expo-google-fonts/nunito/700Bold';
 import { Sniglet_400Regular } from '@expo-google-fonts/sniglet/400Regular';
 import { useFonts } from '@expo-google-fonts/sniglet/useFonts';
+import type { GamePhase } from '@unfairenough/game-logic';
 import { changeLanguage, type SupportedLanguage } from '@unfairenough/i18n';
 import Constants from 'expo-constants';
 import { StatusBar } from 'expo-status-bar';
 import type React from 'react';
-import { useCallback, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Linking, Platform } from 'react-native';
 import { GameModeProvider } from './src/context/GameModeContext';
+import { PreviewGameController } from './src/preview/PreviewGameController';
 import { ConnectScreen } from './src/screens/ConnectScreen';
 import { GameScreen } from './src/screens/GameScreen';
 import { ModeSelectionScreen } from './src/screens/ModeSelectionScreen';
@@ -20,7 +22,24 @@ import '@unfairenough/i18n';
 const defaultLang = Constants.expoConfig?.extra?.defaultLang;
 if (defaultLang) changeLanguage(defaultLang as SupportedLanguage);
 
-type AppScreen = 'mode_select' | 'local_game' | 'connect' | 'hosted_game';
+const VALID_PREVIEW_PHASES: GamePhase[] = [
+  'LOBBY',
+  'COUNTDOWN',
+  'MEDIA_PREVIEW',
+  'QUESTION',
+  'REVEALING',
+  'RESULTS',
+  'GAME_OVER',
+];
+
+function getWebPreviewPhase(): GamePhase | null {
+  if (!__DEV__ || Platform.OS !== 'web') return null;
+  const params = new URLSearchParams(window.location.search);
+  const phase = params.get('preview') as GamePhase | null;
+  return phase && VALID_PREVIEW_PHASES.includes(phase) ? phase : null;
+}
+
+type AppScreen = 'mode_select' | 'local_game' | 'connect' | 'hosted_game' | 'preview';
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -30,12 +49,35 @@ export default function App() {
     Nunito_700Bold,
   });
 
+  const webPreviewPhase = getWebPreviewPhase();
   const [screen, setScreen] = useState<AppScreen>(
-    Platform.OS === 'web' ? 'connect' : 'mode_select',
+    webPreviewPhase ? 'preview' : Platform.OS === 'web' ? 'connect' : 'mode_select',
   );
   const [hostedServerUrl, setHostedServerUrl] = useState<string>('');
   const [hostedMobileBaseUrl, setHostedMobileBaseUrl] = useState<string | null>(null);
   const hostedControllerRef = useRef<HostedGameController | null>(null);
+  const previewControllerRef = useRef<PreviewGameController | null>(
+    webPreviewPhase ? new PreviewGameController(webPreviewPhase) : null,
+  );
+
+  // Android TV: detect preview intent URI asynchronously
+  useEffect(() => {
+    if (!__DEV__ || Platform.OS === 'web') return;
+    Linking.getInitialURL().then((url) => {
+      if (!url) return;
+      try {
+        const parsed = new URL(url);
+        if (parsed.hostname !== 'preview') return;
+        const phase = parsed.searchParams.get('phase') as GamePhase | null;
+        if (phase && VALID_PREVIEW_PHASES.includes(phase)) {
+          previewControllerRef.current = new PreviewGameController(phase);
+          setScreen('preview');
+        }
+      } catch {
+        // Not a valid URL — ignore
+      }
+    });
+  }, []);
 
   const handleSelectLocal = useCallback(() => {
     setScreen('local_game');
@@ -122,6 +164,16 @@ export default function App() {
             mobileBaseUrl={hostedMobileBaseUrl ?? undefined}
           >
             {content}
+          </GameModeProvider>
+        </>
+      );
+
+    case 'preview':
+      return (
+        <>
+          <StatusBar style="light" hidden />
+          <GameModeProvider mode="hosted" controller={previewControllerRef.current!}>
+            <GameScreen />
           </GameModeProvider>
         </>
       );

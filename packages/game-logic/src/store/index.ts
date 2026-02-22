@@ -2,12 +2,18 @@ import { configureStore } from '@reduxjs/toolkit';
 import gameReducer from '../slices/gameSlice';
 import playersReducer from '../slices/playersSlice';
 
-export const createStore = () =>
+type StoreState = {
+  game: ReturnType<typeof gameReducer>;
+  players: ReturnType<typeof playersReducer>;
+};
+
+export const createStore = (preloadedState?: StoreState) =>
   configureStore({
     reducer: {
       game: gameReducer,
       players: playersReducer,
     },
+    preloadedState,
     middleware: (getDefaultMiddleware) =>
       getDefaultMiddleware({
         serializableCheck: {

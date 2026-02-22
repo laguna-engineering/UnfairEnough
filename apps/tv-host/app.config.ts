@@ -28,6 +28,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'Unfair Enough!',
   slug: 'unfairenough-tv',
+  scheme: 'unfairenough-tv',
   version: '1.0.0',
   orientation: 'landscape',
   icon: './assets/images/icon-800x480.png',
