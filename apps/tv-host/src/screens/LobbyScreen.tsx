@@ -35,6 +35,102 @@ interface BgMusic {
   hasTracks: boolean;
 }
 
+const MOCK_QUESTION_SETS: QuestionSetWithMeta[] = [
+  {
+    id: 'mock-1',
+    name: 'Pop Culture',
+    author: null,
+    description: null,
+    defaultTimeLimit: 15,
+    tags: ['pop culture'],
+    questionCount: 3,
+    isMeta: false,
+    deletedAt: null,
+    createdAt: '',
+    updatedAt: '',
+  },
+  {
+    id: 'mock-2',
+    name: 'World Geography',
+    author: null,
+    description: null,
+    defaultTimeLimit: 15,
+    tags: ['geography'],
+    questionCount: 3,
+    isMeta: false,
+    deletedAt: null,
+    createdAt: '',
+    updatedAt: '',
+  },
+  {
+    id: 'mock-3',
+    name: 'Science & Nature',
+    author: null,
+    description: null,
+    defaultTimeLimit: 15,
+    tags: ['science'],
+    questionCount: 4,
+    isMeta: false,
+    deletedAt: null,
+    createdAt: '',
+    updatedAt: '',
+  },
+  {
+    id: 'mock-4',
+    name: 'Food & Drink',
+    author: null,
+    description: null,
+    defaultTimeLimit: 15,
+    tags: ['food'],
+    questionCount: 3,
+    isMeta: false,
+    deletedAt: null,
+    createdAt: '',
+    updatedAt: '',
+  },
+  {
+    id: 'mock-5',
+    name: 'Sports Trivia',
+    author: null,
+    description: null,
+    defaultTimeLimit: 15,
+    tags: ['sports'],
+    questionCount: 3,
+    isMeta: false,
+    deletedAt: null,
+    createdAt: '',
+    updatedAt: '',
+  },
+  {
+    id: 'mock-meta-1',
+    name: 'All Questions',
+    author: null,
+    description: null,
+    defaultTimeLimit: 15,
+    tags: [],
+    questionCount: 16,
+    isMeta: true,
+    childSetIds: ['mock-1', 'mock-2', 'mock-3', 'mock-4', 'mock-5'],
+    deletedAt: null,
+    createdAt: '',
+    updatedAt: '',
+  },
+  {
+    id: 'mock-meta-2',
+    name: 'Party Mix',
+    author: null,
+    description: null,
+    defaultTimeLimit: 15,
+    tags: [],
+    questionCount: 6,
+    isMeta: true,
+    childSetIds: ['mock-1', 'mock-5'],
+    deletedAt: null,
+    createdAt: '',
+    updatedAt: '',
+  },
+];
+
 export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
   const { t, i18n } = useTranslation();
   const {
@@ -54,8 +150,10 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
     gameConfig.gameType ?? 'casual',
   );
   const [showImportModal, setShowImportModal] = useState(false);
-  const [questionSets, setQuestionSets] = useState<QuestionSetWithMeta[]>([]);
-  const [totalQuestions, setTotalQuestions] = useState(0);
+  const [questionSets, setQuestionSets] = useState<QuestionSetWithMeta[]>(MOCK_QUESTION_SETS);
+  const [totalQuestions, setTotalQuestions] = useState(
+    MOCK_QUESTION_SETS.reduce((sum, s) => sum + s.questionCount, 0),
+  );
 
   const loadQuestionSets = useCallback(async () => {
     try {
@@ -157,39 +255,6 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
       </View>
 
       <View style={styles.content}>
-        {/* QR Code Section */}
-        <View style={styles.qrSection}>
-          <Card style={styles.qrCard} variant="glow" glowColor={colors.primary}>
-            {qrUrl ? (
-              <>
-                <View style={styles.qrContainer}>
-                  <QRCode
-                    value={qrUrl}
-                    size={QR_SIZE}
-                    backgroundColor="white"
-                    color={colors.background}
-                  />
-                </View>
-                <View style={styles.codeContainer}>
-                  <Text style={styles.codeLabel}>
-                    {t('lobby.orEnterCode', { code: '' }).replace(': ', '')}
-                  </Text>
-                  <Text style={styles.roomCode}>{roomCode}</Text>
-                  {mode === 'local' && localIp && serverPort ? (
-                    <Text style={styles.addressText}>
-                      {localIp}:{serverPort}
-                    </Text>
-                  ) : null}
-                </View>
-              </>
-            ) : (
-              <View style={styles.loadingContainer}>
-                <Text style={styles.loadingText}>{t('lobby.serverStarting')}</Text>
-              </View>
-            )}
-          </Card>
-        </View>
-
         {/* Players Section */}
         <View style={styles.playersSection}>
           <Card style={styles.playersCard}>
@@ -200,15 +265,20 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
             </Text>
 
             <View style={styles.playersList}>
-              {players.map((player) => (
+              {players.slice(0, playerCount > 8 ? 7 : 8).map((player) => (
                 <PlayerAvatar
                   key={player.id}
                   name={player.name}
                   color={player.color}
                   emoji={player.emoji}
-                  size={playerCount > 6 ? 'medium' : 'large'}
+                  size="small"
                 />
               ))}
+              {playerCount > 8 && (
+                <View style={styles.overflowBadge}>
+                  <Text style={styles.overflowText}>+{playerCount - 7}</Text>
+                </View>
+              )}
               {players.length === 0 && (
                 <Text style={styles.waitingText}>{t('lobby.scanQrToJoin')}</Text>
               )}
@@ -317,6 +387,39 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
               </ScrollView>
             )}
           </View>
+        </View>
+
+        {/* QR Code Section */}
+        <View style={styles.qrSection}>
+          <Card style={styles.qrCard} variant="glow" glowColor={colors.primary}>
+            {qrUrl ? (
+              <>
+                <View style={styles.qrContainer}>
+                  <QRCode
+                    value={qrUrl}
+                    size={QR_SIZE}
+                    backgroundColor="white"
+                    color={colors.background}
+                  />
+                </View>
+                <View style={styles.codeContainer}>
+                  <Text style={styles.codeLabel}>
+                    {t('lobby.orEnterCode', { code: '' }).replace(': ', '')}
+                  </Text>
+                  <Text style={styles.roomCode}>{roomCode}</Text>
+                  {mode === 'local' && localIp && serverPort ? (
+                    <Text style={styles.addressText}>
+                      {localIp}:{serverPort}
+                    </Text>
+                  ) : null}
+                </View>
+              </>
+            ) : (
+              <View style={styles.loadingContainer}>
+                <Text style={styles.loadingText}>{t('lobby.serverStarting')}</Text>
+              </View>
+            )}
+          </Card>
 
           {/* Start Button */}
           <View style={styles.startButtonContainer}>
@@ -408,8 +511,8 @@ const styles = StyleSheet.create({
     gap: spacing.xl,
   },
   qrSection: {
-    flex: 0.42,
-    justifyContent: 'center',
+    flex: 0.35,
+    justifyContent: 'flex-start',
     alignItems: 'center',
   },
   qrCard: {
@@ -452,8 +555,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   playersSection: {
-    flex: 0.58,
-    justifyContent: 'space-between',
+    flex: 0.65,
   },
   playersCard: {
     padding: spacing.lg,
@@ -468,10 +570,22 @@ const styles = StyleSheet.create({
   playersList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.md,
+    gap: spacing.sm,
     paddingVertical: spacing.xs,
-    minHeight: 80,
+    minHeight: 48,
     alignItems: 'center',
+  },
+  overflowBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  overflowText: {
+    ...typography.label,
+    color: colors.textSecondary,
   },
   waitingText: {
     ...typography.body,
@@ -575,6 +689,7 @@ const styles = StyleSheet.create({
   },
   startButtonContainer: {
     alignItems: 'center',
+    marginTop: spacing.lg,
   },
   startButton: {
     minWidth: 260,

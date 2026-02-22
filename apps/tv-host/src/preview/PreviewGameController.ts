@@ -1,4 +1,9 @@
-import { createStore, type GamePhase, type RootState } from '@unfairenough/game-logic';
+import {
+  createStore,
+  type GamePhase,
+  type RootState,
+  updateConfig,
+} from '@unfairenough/game-logic';
 import { changeLanguage } from '@unfairenough/i18n';
 import type { IGameController } from '../services/IGameController';
 import { buildPreviewState } from './previewData';
@@ -30,8 +35,8 @@ export class PreviewGameController implements IGameController {
     // No-op
   }
 
-  configureGame(): void {
-    // No-op
+  configureGame(gameType: 'casual' | 'configured', questionSetId?: string): void {
+    this.store.dispatch(updateConfig({ gameType, questionSetId }));
   }
 
   setLanguage(language: string): void {
