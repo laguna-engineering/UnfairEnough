@@ -20,10 +20,11 @@ function requireAuth(c: any): boolean {
   return true;
 }
 
-// GET /api/question-sets — list all sets
+// GET /api/question-sets — list all sets (optional ?language= filter)
 questionSets.get('/', async (c) => {
   const db = getDb();
-  const sets = await questionsRepo.getQuestionSets(db);
+  const language = c.req.query('language') || undefined;
+  const sets = await questionsRepo.getQuestionSets(db, language);
   return c.json({ sets });
 });
 

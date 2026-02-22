@@ -12,6 +12,7 @@ export interface QuestionSetRow {
   question_count: number;
   is_meta: number; // 0 or 1
   available_in_casual: number; // 0 or 1
+  language: string;
   deleted_at: string | null; // soft delete
   created_at: string;
   updated_at: string;
@@ -41,6 +42,7 @@ export interface QuestionRow {
   difficulty: number;
   explanation: string | null;
   hide_tags: number;
+  language: string;
   times_asked: number;
   last_asked_at: string | null;
   created_at: string;
@@ -126,6 +128,7 @@ export interface QuestionWithMeta {
   difficulty: number;
   explanation: string | null;
   hideTags: boolean;
+  language: string;
   timesAsked: number;
   lastAskedAt: string | null;
 }
@@ -140,6 +143,7 @@ export interface QuestionSetWithMeta {
   questionCount: number;
   isMeta: boolean;
   availableInCasual: boolean;
+  language: string;
   childSetIds?: string[];
   deletedAt: string | null;
   createdAt: string;

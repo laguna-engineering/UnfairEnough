@@ -598,7 +598,12 @@ export class GameRoom {
         );
       } else {
         // Casual mode: load 3× from the general pool
-        rawPool = await questionsRepo.getRandomQuestions(this.db, requestedCount * 3);
+        rawPool = await questionsRepo.getRandomQuestions(
+          this.db,
+          requestedCount * 3,
+          undefined,
+          this.language,
+        );
       }
 
       if (this.gameType === 'casual') {

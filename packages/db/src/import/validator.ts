@@ -16,6 +16,7 @@ export interface QuestionInput {
   category?: string;
   tags?: string[];
   hideTags?: boolean;
+  language?: string;
   timeLimit?: number;
   media?: MediaInput;
   options: QuestionOptionInput[];
@@ -31,6 +32,7 @@ export interface QuestionSetInput {
   description?: string;
   defaultTimeLimit?: number;
   tags?: string[];
+  language?: string;
   availableInCasual?: boolean;
   questions: QuestionInput[];
 }
@@ -199,6 +201,10 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
           : undefined,
       explanation: typeof qObj.explanation === 'string' ? qObj.explanation : undefined,
       hideTags: qObj.hideTags === true ? true : undefined,
+      language:
+        typeof qObj.language === 'string' && qObj.language.trim().length > 0
+          ? qObj.language.trim()
+          : undefined,
     });
   }
 
@@ -207,6 +213,10 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
     author: typeof obj.author === 'string' ? obj.author : undefined,
     description: typeof obj.description === 'string' ? obj.description : undefined,
     defaultTimeLimit,
+    language:
+      typeof obj.language === 'string' && obj.language.trim().length > 0
+        ? obj.language.trim()
+        : undefined,
     availableInCasual:
       typeof obj.availableInCasual === 'boolean' ? obj.availableInCasual : undefined,
     tags: Array.isArray(obj.tags)

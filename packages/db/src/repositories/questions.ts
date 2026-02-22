@@ -28,6 +28,7 @@ function rowToQuestionWithMeta(row: QuestionRow): QuestionWithMeta {
     difficulty: row.difficulty,
     explanation: row.explanation,
     hideTags: row.hide_tags === 1,
+    language: row.language,
     timesAsked: row.times_asked,
     lastAskedAt: row.last_asked_at,
   };
@@ -44,6 +45,7 @@ function rowToQuestionSetWithMeta(row: QuestionSetRow): QuestionSetWithMeta {
     questionCount: row.question_count,
     isMeta: row.is_meta === 1,
     availableInCasual: row.available_in_casual !== 0,
+    language: row.language,
     deletedAt: row.deleted_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -60,9 +62,10 @@ export async function importQuestionSet(
   input: QuestionSetInput,
   generateId: () => string,
 ): Promise<string> {
+  const setLanguage = input.language ?? 'en';
   await db.run(
-    `INSERT INTO question_sets (id, name, author, description, default_time_limit, tags, question_count, available_in_casual)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO question_sets (id, name, author, description, default_time_limit, tags, question_count, available_in_casual, language)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       setId,
       input.name,
@@ -72,6 +75,7 @@ export async function importQuestionSet(
       input.tags ? JSON.stringify(input.tags) : null,
       input.questions.length,
       input.availableInCasual === false ? 0 : 1,
+      setLanguage,
     ],
   );
 
@@ -79,8 +83,8 @@ export async function importQuestionSet(
     const questionId = generateId();
     await db.run(
       `INSERT INTO questions (id, set_id, original_id, type, text, category, tags, time_limit,
-        media_type, media_url, media_preview_duration, options, correct_answer, player_difficulty, difficulty, explanation, hide_tags)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        media_type, media_url, media_preview_duration, options, correct_answer, player_difficulty, difficulty, explanation, hide_tags, language)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         questionId,
         setId,
@@ -99,6 +103,7 @@ export async function importQuestionSet(
         q.difficulty ?? 3,
         q.explanation ?? null,
         q.hideTags ? 1 : 0,
+        q.language ?? setLanguage,
       ],
     );
   }
@@ -110,6 +115,7 @@ export async function getRandomQuestions(
   db: DbAdapter,
   count: number,
   excludeSetIds?: string[],
+  language?: string,
 ): Promise<QuestionWithMeta[]> {
   let sql = `SELECT * FROM questions WHERE (set_id IS NULL OR set_id NOT IN (
     SELECT id FROM question_sets WHERE deleted_at IS NOT NULL
@@ -122,6 +128,11 @@ export async function getRandomQuestions(
     const placeholders = excludeSetIds.map(() => '?').join(',');
     sql += ` AND (set_id IS NULL OR set_id NOT IN (${placeholders}))`;
     params.push(...excludeSetIds);
+  }
+
+  if (language) {
+    sql += ' AND language = ?';
+    params.push(language);
   }
 
   sql += ' ORDER BY last_asked_at IS NOT NULL, last_asked_at ASC, RANDOM() LIMIT ?';
@@ -139,10 +150,12 @@ export async function getQuestionsBySet(db: DbAdapter, setId: string): Promise<Q
   return rows.map(rowToQuestionWithMeta);
 }
 
-export async function getQuestionSets(db: DbAdapter): Promise<QuestionSetWithMeta[]> {
+export async function getQuestionSets(
+  db: DbAdapter,
+  language?: string,
+): Promise<QuestionSetWithMeta[]> {
   // For meta sets, compute question_count dynamically from child sets
-  const rows = await db.all<QuestionSetRow>(
-    `SELECT qs.*,
+  let sql = `SELECT qs.*,
        CASE WHEN qs.is_meta = 1
          THEN COALESCE((
            SELECT COUNT(*) FROM questions q
@@ -153,9 +166,17 @@ export async function getQuestionSets(db: DbAdapter): Promise<QuestionSetWithMet
          ELSE qs.question_count
        END AS question_count
      FROM question_sets qs
-     WHERE qs.deleted_at IS NULL
-     ORDER BY qs.created_at DESC`,
-  );
+     WHERE qs.deleted_at IS NULL`;
+  const params: string[] = [];
+
+  if (language) {
+    sql += ' AND qs.language = ?';
+    params.push(language);
+  }
+
+  sql += ' ORDER BY qs.created_at DESC';
+
+  const rows = await db.all<QuestionSetRow>(sql, params);
   return rows.map(rowToQuestionSetWithMeta);
 }
 
@@ -189,12 +210,18 @@ export async function softDeleteQuestionSet(db: DbAdapter, setId: string): Promi
   return result.changes > 0;
 }
 
-export async function getTotalQuestionCount(db: DbAdapter): Promise<number> {
-  const row = await db.get<{ count: number }>(
-    `SELECT COUNT(*) as count FROM questions WHERE set_id IS NULL OR set_id NOT IN (
+export async function getTotalQuestionCount(db: DbAdapter, language?: string): Promise<number> {
+  let sql = `SELECT COUNT(*) as count FROM questions WHERE (set_id IS NULL OR set_id NOT IN (
       SELECT id FROM question_sets WHERE deleted_at IS NOT NULL
-    )`,
-  );
+    ))`;
+  const params: string[] = [];
+
+  if (language) {
+    sql += ' AND language = ?';
+    params.push(language);
+  }
+
+  const row = await db.get<{ count: number }>(sql, params);
   return row?.count ?? 0;
 }
 

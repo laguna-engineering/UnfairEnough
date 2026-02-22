@@ -1,6 +1,7 @@
 # yaml-language-server: $schema=../packages/db/question-set.schema.json
 
 name: "Example Quiz"
+language: en
 author: "Your Name"
 description: "Copy this file as a starting point"
 defaultTimeLimit: 15

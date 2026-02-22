@@ -46,6 +46,7 @@ const MOCK_QUESTION_SETS: QuestionSetWithMeta[] = [
     questionCount: 3,
     isMeta: false,
     availableInCasual: true,
+    language: 'en',
     deletedAt: null,
     createdAt: '',
     updatedAt: '',
@@ -60,6 +61,7 @@ const MOCK_QUESTION_SETS: QuestionSetWithMeta[] = [
     questionCount: 3,
     isMeta: false,
     availableInCasual: true,
+    language: 'en',
     deletedAt: null,
     createdAt: '',
     updatedAt: '',
@@ -74,6 +76,7 @@ const MOCK_QUESTION_SETS: QuestionSetWithMeta[] = [
     questionCount: 4,
     isMeta: false,
     availableInCasual: true,
+    language: 'en',
     deletedAt: null,
     createdAt: '',
     updatedAt: '',
@@ -88,6 +91,7 @@ const MOCK_QUESTION_SETS: QuestionSetWithMeta[] = [
     questionCount: 3,
     isMeta: false,
     availableInCasual: true,
+    language: 'en',
     deletedAt: null,
     createdAt: '',
     updatedAt: '',
@@ -102,6 +106,7 @@ const MOCK_QUESTION_SETS: QuestionSetWithMeta[] = [
     questionCount: 3,
     isMeta: false,
     availableInCasual: true,
+    language: 'en',
     deletedAt: null,
     createdAt: '',
     updatedAt: '',
@@ -116,6 +121,7 @@ const MOCK_QUESTION_SETS: QuestionSetWithMeta[] = [
     questionCount: 16,
     isMeta: true,
     availableInCasual: true,
+    language: 'en',
     childSetIds: ['mock-1', 'mock-2', 'mock-3', 'mock-4', 'mock-5'],
     deletedAt: null,
     createdAt: '',
@@ -131,6 +137,7 @@ const MOCK_QUESTION_SETS: QuestionSetWithMeta[] = [
     questionCount: 6,
     isMeta: true,
     availableInCasual: true,
+    language: 'en',
     childSetIds: ['mock-1', 'mock-5'],
     deletedAt: null,
     createdAt: '',
@@ -151,18 +158,22 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
     MOCK_QUESTION_SETS.filter((s) => !s.isMeta).reduce((sum, s) => sum + s.questionCount, 0),
   );
 
+  const currentLanguage = i18n.language;
+
   const loadQuestionSets = useCallback(async () => {
     try {
       if (mode === 'local') {
         const db = getDb();
-        const sets = await questionsRepo.getQuestionSets(db);
+        const sets = await questionsRepo.getQuestionSets(db, currentLanguage);
         setQuestionSets(sets);
-        const count = await questionsRepo.getTotalQuestionCount(db);
+        const count = await questionsRepo.getTotalQuestionCount(db, currentLanguage);
         setTotalQuestions(count);
       } else if (mode === 'hosted' && serverUrl) {
         // Fetch sets from server API
         const host = serverUrl.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '');
-        const res = await fetch(`http://${host}/api/question-sets`);
+        const res = await fetch(
+          `http://${host}/api/question-sets?language=${encodeURIComponent(currentLanguage)}`,
+        );
         if (res.ok) {
           const data = await res.json();
           setQuestionSets(data.sets || []);
@@ -175,7 +186,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
     } catch (err) {
       console.error('Failed to load question sets:', err);
     }
-  }, [mode, serverUrl]);
+  }, [mode, serverUrl, currentLanguage]);
 
   useEffect(() => {
     loadQuestionSets();
@@ -379,35 +390,37 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                 {questionSets.length === 0 ? (
                   <Text style={styles.noSetsText}>{t('gameConfig.noSets')}</Text>
                 ) : (
-                  questionSets.map((set) => (
-                    <Pressable
-                      key={set.id}
-                      onPress={() => configureGame('configured', set.id)}
-                      nextFocusRight={focusTags.start}
-                      style={(pressState) => [
-                        styles.setCard,
-                        set.isMeta && styles.setCardMeta,
-                        gameConfig.questionSetId === set.id && styles.setCardActive,
-                        (pressState as any).focused && styles.focused,
-                        pressState.pressed && styles.pressed,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.setCardName,
-                          gameConfig.questionSetId === set.id && styles.setCardNameActive,
+                  [...questionSets]
+                    .sort((a, b) => Number(b.isMeta) - Number(a.isMeta))
+                    .map((set) => (
+                      <Pressable
+                        key={set.id}
+                        onPress={() => configureGame('configured', set.id)}
+                        nextFocusRight={focusTags.start}
+                        style={(pressState) => [
+                          styles.setCard,
+                          set.isMeta && styles.setCardMeta,
+                          gameConfig.questionSetId === set.id && styles.setCardActive,
+                          (pressState as any).focused && styles.focused,
+                          pressState.pressed && styles.pressed,
                         ]}
-                        numberOfLines={1}
                       >
-                        {set.name}
-                      </Text>
-                      <Text style={styles.setCardCount}>
-                        {set.isMeta
-                          ? t('gameConfig.questionsCount', { count: set.questionCount })
-                          : t('gameConfig.questionsCount', { count: set.questionCount })}
-                      </Text>
-                    </Pressable>
-                  ))
+                        <Text
+                          style={[
+                            styles.setCardName,
+                            gameConfig.questionSetId === set.id && styles.setCardNameActive,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {set.name}
+                        </Text>
+                        <Text style={styles.setCardCount}>
+                          {set.isMeta
+                            ? t('gameConfig.questionsCount', { count: set.questionCount })
+                            : t('gameConfig.questionsCount', { count: set.questionCount })}
+                        </Text>
+                      </Pressable>
+                    ))
                 )}
               </ScrollView>
             )}

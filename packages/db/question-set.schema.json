@@ -30,6 +30,11 @@
       "items": { "type": "string" },
       "description": "Tags for categorizing the set"
     },
+    "language": {
+      "type": "string",
+      "description": "Language code for the question set (e.g. 'en', 'it'). Defaults to 'en' on import.",
+      "minLength": 1
+    },
     "availableInCasual": {
       "type": "boolean",
       "description": "Whether questions from this set appear in casual/random games (default: true)",
@@ -120,6 +125,11 @@
           "correctAnswer": {
             "type": "string",
             "description": "Key of the correct answer (A-D for multiple_choice, true/false for true_false)"
+          },
+          "language": {
+            "type": "string",
+            "description": "Per-question language override (inherits from set if omitted)",
+            "minLength": 1
           },
           "difficulty": {
             "type": "integer",

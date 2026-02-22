@@ -82,6 +82,7 @@ class GameController implements IGameController {
   private playerTagScores = new Map<string, Map<string, number>>(); // profileId -> tag -> decayed score
   private currentRoundDifficulties = new Map<string, number>(); // playerId -> difficulty
   private isMetaSet = false;
+  private language = 'en';
 
   constructor() {
     this.setupServerCallbacks();
@@ -213,7 +214,12 @@ class GameController implements IGameController {
         rawPool = await questionsRepo.getQuestionsByMetaSet(db, questionSetId, totalQuestions * 3);
       } else {
         // Casual mode: load 3× from the general pool
-        rawPool = await questionsRepo.getRandomQuestions(db, totalQuestions * 3);
+        rawPool = await questionsRepo.getRandomQuestions(
+          db,
+          totalQuestions * 3,
+          undefined,
+          this.language,
+        );
       }
 
       if (gameType === 'casual') {
@@ -789,6 +795,7 @@ class GameController implements IGameController {
   }
 
   setLanguage(language: string): void {
+    this.language = language;
     wsServer.setLanguage(language);
   }
 
