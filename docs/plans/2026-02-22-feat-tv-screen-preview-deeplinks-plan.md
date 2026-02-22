@@ -168,18 +168,18 @@ Behavior:
 
 ## Acceptance Criteria
 
-- [ ] `http://localhost:8082/?preview=QUESTION` renders QuestionScreen with mock question, countdown, and "2/4 answered"
-- [ ] `http://localhost:8082/?preview=RESULTS` renders ResultsScreen with correct answer highlighted, 4 player results, and rankings
-- [ ] `http://localhost:8082/?preview=GAME_OVER` renders GameOverScreen with position chart (5 rounds of history)
-- [ ] `http://localhost:8082/?preview=LOBBY` renders LobbyScreen with 4 players, room code "PREV", no crashes from missing server
-- [ ] `http://localhost:8082/?preview=COUNTDOWN` renders frozen countdown at 3
-- [ ] `http://localhost:8082/?preview=REVEALING` renders reveal animation
-- [ ] `http://localhost:8082/?preview=MEDIA_PREVIEW` renders media preview with placeholder
-- [ ] `./scripts/preview-screen.sh QUESTION` opens browser to correct URL
-- [ ] `./scripts/preview-screen.sh RESULTS android` sends correct ADB intent
-- [ ] Script prints usage on invalid phase
-- [ ] Preview mode is gated behind `__DEV__` — no-op in production builds
-- [ ] `adb shell am start -a android.intent.action.VIEW -d "unfairenough-tv://preview?phase=QUESTION" com.unfairenough.tvhost` opens QuestionScreen on Android TV
+- [x] `http://localhost:8082/?preview=QUESTION` renders QuestionScreen with mock question, countdown, and "2/4 answered"
+- [x] `http://localhost:8082/?preview=RESULTS` renders ResultsScreen with correct answer highlighted, 4 player results, and rankings
+- [x] `http://localhost:8082/?preview=GAME_OVER` renders GameOverScreen with position chart (5 rounds of history)
+- [x] `http://localhost:8082/?preview=LOBBY` renders LobbyScreen with 4 players, room code "PREV", no crashes from missing server
+- [x] `http://localhost:8082/?preview=COUNTDOWN` renders frozen countdown at 3
+- [x] `http://localhost:8082/?preview=REVEALING` renders reveal animation
+- [x] `http://localhost:8082/?preview=MEDIA_PREVIEW` renders media preview with placeholder
+- [x] `./scripts/preview-screen.sh QUESTION` opens browser to correct URL
+- [x] `./scripts/preview-screen.sh RESULTS android` sends correct ADB intent
+- [x] Script prints usage on invalid phase
+- [x] Preview mode is gated behind `__DEV__` — no-op in production builds
+- [x] `adb shell am start -a android.intent.action.VIEW -d "unfairenough-tv://preview?phase=QUESTION" com.unfairenough.tvhost` opens QuestionScreen on Android TV
 
 ## Design Decisions
 

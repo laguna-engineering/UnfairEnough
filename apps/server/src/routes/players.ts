@@ -130,7 +130,7 @@ players.get('/:id/stats', async (c) => {
     const isWinner = game.winnerPlayerId === id;
     // Only include games where this player participated
     const results = await gamesRepo.getGameResults(db, game.id);
-    const participated = results.some((r) => r.playerId === id);
+    const participated = results.some((r) => r.profileId === id);
     if (!participated && !isWinner) continue;
 
     playerGames.push({

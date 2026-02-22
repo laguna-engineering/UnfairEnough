@@ -29,12 +29,17 @@ nav a {
   transition: color 0.15s, background 0.15s;
 }
 
+nav a:visited {
+  color: #ccc;
+}
+
 nav a:hover {
   color: #fff;
   background: #333;
 }
 
-nav a.active {
+nav a.active,
+nav a.active:visited {
   color: #fff;
   border-bottom: 2px solid #4a9eff;
 }

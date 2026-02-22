@@ -32,6 +32,8 @@ export const AVATAR_EMOJIS = [
   '🧔🏼‍♂️',
   '🏈',
   '👩🏻‍⚕️',
+  '🦦',
+  '🧩',
 ] as const;
 
 export const AVATAR_COLORS = [
