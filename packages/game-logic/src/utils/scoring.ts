@@ -67,8 +67,8 @@ export function computeTimeBonusMultiplier(
 /**
  * Compute a lifetime-score handicap multiplier for a player.
  * Uses log-compressed scores to map the player's deviation from the room
- * average into a [0.90, 1.10] range — higher lifetime scorers get penalised,
- * lower scorers get a boost.
+ * average into an asymmetric [0.80, 1.10] range — higher lifetime scorers
+ * get penalised harder (-20%), lower scorers get a modest boost (+10%).
  */
 export function computeLifetimeHandicap(
   playerLifetimeScore: number,
@@ -85,8 +85,9 @@ export function computeLifetimeHandicap(
 
   // deviation: +1 for highest scorer, -1 for lowest
   const deviation = (playerLog - mean) / maxDev;
-  // Map [-1, 1] → [1.10, 0.90]  (higher deviation = lower multiplier)
-  return Math.min(1.1, Math.max(0.9, 1.0 - 0.1 * deviation));
+  // Asymmetric: above average penalised up to 0.20, below average boosted up to 0.10
+  const slope = deviation >= 0 ? 0.2 : 0.1;
+  return Math.min(1.1, Math.max(0.8, 1.0 - slope * deviation));
 }
 
 // ── Ranking utilities ───────────────────────────────────────────────

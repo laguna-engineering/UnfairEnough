@@ -146,12 +146,13 @@ describe('computeLifetimeHandicap', () => {
     expect(computeLifetimeHandicap(0, [0, 0, 0])).toBe(1);
   });
 
-  test('highest scorer gets ~0.90', () => {
+  test('highest scorer is penalised (below 1.0)', () => {
     const scores = [0, 500, 2000, 10000];
     const result = computeLifetimeHandicap(10000, scores);
-    expect(result).toBeCloseTo(0.9, 1);
-    expect(result).toBeGreaterThanOrEqual(0.9);
-    expect(result).toBeLessThanOrEqual(1.0);
+    // In a 4-player room the highest scorer isn't at max deviation
+    // due to log compression, but still gets a meaningful penalty
+    expect(result).toBeGreaterThanOrEqual(0.8);
+    expect(result).toBeLessThan(0.95);
   });
 
   test('lowest scorer gets ~1.10', () => {
@@ -161,30 +162,36 @@ describe('computeLifetimeHandicap', () => {
     expect(result).toBeLessThanOrEqual(1.1);
   });
 
-  test('middle player gets ~1.0', () => {
+  test('middle player is between extremes', () => {
     const scores = [0, 5000, 10000];
     const result = computeLifetimeHandicap(5000, scores);
-    expect(result).toBeGreaterThanOrEqual(0.95);
-    expect(result).toBeLessThanOrEqual(1.05);
+    const low = computeLifetimeHandicap(0, scores);
+    const high = computeLifetimeHandicap(10000, scores);
+    // Middle player falls between the two extremes
+    expect(result).toBeGreaterThan(high);
+    expect(result).toBeLessThan(low);
   });
 
-  test('clamped to [0.90, 1.10]', () => {
+  test('clamped to [0.80, 1.10]', () => {
     // Even with extreme spread the result must stay in range
     const scores = [0, 1_000_000];
-    expect(computeLifetimeHandicap(1_000_000, scores)).toBeGreaterThanOrEqual(0.9);
+    expect(computeLifetimeHandicap(1_000_000, scores)).toBeGreaterThanOrEqual(0.8);
     expect(computeLifetimeHandicap(1_000_000, scores)).toBeLessThanOrEqual(1.1);
-    expect(computeLifetimeHandicap(0, scores)).toBeGreaterThanOrEqual(0.9);
+    expect(computeLifetimeHandicap(0, scores)).toBeGreaterThanOrEqual(0.8);
     expect(computeLifetimeHandicap(0, scores)).toBeLessThanOrEqual(1.1);
   });
 
-  test('two-player symmetric: boosts cancel out', () => {
+  test('two-player asymmetric: penalty is stronger than boost', () => {
     const scores = [100, 5000];
     const low = computeLifetimeHandicap(100, scores);
     const high = computeLifetimeHandicap(5000, scores);
-    // Their deviations from mean are equal and opposite → multipliers symmetric around 1.0
-    expect(low + high).toBeCloseTo(2.0, 5);
+    // Asymmetric: high scorer penalised 0.20, low scorer boosted 0.10
+    expect(low).toBeCloseTo(1.1, 5);
+    expect(high).toBeCloseTo(0.8, 5);
     expect(low).toBeGreaterThan(1.0);
     expect(high).toBeLessThan(1.0);
+    // Penalty (0.20) is larger than boost (0.10)
+    expect(1.0 - high).toBeGreaterThan(low - 1.0);
   });
 });
 
@@ -265,9 +272,9 @@ describe('integration: 5-round scoring with lifetime handicap', () => {
 
     // Newcomer should end with a higher score than the veteran
     expect(scores[1]).toBeGreaterThan(scores[0]);
-    // But the difference should be modest (lifetime handicap is 0.9–1.1)
+    // Asymmetric handicap (0.80–1.10) creates a bigger gap than before
     const ratio = scores[1] / scores[0];
-    expect(ratio).toBeGreaterThan(1.0);
-    expect(ratio).toBeLessThan(1.25);
+    expect(ratio).toBeGreaterThan(1.2);
+    expect(ratio).toBeLessThan(1.5);
   });
 });
