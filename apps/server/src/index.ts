@@ -10,6 +10,7 @@ import gamesRoutes from './routes/games';
 import metaSetsRoutes from './routes/metaSets';
 import playersRoutes from './routes/players';
 import questionSetsRoutes from './routes/questionSets';
+import questionsRoutes from './routes/questions';
 import tagsRoutes from './routes/tags';
 import type { WSData } from './types';
 
@@ -38,6 +39,7 @@ app.route('/api/meta-sets', metaSetsRoutes);
 app.route('/api/players', playersRoutes);
 app.route('/api/games', gamesRoutes);
 app.route('/api/tags', tagsRoutes);
+app.route('/api/questions', questionsRoutes);
 app.route('/api/events', eventsRoutes);
 
 // ── WebSocket endpoint ─────────────────────────────────────────

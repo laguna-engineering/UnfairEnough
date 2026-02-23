@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Questions — Admin</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="admin.js"></script>
+  <style>
+    thead th.sortable { cursor: pointer; user-select: none; }
+    thead th.sortable:hover { color: #1a1a1a; }
+    thead th.sortable::after {
+      content: " \2195";
+      font-size: 0.7rem;
+      color: #bbb;
+    }
+    thead th.sort-asc::after { content: " \2191"; color: #555; }
+    thead th.sort-desc::after { content: " \2193"; color: #555; }
+
+    .text-col {
+      max-width: 320px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .tags-col { max-width: 220px; }
+    .lang-flag { font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Questions</h1>
+    <div id="content"></div>
+  </main>
+
+  <script>
+    const content = document.getElementById("content");
+
+    const COLUMNS = [
+      { key: "text",       label: "Text",        sort: (a, b) => a.text.localeCompare(b.text) },
+      { key: "tags",       label: "Tags",        sort: (a, b) => a.tags.join(",").localeCompare(b.tags.join(",")) },
+      { key: "setName",    label: "Set",         sort: (a, b) => (a.setName || "").localeCompare(b.setName || "") },
+      { key: "difficulty",  label: "Difficulty",  sort: (a, b) => a.difficulty - b.difficulty },
+      { key: "language",   label: "Lang",        sort: (a, b) => a.language.localeCompare(b.language) },
+      { key: "timesAsked", label: "Times Asked",  sort: (a, b) => a.timesAsked - b.timesAsked },
+      { key: "lastAskedAt",label: "Last Asked",   sort: (a, b) => (a.lastAskedAt || "").localeCompare(b.lastAskedAt || "") },
+      { key: "pctCorrect", label: "% Correct",    sort: (a, b) => (a.pctCorrect ?? -1) - (b.pctCorrect ?? -1) },
+    ];
+
+    let allQuestions = [];
+    let sortCol = "timesAsked";
+    let sortDir = "desc";
+
+    async function load() {
+      showLoading(content);
+      try {
+        const data = await fetchJson("/api/questions/stats");
+        allQuestions = data.questions || [];
+        render();
+      } catch (err) {
+        showError(content, err.message);
+      }
+    }
+
+    function langFlag(lang) {
+      const flags = { en: "\uD83C\uDDEC\uD83C\uDDE7", it: "\uD83C\uDDEE\uD83C\uDDF9" };
+      return flags[lang] || lang;
+    }
+
+    function pctClass(pct) {
+      if (pct == null) return "";
+      if (pct >= 70) return "pct-green";
+      if (pct >= 40) return "pct-yellow";
+      return "pct-red";
+    }
+
+    function render() {
+      if (allQuestions.length === 0) {
+        content.innerHTML = '<p class="empty">No questions yet.</p>';
+        return;
+      }
+
+      const sorted = allQuestions.slice();
+      const colDef = COLUMNS.find(c => c.key === sortCol);
+      if (colDef) {
+        sorted.sort((a, b) => {
+          const v = colDef.sort(a, b);
+          return sortDir === "desc" ? -v : v;
+        });
+      }
+
+      const table = document.createElement("table");
+
+      // Header
+      const thead = document.createElement("thead");
+      const headerRow = document.createElement("tr");
+      for (const col of COLUMNS) {
+        const th = document.createElement("th");
+        th.textContent = col.label;
+        th.className = "sortable";
+        if (sortCol === col.key) {
+          th.classList.add(sortDir === "asc" ? "sort-asc" : "sort-desc");
+        }
+        th.addEventListener("click", () => {
+          if (sortCol === col.key) {
+            sortDir = sortDir === "asc" ? "desc" : "asc";
+          } else {
+            sortCol = col.key;
+            sortDir = (col.key === "text" || col.key === "tags" || col.key === "setName" || col.key === "language") ? "asc" : "desc";
+          }
+          render();
+        });
+        headerRow.appendChild(th);
+      }
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+
+      // Body
+      const tbody = document.createElement("tbody");
+      for (const q of sorted) {
+        const tr = document.createElement("tr");
+
+        // Text
+        const tdText = document.createElement("td");
+        tdText.className = "text-col";
+        tdText.textContent = q.text;
+        tdText.title = q.text;
+        tr.appendChild(tdText);
+
+        // Tags
+        const tdTags = document.createElement("td");
+        tdTags.className = "tags-col";
+        for (const tag of q.tags) {
+          const span = document.createElement("span");
+          span.className = "tag-badge";
+          span.textContent = tag;
+          tdTags.appendChild(span);
+        }
+        tr.appendChild(tdTags);
+
+        // Set
+        const tdSet = document.createElement("td");
+        tdSet.textContent = q.setName || "\u2014";
+        tr.appendChild(tdSet);
+
+        // Difficulty
+        const tdDiff = document.createElement("td");
+        tdDiff.textContent = q.difficulty;
+        tr.appendChild(tdDiff);
+
+        // Language
+        const tdLang = document.createElement("td");
+        tdLang.className = "lang-flag";
+        tdLang.textContent = langFlag(q.language);
+        tr.appendChild(tdLang);
+
+        // Times Asked
+        const tdAsked = document.createElement("td");
+        tdAsked.textContent = fmtNum(q.timesAsked);
+        tr.appendChild(tdAsked);
+
+        // Last Asked
+        const tdLast = document.createElement("td");
+        tdLast.textContent = fmtDate(q.lastAskedAt);
+        tr.appendChild(tdLast);
+
+        // % Correct
+        const tdPct = document.createElement("td");
+        if (q.pctCorrect != null) {
+          tdPct.textContent = q.pctCorrect + "%";
+          tdPct.className = pctClass(q.pctCorrect);
+        } else {
+          tdPct.textContent = "\u2014";
+        }
+        tr.appendChild(tdPct);
+
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
+
+      content.innerHTML = "";
+      content.appendChild(table);
+    }
+
+    document.addEventListener("DOMContentLoaded", load);
+  </script>
+</body>
+</html>

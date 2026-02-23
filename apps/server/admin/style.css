@@ -316,3 +316,21 @@ button:disabled {
   color: #555;
   font-weight: 500;
 }
+
+/* Tag badges (inline) */
+.tag-badge {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  margin: 0.1rem 0.15rem;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  background: #e8eaed;
+  color: #444;
+  white-space: nowrap;
+}
+
+/* % correct color classes */
+.pct-green { color: #16a34a; font-weight: 600; }
+.pct-yellow { color: #ca8a04; font-weight: 600; }
+.pct-red { color: #dc2626; font-weight: 600; }

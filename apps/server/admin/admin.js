@@ -65,6 +65,7 @@ function renderNav() {
   const pages = [
     { href: "/admin/", label: "Players" },
     { href: "/admin/question-sets.html", label: "Question Sets" },
+    { href: "/admin/questions.html", label: "Questions" },
     { href: "/admin/tags.html", label: "Tags" },
     { href: "/admin/export.html", label: "Export" },
   ];
