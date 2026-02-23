@@ -102,8 +102,10 @@ export class GameRoom {
   private currentRoundDifficulties = new Map<string, number>();
 
   // Game configuration
-  private gameType: 'casual' | 'configured' = 'casual';
+  private gameType: 'casual' | 'configured' | 'custom' = 'casual';
   private questionSetId: string | null = null;
+  private questionSetIds: string[] = [];
+  private adaptiveMode = false;
   private isMetaSet = false;
   private configuredTotalQuestions: number | null = null;
   private configuredTimeLimit: number | null = null;
@@ -509,7 +511,67 @@ export class GameRoom {
   ): Promise<void> {
     if (this.phase !== 'LOBBY') return;
 
-    if (payload.gameType === 'configured' && payload.questionSetId) {
+    if (
+      payload.gameType === 'custom' &&
+      payload.questionSetIds &&
+      payload.questionSetIds.length > 0
+    ) {
+      // Validate all set IDs exist, are non-meta, and have questions
+      let totalAvailable = 0;
+      for (const setId of payload.questionSetIds) {
+        const set = await questionsRepo.getQuestionSet(this.db, setId);
+        if (!set) {
+          this.sendToHost({
+            type: 'ERROR',
+            payload: { code: 'SET_NOT_FOUND', message: `Question set not found: ${setId}` },
+          });
+          return;
+        }
+        if (set.isMeta) {
+          this.sendToHost({
+            type: 'ERROR',
+            payload: {
+              code: 'META_SET_NOT_ALLOWED',
+              message: 'Meta sets cannot be used in custom mode',
+            },
+          });
+          return;
+        }
+        totalAvailable += set.questionCount;
+      }
+
+      if (totalAvailable === 0) {
+        this.sendToHost({
+          type: 'ERROR',
+          payload: { code: 'SET_EMPTY', message: 'Selected sets have no questions' },
+        });
+        return;
+      }
+
+      const requestedTotal = payload.totalQuestions ?? totalAvailable;
+      const clampedTotal = Math.max(1, Math.min(requestedTotal, totalAvailable));
+      const clampedTimeLimit = payload.questionTimeLimit
+        ? Math.max(1, payload.questionTimeLimit)
+        : null;
+
+      this.gameType = 'custom';
+      this.questionSetId = null;
+      this.questionSetIds = payload.questionSetIds;
+      this.adaptiveMode = payload.adaptiveMode ?? true;
+      this.isMetaSet = false;
+      this.configuredTotalQuestions = clampedTotal;
+      this.configuredTimeLimit = clampedTimeLimit;
+
+      this.sendToHost({
+        type: 'GAME_CONFIGURED',
+        payload: {
+          gameType: 'custom',
+          questionCount: clampedTotal,
+          questionSetIds: payload.questionSetIds,
+          adaptiveMode: this.adaptiveMode,
+        },
+      });
+    } else if (payload.gameType === 'configured' && payload.questionSetId) {
       // Validate the set exists and has questions
       const set = await questionsRepo.getQuestionSet(this.db, payload.questionSetId);
       if (!set) {
@@ -534,6 +596,8 @@ export class GameRoom {
 
       this.gameType = 'configured';
       this.questionSetId = payload.questionSetId;
+      this.questionSetIds = [];
+      this.adaptiveMode = false;
       this.isMetaSet = set.isMeta;
       this.configuredTotalQuestions = payload.totalQuestions ?? null;
       this.configuredTimeLimit = payload.questionTimeLimit ?? null;
@@ -545,6 +609,8 @@ export class GameRoom {
     } else {
       this.gameType = 'casual';
       this.questionSetId = null;
+      this.questionSetIds = [];
+      this.adaptiveMode = false;
       this.configuredTotalQuestions = payload.totalQuestions ?? null;
       this.configuredTimeLimit = payload.questionTimeLimit ?? null;
 
@@ -572,12 +638,34 @@ export class GameRoom {
 
     // Load tag scores early — needed for both pool building and per-round selection
     // Skip for casual games: no historical data used
-    if (this.gameType === 'configured') {
+    if (this.gameType === 'configured' || (this.gameType === 'custom' && this.adaptiveMode)) {
       await this.loadPlayerTagScores();
     }
 
     // Load questions based on game configuration
-    if (this.gameType === 'configured' && this.questionSetId && !this.isMetaSet) {
+    if (this.gameType === 'custom' && this.questionSetIds.length > 0) {
+      // Custom mode: load from multiple sets
+      const rawPool = await questionsRepo.getQuestionsBySetIds(this.db, this.questionSetIds);
+      const requestedCount = this.configuredTotalQuestions ?? rawPool.length;
+
+      if (this.adaptiveMode) {
+        // Adaptive: use selection pipeline
+        this.questionPool = buildQuestionPool(rawPool, {
+          nRounds: requestedCount,
+          playerTagScores: this.playerTagScores,
+        });
+        this.questions = this.questionPool.slice(0, requestedCount);
+      } else {
+        // Non-adaptive: Fisher-Yates shuffle then slice
+        const shuffled = [...rawPool];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        this.questions = shuffled.slice(0, requestedCount);
+        this.questionPool = [];
+      }
+    } else if (this.gameType === 'configured' && this.questionSetId && !this.isMetaSet) {
       // Regular configured set: serve in authored order
       this.questions = await questionsRepo.getQuestionsBySet(this.db, this.questionSetId);
       if (this.configuredTotalQuestions && this.configuredTotalQuestions < this.questions.length) {
@@ -624,8 +712,8 @@ export class GameRoom {
     this.positionHistory = [];
     this.usedQuestionIds.clear();
 
-    // Create game session in DB (configured games only)
-    if (this.gameType === 'configured') {
+    // Create game session in DB (non-casual games)
+    if (this.gameType !== 'casual') {
       this.gameId = crypto.randomUUID();
       gamesRepo
         .createGame(
@@ -636,6 +724,7 @@ export class GameRoom {
           this.players.size,
           this.totalQuestionCount,
           this.questionSetId ?? undefined,
+          this.questionSetIds.length > 0 ? this.questionSetIds : undefined,
         )
         .catch((err) => console.error('Failed to create game session:', err));
     }
@@ -670,8 +759,12 @@ export class GameRoom {
 
     let q: QuestionWithMeta;
 
-    if (this.isMetaSet && this.questionPool.length > 0) {
-      // Meta set: dynamically select from remaining pool using catch-up logic
+    const usePoolSelection =
+      (this.isMetaSet || (this.gameType === 'custom' && this.adaptiveMode)) &&
+      this.questionPool.length > 0;
+
+    if (usePoolSelection) {
+      // Meta set or custom adaptive: dynamically select from remaining pool
       const remaining = this.questionPool.filter((qn) => !this.usedQuestionIds.has(qn.id));
       if (remaining.length === 0) {
         this.endGame();
@@ -944,12 +1037,16 @@ export class GameRoom {
       }
 
       // Position-based time bonus multiplier (trailing players get a boost)
-      const tbMultiplier = computeTimeBonusMultiplier(
-        player.score,
-        preRoundScores,
-        this.currentQuestionIndex,
-        this.totalQuestionCount,
-      );
+      // Skip catch-up for custom non-adaptive mode
+      const skipCatchUp = this.gameType === 'custom' && !this.adaptiveMode;
+      const tbMultiplier = skipCatchUp
+        ? 1.0
+        : computeTimeBonusMultiplier(
+            player.score,
+            preRoundScores,
+            this.currentQuestionIndex,
+            this.totalQuestionCount,
+          );
       const adjustedScore = basePoints + timeBonus * tbMultiplier;
 
       // Apply difficulty multiplier and lifetime handicap
@@ -1039,10 +1136,12 @@ export class GameRoom {
         .insertRoundResults(this.db, gameId, roundResults)
         .catch((err) => console.error('Failed to insert round results:', err));
 
-      // Update tag scores for profiled players (fire-and-forget + update in-memory)
-      this.updateTagScoresAfterRound(q, playerResults).catch((err) =>
-        console.error('Failed to update tag scores:', err),
-      );
+      // Update tag scores for profiled players (skip for custom non-adaptive)
+      if (this.gameType !== 'custom' || this.adaptiveMode) {
+        this.updateTagScoresAfterRound(q, playerResults).catch((err) =>
+          console.error('Failed to update tag scores:', err),
+        );
+      }
     }
 
     this.resultsTimeout = setTimeout(() => {
@@ -1123,10 +1222,12 @@ export class GameRoom {
       if (player.playerId === winner.playerId) {
         await playersRepo.incrementWins(this.db, player.profileId);
       }
-      // Increment games_played on all tag scores for decay tracking
-      playerTagScoresRepo
-        .incrementGamesPlayed(this.db, player.profileId)
-        .catch((err) => console.error('Failed to increment tag games played:', err));
+      // Increment games_played on all tag scores for decay tracking (skip for custom non-adaptive)
+      if (this.gameType !== 'custom' || this.adaptiveMode) {
+        playerTagScoresRepo
+          .incrementGamesPlayed(this.db, player.profileId)
+          .catch((err) => console.error('Failed to increment tag games played:', err));
+      }
     }
   }
 
@@ -1200,6 +1301,9 @@ export class GameRoom {
   }
 
   private get totalQuestionCount(): number {
+    if (this.gameType === 'custom') {
+      return this.configuredTotalQuestions ?? this.questions.length;
+    }
     if (this.gameType === 'configured' || this.questionPool.length === 0) {
       return this.questions.length;
     }

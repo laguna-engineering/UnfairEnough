@@ -145,18 +145,24 @@ const MOCK_QUESTION_SETS: QuestionSetWithMeta[] = [
   },
 ];
 
+type GameModeType = 'casual' | 'configured' | 'custom';
+
 export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
   const { t, i18n } = useTranslation();
   const { state, startGame, configureGame, setLanguage, qrUrl, gameConfig, mode, serverUrl } =
     useGameController();
-  const [selectedMode, setSelectedMode] = useState<'casual' | 'configured'>(
-    gameConfig.gameType ?? 'casual',
-  );
+  const [selectedMode, setSelectedMode] = useState<GameModeType>(gameConfig.gameType ?? 'casual');
   const [showImportModal, setShowImportModal] = useState(false);
   const [questionSets, setQuestionSets] = useState<QuestionSetWithMeta[]>(MOCK_QUESTION_SETS);
   const [totalQuestions, setTotalQuestions] = useState(
     MOCK_QUESTION_SETS.filter((s) => !s.isMeta).reduce((sum, s) => sum + s.questionCount, 0),
   );
+
+  // Custom mode local state
+  const [selectedSetIds, setSelectedSetIds] = useState<string[]>([]);
+  const [customTotalQuestions, setCustomTotalQuestions] = useState(10);
+  const [customTimeLimit, setCustomTimeLimit] = useState(15);
+  const [adaptiveEnabled, setAdaptiveEnabled] = useState(true);
 
   const currentLanguage = i18n.language;
 
@@ -192,6 +198,12 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
     loadQuestionSets();
   }, [loadQuestionSets]);
 
+  // Clear custom set selection on language change
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional trigger on language change
+  useEffect(() => {
+    setSelectedSetIds([]);
+  }, [currentLanguage]);
+
   const handleLanguageChange = useCallback(
     (lang: SupportedLanguage) => {
       changeLanguage(lang);
@@ -200,23 +212,114 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
     [setLanguage],
   );
 
-  const handleModeChange = useCallback(
-    (mode: 'casual' | 'configured') => {
-      setSelectedMode(mode);
-      if (mode === 'casual') {
-        configureGame('casual');
+  // Compute max questions available from selected custom sets
+  const nonMetaSets = questionSets.filter((s) => !s.isMeta);
+  const maxCustomQuestions = nonMetaSets
+    .filter((s) => selectedSetIds.includes(s.id))
+    .reduce((sum, s) => sum + s.questionCount, 0);
+
+  // Send custom config whenever custom settings change
+  const sendCustomConfig = useCallback(
+    (setIds: string[], total: number, timeLimit: number, adaptive: boolean) => {
+      if (setIds.length > 0) {
+        configureGame('custom', undefined, {
+          questionSetIds: setIds,
+          totalQuestions: total,
+          questionTimeLimit: timeLimit,
+          adaptiveMode: adaptive,
+        });
       }
     },
     [configureGame],
   );
 
+  const handleModeChange = useCallback(
+    (newMode: GameModeType) => {
+      setSelectedMode(newMode);
+      if (newMode === 'casual') {
+        configureGame('casual');
+      } else if (newMode === 'custom' && selectedSetIds.length > 0) {
+        sendCustomConfig(selectedSetIds, customTotalQuestions, customTimeLimit, adaptiveEnabled);
+      }
+      // 'configured' mode waits for set selection
+    },
+    [
+      configureGame,
+      selectedSetIds,
+      customTotalQuestions,
+      customTimeLimit,
+      adaptiveEnabled,
+      sendCustomConfig,
+    ],
+  );
+
+  const handleToggleSet = useCallback(
+    (setId: string) => {
+      setSelectedSetIds((prev) => {
+        const next = prev.includes(setId) ? prev.filter((id) => id !== setId) : [...prev, setId];
+
+        // Recompute max from new selection
+        const newMax = nonMetaSets
+          .filter((s) => next.includes(s.id))
+          .reduce((sum, s) => sum + s.questionCount, 0);
+
+        // Auto-clamp totalQuestions
+        const clamped = Math.min(customTotalQuestions, newMax) || newMax;
+        setCustomTotalQuestions(clamped > 0 ? clamped : 1);
+
+        if (next.length > 0) {
+          sendCustomConfig(
+            next,
+            Math.min(customTotalQuestions, newMax) || newMax,
+            customTimeLimit,
+            adaptiveEnabled,
+          );
+        }
+        return next;
+      });
+    },
+    [nonMetaSets, customTotalQuestions, customTimeLimit, adaptiveEnabled, sendCustomConfig],
+  );
+
+  const handleTotalQuestionsChange = useCallback(
+    (delta: number) => {
+      setCustomTotalQuestions((prev) => {
+        const next = Math.max(1, Math.min(prev + delta, maxCustomQuestions));
+        sendCustomConfig(selectedSetIds, next, customTimeLimit, adaptiveEnabled);
+        return next;
+      });
+    },
+    [maxCustomQuestions, selectedSetIds, customTimeLimit, adaptiveEnabled, sendCustomConfig],
+  );
+
+  const handleTimeLimitChange = useCallback(
+    (delta: number) => {
+      setCustomTimeLimit((prev) => {
+        const next = Math.max(5, Math.min(prev + delta, 60));
+        sendCustomConfig(selectedSetIds, customTotalQuestions, next, adaptiveEnabled);
+        return next;
+      });
+    },
+    [selectedSetIds, customTotalQuestions, adaptiveEnabled, sendCustomConfig],
+  );
+
+  const handleAdaptiveToggle = useCallback(() => {
+    setAdaptiveEnabled((prev) => {
+      const next = !prev;
+      sendCustomConfig(selectedSetIds, customTotalQuestions, customTimeLimit, next);
+      return next;
+    });
+  }, [selectedSetIds, customTotalQuestions, customTimeLimit, sendCustomConfig]);
+
   // TV focus refs
   const casualRef = useRef<View>(null);
   const configuredRef = useRef<View>(null);
+  const customRef = useRef<View>(null);
   const startRef = useRef<View>(null);
   const enRef = useRef<View>(null);
   const [focusTags, setFocusTags] = useState<{
     configured?: number;
+    custom?: number;
     start?: number;
     en?: number;
   }>({});
@@ -225,6 +328,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
     const timer = setTimeout(() => {
       setFocusTags({
         configured: findNodeHandle(configuredRef.current) ?? undefined,
+        custom: findNodeHandle(customRef.current) ?? undefined,
         start: findNodeHandle(startRef.current) ?? undefined,
         en: findNodeHandle(enRef.current) ?? undefined,
       });
@@ -234,7 +338,9 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
 
   const players = playersSelectors.selectAll(state.players);
   const playerCount = players.length;
-  const canStart = playerCount >= state.game.config.minPlayers;
+  const canStart =
+    playerCount >= state.game.config.minPlayers &&
+    (selectedMode !== 'custom' || selectedSetIds.length > 0);
 
   return (
     <ScreenBackground style={styles.container}>
@@ -348,7 +454,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
               <Pressable
                 ref={configuredRef}
                 onPress={() => handleModeChange('configured')}
-                nextFocusRight={focusTags.start}
+                nextFocusRight={focusTags.custom}
                 style={(state) => [
                   styles.gameModeButton,
                   selectedMode === 'configured' && styles.gameModeButtonActive,
@@ -363,6 +469,26 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                   ]}
                 >
                   {t('gameConfig.configured')}
+                </Text>
+              </Pressable>
+              <Pressable
+                ref={customRef}
+                onPress={() => handleModeChange('custom')}
+                nextFocusRight={focusTags.start}
+                style={(state) => [
+                  styles.gameModeButton,
+                  selectedMode === 'custom' && styles.gameModeButtonActive,
+                  (state as any).focused && styles.focused,
+                  state.pressed && styles.pressed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.gameModeButtonText,
+                    selectedMode === 'custom' && styles.gameModeButtonTextActive,
+                  ]}
+                >
+                  {t('gameConfig.custom')}
                 </Text>
               </Pressable>
               {mode === 'local' && (
@@ -415,14 +541,141 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                           {set.name}
                         </Text>
                         <Text style={styles.setCardCount}>
-                          {set.isMeta
-                            ? t('gameConfig.questionsCount', { count: set.questionCount })
-                            : t('gameConfig.questionsCount', { count: set.questionCount })}
+                          {t('gameConfig.questionsCount', { count: set.questionCount })}
                         </Text>
                       </Pressable>
                     ))
                 )}
               </ScrollView>
+            )}
+
+            {/* Custom Mode Controls */}
+            {selectedMode === 'custom' && (
+              <View style={styles.customControls}>
+                {/* Multi-select set picker (meta sets excluded) */}
+                <ScrollView
+                  horizontal
+                  style={styles.setPickerContainer}
+                  contentContainerStyle={styles.setPickerContent}
+                  showsHorizontalScrollIndicator={false}
+                >
+                  {nonMetaSets.length === 0 ? (
+                    <Text style={styles.noSetsText}>{t('gameConfig.noSets')}</Text>
+                  ) : (
+                    nonMetaSets.map((set) => (
+                      <Pressable
+                        key={set.id}
+                        onPress={() => handleToggleSet(set.id)}
+                        nextFocusRight={focusTags.start}
+                        style={(pressState) => [
+                          styles.setCard,
+                          selectedSetIds.includes(set.id) && styles.setCardActive,
+                          (pressState as any).focused && styles.focused,
+                          pressState.pressed && styles.pressed,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.setCardName,
+                            selectedSetIds.includes(set.id) && styles.setCardNameActive,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {set.name}
+                        </Text>
+                        <Text style={styles.setCardCount}>
+                          {t('gameConfig.questionsCount', { count: set.questionCount })}
+                        </Text>
+                      </Pressable>
+                    ))
+                  )}
+                </ScrollView>
+
+                {selectedSetIds.length === 0 ? (
+                  <Text style={styles.selectSetsHint}>{t('gameConfig.selectSets')}</Text>
+                ) : (
+                  <View style={styles.customSettingsRow}>
+                    {/* Total questions stepper */}
+                    <View style={styles.stepperGroup}>
+                      <Text style={styles.stepperLabel}>{t('gameConfig.totalQuestionsLabel')}</Text>
+                      <View style={styles.stepper}>
+                        <Pressable
+                          onPress={() => handleTotalQuestionsChange(-1)}
+                          style={(s) => [
+                            styles.stepperButton,
+                            (s as any).focused && styles.focused,
+                            s.pressed && styles.pressed,
+                          ]}
+                        >
+                          <Text style={styles.stepperButtonText}>-</Text>
+                        </Pressable>
+                        <Text style={styles.stepperValue}>{customTotalQuestions}</Text>
+                        <Pressable
+                          onPress={() => handleTotalQuestionsChange(1)}
+                          style={(s) => [
+                            styles.stepperButton,
+                            (s as any).focused && styles.focused,
+                            s.pressed && styles.pressed,
+                          ]}
+                        >
+                          <Text style={styles.stepperButtonText}>+</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+
+                    {/* Seconds per question stepper */}
+                    <View style={styles.stepperGroup}>
+                      <Text style={styles.stepperLabel}>{t('gameConfig.secondsPerQuestion')}</Text>
+                      <View style={styles.stepper}>
+                        <Pressable
+                          onPress={() => handleTimeLimitChange(-5)}
+                          style={(s) => [
+                            styles.stepperButton,
+                            (s as any).focused && styles.focused,
+                            s.pressed && styles.pressed,
+                          ]}
+                        >
+                          <Text style={styles.stepperButtonText}>-</Text>
+                        </Pressable>
+                        <Text style={styles.stepperValue}>{customTimeLimit}</Text>
+                        <Pressable
+                          onPress={() => handleTimeLimitChange(5)}
+                          style={(s) => [
+                            styles.stepperButton,
+                            (s as any).focused && styles.focused,
+                            s.pressed && styles.pressed,
+                          ]}
+                        >
+                          <Text style={styles.stepperButtonText}>+</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+
+                    {/* Adaptive mode toggle */}
+                    <View style={styles.stepperGroup}>
+                      <Text style={styles.stepperLabel}>{t('gameConfig.adaptiveMode')}</Text>
+                      <Pressable
+                        onPress={handleAdaptiveToggle}
+                        style={(s) => [
+                          styles.toggleButton,
+                          adaptiveEnabled && styles.toggleButtonActive,
+                          (s as any).focused && styles.focused,
+                          s.pressed && styles.pressed,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.toggleButtonText,
+                            adaptiveEnabled && styles.toggleButtonTextActive,
+                          ]}
+                        >
+                          {adaptiveEnabled ? 'ON' : 'OFF'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                )}
+              </View>
             )}
           </View>
         </View>
@@ -431,16 +684,14 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
         <View style={styles.qrSection}>
           <Card style={styles.qrCard} variant="glow" glowColor={colors.primary}>
             {qrUrl ? (
-              <>
-                <View style={styles.qrContainer}>
-                  <QRCode
-                    value={qrUrl}
-                    size={QR_SIZE}
-                    backgroundColor="white"
-                    color={colors.background}
-                  />
-                </View>
-              </>
+              <View style={styles.qrContainer}>
+                <QRCode
+                  value={qrUrl}
+                  size={QR_SIZE}
+                  backgroundColor="white"
+                  color={colors.background}
+                />
+              </View>
             ) : (
               <View style={styles.loadingContainer}>
                 <Text style={styles.loadingText}>{t('lobby.serverStarting')}</Text>
@@ -457,13 +708,16 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
               disabled={!canStart}
               size="large"
               style={styles.startButton}
-              nextFocusLeft={focusTags.configured}
+              nextFocusLeft={focusTags.custom ?? focusTags.configured}
               nextFocusUp={focusTags.en}
             />
-            {!canStart && playerCount > 0 && (
+            {!canStart && playerCount > 0 && selectedMode !== 'custom' && (
               <Text style={styles.hintText}>
                 {t('lobby.needMorePlayers', { min: state.game.config.minPlayers })}
               </Text>
+            )}
+            {selectedMode === 'custom' && selectedSetIds.length === 0 && (
+              <Text style={styles.hintText}>{t('gameConfig.selectSets')}</Text>
             )}
           </View>
         </View>
@@ -696,6 +950,77 @@ const styles = StyleSheet.create({
   gameModeButtonTextActive: {
     color: colors.textPrimary,
     fontWeight: '700',
+  },
+  // Custom mode controls
+  customControls: {
+    marginTop: spacing.xs,
+  },
+  selectSetsHint: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+    marginTop: spacing.sm,
+  },
+  customSettingsRow: {
+    flexDirection: 'row',
+    gap: spacing.lg,
+    marginTop: spacing.sm,
+    alignItems: 'flex-start',
+  },
+  stepperGroup: {
+    alignItems: 'center',
+  },
+  stepperLabel: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  stepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  stepperButton: {
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.md,
+    borderWidth: 2,
+    borderColor: colors.textSecondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stepperButtonText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontWeight: '700',
+  },
+  stepperValue: {
+    ...typography.body,
+    color: colors.textPrimary,
+    fontWeight: '700',
+    minWidth: 32,
+    textAlign: 'center',
+  },
+  toggleButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    borderWidth: 2,
+    borderColor: colors.textSecondary,
+    minWidth: 56,
+    alignItems: 'center',
+  },
+  toggleButtonActive: {
+    backgroundColor: colors.secondary,
+    borderColor: colors.secondary,
+  },
+  toggleButtonText: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    fontWeight: '700',
+  },
+  toggleButtonTextActive: {
+    color: colors.textPrimary,
   },
   startButtonContainer: {
     alignItems: 'center',

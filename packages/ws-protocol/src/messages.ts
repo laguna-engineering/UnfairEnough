@@ -31,7 +31,13 @@ export type ServerMessage =
   | { type: 'GAME_OVER'; payload: GameResult }
   | {
       type: 'GAME_CONFIGURED';
-      payload: { gameType: string; questionCount: number; questionSetId?: string };
+      payload: {
+        gameType: string;
+        questionCount: number;
+        questionSetId?: string;
+        questionSetIds?: string[];
+        adaptiveMode?: boolean;
+      };
     }
   | { type: 'PONG' }
   | { type: 'ERROR'; payload: { code: string; message: string } };
@@ -154,10 +160,12 @@ export type HostMessage =
   | { type: 'MEDIA_LOADED' };
 
 export interface ConfigureGamePayload {
-  gameType: 'casual' | 'configured';
+  gameType: 'casual' | 'configured' | 'custom';
   questionSetId?: string;
+  questionSetIds?: string[];
   totalQuestions?: number;
   questionTimeLimit?: number;
+  adaptiveMode?: boolean;
 }
 
 // Internal messages for RN Bridge communication

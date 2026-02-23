@@ -5,6 +5,7 @@ function rowToGameSession(row: GameRow): GameSession {
   return {
     id: row.id,
     questionSetId: row.question_set_id,
+    questionSetIds: row.question_set_ids ? JSON.parse(row.question_set_ids) : null,
     roomCode: row.room_code,
     gameType: row.game_type,
     playerCount: row.player_count,
@@ -42,11 +43,20 @@ export async function createGame(
   playerCount: number,
   questionCount: number,
   questionSetId?: string,
+  questionSetIds?: string[],
 ): Promise<GameSession> {
   await db.run(
-    `INSERT INTO games (id, room_code, game_type, player_count, question_count, question_set_id)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [id, roomCode, gameType, playerCount, questionCount, questionSetId ?? null],
+    `INSERT INTO games (id, room_code, game_type, player_count, question_count, question_set_id, question_set_ids)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      roomCode,
+      gameType,
+      playerCount,
+      questionCount,
+      questionSetId ?? null,
+      questionSetIds ? JSON.stringify(questionSetIds) : null,
+    ],
   );
   const row = await db.get<GameRow>('SELECT * FROM games WHERE id = ?', [id]);
   return rowToGameSession(row!);

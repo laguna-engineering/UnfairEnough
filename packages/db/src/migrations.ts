@@ -184,6 +184,10 @@ ALTER TABLE questions ADD COLUMN language TEXT NOT NULL DEFAULT 'it';
 CREATE INDEX IF NOT EXISTS idx_questions_language ON questions(language);
 `;
 
+const MIGRATION_V12 = `
+ALTER TABLE games ADD COLUMN question_set_ids TEXT;
+`;
+
 const migrations: Migration[] = [
   { version: 1, sql: MIGRATION_V1 },
   { version: 2, sql: MIGRATION_V2 },
@@ -196,6 +200,7 @@ const migrations: Migration[] = [
   { version: 9, sql: MIGRATION_V9 },
   { version: 10, sql: MIGRATION_V10 },
   { version: 11, sql: MIGRATION_V11 },
+  { version: 12, sql: MIGRATION_V12 },
 ];
 
 /**

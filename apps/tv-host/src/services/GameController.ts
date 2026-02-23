@@ -195,14 +195,34 @@ class GameController implements IGameController {
   private async loadQuestionsAndStart(): Promise<void> {
     const db = getDb();
     const state = this.getState();
-    const { gameType, questionSetId, totalQuestions } = state.game.config;
+    const { gameType, questionSetId, questionSetIds, adaptiveMode, totalQuestions } =
+      state.game.config;
 
-    // Load tag scores for profiled players (configured games only)
-    if (gameType === 'configured') {
+    // Load tag scores for profiled players (configured or custom adaptive)
+    if (gameType === 'configured' || (gameType === 'custom' && adaptiveMode)) {
       await this.loadPlayerTagScores();
     }
 
-    if (gameType === 'configured' && questionSetId && !this.isMetaSet) {
+    if (gameType === 'custom' && questionSetIds && questionSetIds.length > 0) {
+      // Custom mode: load from multiple sets
+      const rawPool = await questionsRepo.getQuestionsBySetIds(db, questionSetIds);
+
+      if (adaptiveMode) {
+        // Adaptive: use selection pipeline
+        this.questionPool = buildQuestionPool(rawPool, {
+          nRounds: totalQuestions,
+          playerTagScores: this.playerTagScores,
+        });
+      } else {
+        // Non-adaptive: Fisher-Yates shuffle then slice
+        const shuffled = [...rawPool];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        this.questionPool = shuffled.slice(0, totalQuestions);
+      }
+    } else if (gameType === 'configured' && questionSetId && !this.isMetaSet) {
       // Regular configured set: serve in authored order
       this.questionPool = await questionsRepo.getQuestionsBySet(db, questionSetId);
     } else {
@@ -284,6 +304,7 @@ class GameController implements IGameController {
   private get totalQuestionCount(): number {
     const state = this.getState();
     const { gameType, totalQuestions } = state.game.config;
+    if (gameType === 'custom') return Math.min(totalQuestions, this.questionPool.length);
     if (gameType === 'configured') return this.questionPool.length;
     return Math.min(totalQuestions, this.questionPool.length);
   }
@@ -306,8 +327,14 @@ class GameController implements IGameController {
 
     let question: QuestionWithMeta;
 
-    if (this.isMetaSet) {
-      // Meta set: dynamically select from remaining pool using catch-up logic
+    const state = this.getState();
+    const { gameType, adaptiveMode } = state.game.config;
+    const usePoolSelection =
+      (this.isMetaSet || (gameType === 'custom' && adaptiveMode)) &&
+      this.questionPool.length > this.currentQuestionIndex;
+
+    if (usePoolSelection) {
+      // Meta set or custom adaptive: dynamically select from remaining pool
       const remaining = this.questionPool.filter((q) => !this.usedQuestionIds.has(q.id));
       if (remaining.length === 0) {
         this.endGame();
@@ -556,12 +583,17 @@ class GameController implements IGameController {
       }
 
       // Position-based time bonus multiplier (trailing players get a boost)
-      const tbMultiplier = computeTimeBonusMultiplier(
-        player.score,
-        preRoundScores,
-        this.currentQuestionIndex,
-        this.totalQuestionCount,
-      );
+      // Skip catch-up for custom non-adaptive mode
+      const { gameType: gt, adaptiveMode: am } = state.game.config;
+      const skipCatchUp = gt === 'custom' && !am;
+      const tbMultiplier = skipCatchUp
+        ? 1.0
+        : computeTimeBonusMultiplier(
+            player.score,
+            preRoundScores,
+            this.currentQuestionIndex,
+            this.totalQuestionCount,
+          );
       const adjustedScore = basePoints + timeBonus * tbMultiplier;
 
       // Apply difficulty multiplier and lifetime handicap
@@ -636,8 +668,9 @@ class GameController implements IGameController {
       .markQuestionAsked(getDb(), currentQuestion.id)
       .catch((err) => console.error('Failed to update question usage:', err));
 
-    // Update tag scores for profiled players (configured games only)
-    if (this.getState().game.config.gameType === 'configured') {
+    // Update tag scores for profiled players (skip for casual and custom non-adaptive)
+    const cfg = this.getState().game.config;
+    if (cfg.gameType === 'configured' || (cfg.gameType === 'custom' && cfg.adaptiveMode)) {
       this.updateTagScoresAfterRound(currentQuestion, playerResults).catch((err) =>
         console.error('Failed to update tag scores:', err),
       );
@@ -727,12 +760,14 @@ class GameController implements IGameController {
       },
     });
 
-    // Record game stats and update tag decay (configured games only)
-    if (state.game.config.gameType === 'configured') {
+    // Record game stats (non-casual games) and update tag decay (when adaptive)
+    if (state.game.config.gameType !== 'casual') {
       this.recordGameEnd(winner).catch((err) => console.error('Failed to record game end:', err));
-      this.incrementTagGamesPlayed().catch((err) =>
-        console.error('Failed to increment tag games played:', err),
-      );
+      if (state.game.config.gameType !== 'custom' || state.game.config.adaptiveMode) {
+        this.incrementTagGamesPlayed().catch((err) =>
+          console.error('Failed to increment tag games played:', err),
+        );
+      }
     }
   }
 
@@ -769,10 +804,38 @@ class GameController implements IGameController {
   /**
    * Configure game mode
    */
-  configureGame(gameType: 'casual' | 'configured', questionSetId?: string): void {
-    this.store.dispatch(updateConfig({ gameType, questionSetId }));
+  configureGame(
+    gameType: 'casual' | 'configured' | 'custom',
+    questionSetId?: string,
+    options?: {
+      questionSetIds?: string[];
+      totalQuestions?: number;
+      questionTimeLimit?: number;
+      adaptiveMode?: boolean;
+    },
+  ): void {
+    if (gameType === 'custom' && options?.questionSetIds && options.questionSetIds.length > 0) {
+      this.store.dispatch(
+        updateConfig({
+          gameType,
+          questionSetId: undefined,
+          questionSetIds: options.questionSetIds,
+          adaptiveMode: options.adaptiveMode ?? true,
+          totalQuestions: options.totalQuestions ?? 10,
+          questionTimeLimit: options.questionTimeLimit ?? 15,
+        }),
+      );
+      this.isMetaSet = false;
+    } else if (gameType === 'configured' && questionSetId) {
+      this.store.dispatch(
+        updateConfig({
+          gameType,
+          questionSetId,
+          questionSetIds: undefined,
+          adaptiveMode: undefined,
+        }),
+      );
 
-    if (gameType === 'configured' && questionSetId) {
       const db = getDb();
       questionsRepo
         .getQuestionSet(db, questionSetId)
@@ -790,6 +853,14 @@ class GameController implements IGameController {
           console.error('Failed to validate question set:', err);
         });
     } else {
+      this.store.dispatch(
+        updateConfig({
+          gameType: 'casual',
+          questionSetId: undefined,
+          questionSetIds: undefined,
+          adaptiveMode: undefined,
+        }),
+      );
       this.isMetaSet = false;
     }
   }

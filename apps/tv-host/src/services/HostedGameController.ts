@@ -78,8 +78,27 @@ export class HostedGameController implements IGameController {
     this.store.dispatch(resetScores());
   }
 
-  configureGame(gameType: 'casual' | 'configured', questionSetId?: string): void {
-    this.send({ type: 'CONFIGURE_GAME', payload: { gameType, questionSetId } });
+  configureGame(
+    gameType: 'casual' | 'configured' | 'custom',
+    questionSetId?: string,
+    options?: {
+      questionSetIds?: string[];
+      totalQuestions?: number;
+      questionTimeLimit?: number;
+      adaptiveMode?: boolean;
+    },
+  ): void {
+    this.send({
+      type: 'CONFIGURE_GAME',
+      payload: {
+        gameType,
+        questionSetId,
+        questionSetIds: options?.questionSetIds,
+        totalQuestions: options?.totalQuestions,
+        questionTimeLimit: options?.questionTimeLimit,
+        adaptiveMode: options?.adaptiveMode,
+      },
+    });
   }
 
   setLanguage(language: string): void {
@@ -256,8 +275,10 @@ export class HostedGameController implements IGameController {
       case 'GAME_CONFIGURED':
         this.store.dispatch(
           updateConfig({
-            gameType: message.payload.gameType as 'casual' | 'configured',
+            gameType: message.payload.gameType as 'casual' | 'configured' | 'custom',
             questionSetId: message.payload.questionSetId,
+            questionSetIds: message.payload.questionSetIds,
+            adaptiveMode: message.payload.adaptiveMode,
             totalQuestions: message.payload.questionCount,
           }),
         );

@@ -81,7 +81,14 @@
     "importing": "Importing...",
     "importSuccess": "Imported {{count}} questions!",
     "importError": "Import failed: {{error}}",
-    "totalQuestions": "{{count}} questions in pool"
+    "totalQuestions": "{{count}} questions in pool",
+    "custom": "Custom",
+    "totalQuestionsLabel": "Questions",
+    "secondsPerQuestion": "Seconds",
+    "adaptiveMode": "Adaptive",
+    "selectSets": "Select at least one set",
+    "selectedSets_one": "{{count}} set selected",
+    "selectedSets_other": "{{count}} sets selected"
   },
   "profile": {
     "welcomeBack": "Welcome back, {{name}}!",

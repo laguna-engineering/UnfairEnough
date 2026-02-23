@@ -43,8 +43,10 @@ export interface GameConfig {
   questionTimeLimit: number;
   totalQuestions: number;
   minPlayers: number;
-  gameType?: 'casual' | 'configured';
+  gameType?: 'casual' | 'configured' | 'custom';
   questionSetId?: string;
+  questionSetIds?: string[];
+  adaptiveMode?: boolean;
 }
 
 interface GameState {

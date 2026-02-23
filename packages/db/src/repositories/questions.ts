@@ -142,6 +142,20 @@ export async function getRandomQuestions(
   return rows.map(rowToQuestionWithMeta);
 }
 
+export async function getQuestionsBySetIds(
+  db: DbAdapter,
+  setIds: string[],
+): Promise<QuestionWithMeta[]> {
+  if (setIds.length === 0) return [];
+  const placeholders = setIds.map(() => '?').join(',');
+  const rows = await db.all<QuestionRow>(
+    `SELECT * FROM questions WHERE set_id IN (${placeholders})
+     AND set_id NOT IN (SELECT id FROM question_sets WHERE deleted_at IS NOT NULL)`,
+    setIds,
+  );
+  return rows.map(rowToQuestionWithMeta);
+}
+
 export async function getQuestionsBySet(db: DbAdapter, setId: string): Promise<QuestionWithMeta[]> {
   const rows = await db.all<QuestionRow>(
     'SELECT * FROM questions WHERE set_id = ? ORDER BY rowid',

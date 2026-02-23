@@ -65,6 +65,7 @@ export interface PlayerRow {
 export interface GameRow {
   id: string;
   question_set_id: string | null;
+  question_set_ids: string | null;
   room_code: string;
   game_type: GameType;
   player_count: number;
@@ -106,7 +107,7 @@ export interface PlayerTagScoreRow {
 
 export type QuestionType = 'multiple_choice' | 'true_false';
 export type MediaType = 'image' | 'audio' | 'video';
-export type GameType = 'casual' | 'configured';
+export type GameType = 'casual' | 'configured' | 'custom';
 
 export interface QuestionWithMeta {
   id: string;
@@ -167,6 +168,7 @@ export interface PlayerProfile {
 export interface GameSession {
   id: string;
   questionSetId: string | null;
+  questionSetIds: string[] | null;
   roomCode: string;
   gameType: GameType;
   playerCount: number;

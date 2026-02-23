@@ -27,8 +27,17 @@ export function useGameController() {
   }, [controller]);
 
   const configureGame = useCallback(
-    (gameType: 'casual' | 'configured', questionSetId?: string) => {
-      controller.configureGame(gameType, questionSetId);
+    (
+      gameType: 'casual' | 'configured' | 'custom',
+      questionSetId?: string,
+      options?: {
+        questionSetIds?: string[];
+        totalQuestions?: number;
+        questionTimeLimit?: number;
+        adaptiveMode?: boolean;
+      },
+    ) => {
+      controller.configureGame(gameType, questionSetId, options);
     },
     [controller],
   );
