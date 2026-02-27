@@ -49,6 +49,8 @@ import { getDb, initDatabase } from './database';
 import type { IGameController } from './IGameController';
 import { wsServer } from './WebSocketServer';
 
+const MEDIA_LOAD_TIMEOUT_MS = 10_000;
+
 /** In-memory player profile info resolved at join time */
 interface LocalPlayerProfile {
   profileId: string;
@@ -374,6 +376,7 @@ class GameController implements IGameController {
       const previewDuration = media.previewDuration ?? 5;
 
       const previewPayload = {
+        questionId: question.id,
         questionNumber: this.currentQuestionIndex + 1,
         totalQuestions: this.totalQuestionCount,
         media: { type: media.type as 'image' | 'audio' | 'video', url: media.url },
@@ -383,16 +386,20 @@ class GameController implements IGameController {
       this.store.dispatch(showMediaPreview(previewPayload));
       wsServer.broadcast({ type: 'MEDIA_PREVIEW', payload: previewPayload });
 
-      // Wait for the TV to signal the image has loaded (max 5s),
+      // Wait for the TV to signal the image has loaded (max 10s),
       // then start the actual preview countdown.
+      // If the image doesn't load within 10s, skip the preview entirely.
       this.waitingForMediaLoad = true;
       this.pendingMediaQuestion = question;
       this.pendingPreviewDuration = previewDuration;
 
       this.mediaLoadWaitTimeout = setTimeout(() => {
         this.mediaLoadWaitTimeout = null;
-        this.startPreviewCountdown();
-      }, 5000);
+        if (!this.waitingForMediaLoad) return;
+        this.waitingForMediaLoad = false;
+        this.pendingMediaQuestion = null;
+        this.sendQuestion(question);
+      }, MEDIA_LOAD_TIMEOUT_MS);
     } else {
       this.sendQuestion(question);
     }
@@ -437,16 +444,29 @@ class GameController implements IGameController {
   }
 
   /**
-   * Signal that the media preview image has finished loading on the TV.
-   * Starts the preview countdown immediately instead of waiting for the 5s load timeout.
+   * Signal that the media preview image has finished loading (or failed) on the TV.
+   * On success: starts the preview countdown immediately instead of waiting for the 10s timeout.
+   * On failure: skips the preview entirely and shows the question.
    */
-  notifyMediaLoaded(): void {
+  notifyMediaLoaded(success = true, questionId?: string): void {
     if (!this.waitingForMediaLoad) return;
+    // Ignore stale messages from a previous question's media preview
+    if (questionId && this.pendingMediaQuestion && questionId !== this.pendingMediaQuestion.id)
+      return;
     if (this.mediaLoadWaitTimeout) {
       clearTimeout(this.mediaLoadWaitTimeout);
       this.mediaLoadWaitTimeout = null;
     }
-    this.startPreviewCountdown();
+
+    if (success) {
+      this.startPreviewCountdown();
+    } else {
+      // Image failed to load — skip preview, go straight to question
+      this.waitingForMediaLoad = false;
+      const question = this.pendingMediaQuestion;
+      this.pendingMediaQuestion = null;
+      if (question) this.sendQuestion(question);
+    }
   }
 
   /**

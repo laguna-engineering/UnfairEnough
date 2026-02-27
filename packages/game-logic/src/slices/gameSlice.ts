@@ -55,6 +55,7 @@ interface GameState {
   mediaPreview: {
     type: 'image' | 'audio' | 'video';
     url: string;
+    questionId?: string;
     questionNumber: number;
     totalQuestions: number;
   } | null;
@@ -120,6 +121,7 @@ const gameSlice = createSlice({
       state.countdown = action.payload.duration;
       state.mediaPreview = {
         ...action.payload.media,
+        questionId: action.payload.questionId,
         questionNumber: action.payload.questionNumber,
         totalQuestions: action.payload.totalQuestions,
       };

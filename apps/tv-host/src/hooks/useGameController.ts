@@ -49,9 +49,12 @@ export function useGameController() {
     [controller],
   );
 
-  const notifyMediaLoaded = useCallback(() => {
-    controller.notifyMediaLoaded();
-  }, [controller]);
+  const notifyMediaLoaded = useCallback(
+    (success?: boolean, questionId?: string) => {
+      controller.notifyMediaLoaded(success, questionId);
+    },
+    [controller],
+  );
 
   // Build the QR URL based on mode
   const { roomCode, localIp, serverPort } = state.game;

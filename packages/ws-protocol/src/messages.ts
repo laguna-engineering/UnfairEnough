@@ -103,6 +103,7 @@ export interface Question {
 }
 
 export interface MediaPreviewPayload {
+  questionId?: string;
   questionNumber: number;
   totalQuestions: number;
   media: { type: 'image' | 'audio' | 'video'; url: string };
@@ -157,7 +158,7 @@ export type HostMessage =
   | { type: 'RESET_GAME' }
   | { type: 'SET_LANGUAGE'; payload: { language: string } }
   | { type: 'CONFIGURE_GAME'; payload: ConfigureGamePayload }
-  | { type: 'MEDIA_LOADED' };
+  | { type: 'MEDIA_LOADED'; payload?: { success: boolean; questionId?: string } };
 
 export interface ConfigureGamePayload {
   gameType: 'casual' | 'configured' | 'custom';

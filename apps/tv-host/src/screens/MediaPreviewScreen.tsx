@@ -1,7 +1,7 @@
 import { useTranslation } from '@unfairenough/i18n';
 import { colors, ScreenBackground, spacing, typography } from '@unfairenough/ui';
 import type React from 'react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { useGameController } from '../hooks/useGameController';
 
@@ -10,6 +10,23 @@ export const MediaPreviewScreen: React.FC = () => {
   const { state, countdown, mediaPreview, serverUrl, mode, notifyMediaLoaded } =
     useGameController();
   const [imageError, setImageError] = useState(false);
+  const hasNotifiedRef = useRef(false);
+
+  // Correlation ID: echo the question ID back so the server can ignore stale
+  // messages that arrive after the question has already advanced.
+  const questionId = mediaPreview?.questionId;
+
+  // At-most-once wrapper: prevents stale callbacks (e.g. onLoad firing after
+  // unmount in hosted mode) from sending duplicate MEDIA_LOADED messages that
+  // could bleed into the next question's preview window.
+  const safeNotify = useCallback(
+    (success: boolean) => {
+      if (hasNotifiedRef.current) return;
+      hasNotifiedRef.current = true;
+      notifyMediaLoaded(success, questionId);
+    },
+    [notifyMediaLoaded, questionId],
+  );
 
   const questionNumber = mediaPreview?.questionNumber ?? state.game.questionIndex + 1;
   const totalQuestions = mediaPreview?.totalQuestions ?? state.game.config.totalQuestions;
@@ -26,12 +43,13 @@ export const MediaPreviewScreen: React.FC = () => {
     }
   }
 
-  // If no image URL could be resolved, notify immediately so the timer isn't blocked
+  // If no image URL could be resolved or the image errored, signal failure
+  // so the server skips the preview and shows the question immediately
   useEffect(() => {
     if (!imageUrl || imageError) {
-      notifyMediaLoaded();
+      safeNotify(false);
     }
-  }, [imageUrl, imageError, notifyMediaLoaded]);
+  }, [imageUrl, imageError, safeNotify]);
 
   return (
     <ScreenBackground style={styles.container}>
@@ -50,10 +68,9 @@ export const MediaPreviewScreen: React.FC = () => {
             source={{ uri: imageUrl }}
             style={styles.image}
             resizeMode="contain"
-            onLoad={notifyMediaLoaded}
+            onLoad={() => safeNotify(true)}
             onError={() => {
               setImageError(true);
-              notifyMediaLoaded();
             }}
           />
         ) : (

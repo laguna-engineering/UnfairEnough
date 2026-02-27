@@ -24,6 +24,24 @@ function wait(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/** Poll a mock WebSocket for a message of the given type, retrying every 50ms. */
+async function waitForMessage(ws: any, type: string, timeoutMs = 8000): Promise<any> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const msg = ws._messages.find((m: any) => m.type === type);
+    if (msg) return msg;
+    await wait(50);
+  }
+  throw new Error(`Timed out after ${timeoutMs}ms waiting for ${type} message`);
+}
+
+/** Assert that a message type does NOT appear within the given window. */
+async function expectNoMessage(ws: any, type: string, withinMs = 500): Promise<void> {
+  await wait(withinMs);
+  const msg = ws._messages.find((m: any) => m.type === type);
+  if (msg) throw new Error(`Expected no ${type} message but found one`);
+}
+
 beforeEach(async () => {
   rawDb = new Database(':memory:');
   db = createBunAdapter(rawDb);
@@ -235,7 +253,7 @@ describe('CONFIGURE_GAME', () => {
 // ── MEDIA_PREVIEW ─────────────────────────────────────────────
 
 describe('MEDIA_PREVIEW phase', () => {
-  it('sends MEDIA_PREVIEW before QUESTION when question has media', async () => {
+  it('sends MEDIA_PREVIEW then QUESTION after host signals MEDIA_LOADED', async () => {
     const room = new GameRoom('TEST', db);
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
@@ -256,26 +274,110 @@ describe('MEDIA_PREVIEW phase', () => {
     // Start the game
     room.handleHostMessage(hostWs, JSON.stringify({ type: 'START_GAME' }));
 
-    // Wait for countdown (3s) + a small buffer
-    await wait(3200);
-
-    // MEDIA_PREVIEW should have been sent (first question has media)
-    const mediaPreview = playerWs._messages.find((m: any) => m.type === 'MEDIA_PREVIEW');
-    expect(mediaPreview).toBeDefined();
+    // Wait for countdown to finish and MEDIA_PREVIEW to be sent
+    const mediaPreview = await waitForMessage(playerWs, 'MEDIA_PREVIEW');
     expect(mediaPreview.payload.media.type).toBe('image');
     expect(mediaPreview.payload.media.url).toBe('https://example.com/image.jpg');
     expect(mediaPreview.payload.duration).toBe(1);
 
-    // Wait for preview (1s) + buffer
-    await wait(1200);
+    // Host signals image loaded successfully
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({ type: 'MEDIA_LOADED', payload: { success: true } }),
+    );
 
-    // QUESTION should now have been sent
-    const question = playerWs._messages.find((m: any) => m.type === 'QUESTION');
-    expect(question).toBeDefined();
+    // Wait for preview countdown to finish and QUESTION to be sent
+    const question = await waitForMessage(playerWs, 'QUESTION');
     expect(question.payload.text).toBe('Question with image');
 
     room.cleanup();
   }, 10000); // Extended timeout for timer-based test
+
+  it('skips preview when host signals MEDIA_LOADED with failure', async () => {
+    const room = new GameRoom('TEST', db);
+    const hostWs = createMockWs({ data: { role: 'host' } });
+    room.setHost(hostWs);
+
+    const playerWs = createMockWs();
+    await room.addPlayer(playerWs, 'Alice');
+
+    // Configure with media set
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'CONFIGURE_GAME',
+        payload: { gameType: 'configured', questionSetId: 'media-set' },
+      }),
+    );
+    await wait(50);
+
+    // Start the game
+    room.handleHostMessage(hostWs, JSON.stringify({ type: 'START_GAME' }));
+
+    // Wait for countdown to finish and MEDIA_PREVIEW to be sent
+    await waitForMessage(playerWs, 'MEDIA_PREVIEW');
+
+    // Host signals image FAILED to load
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({ type: 'MEDIA_LOADED', payload: { success: false } }),
+    );
+
+    // QUESTION should be sent immediately (no preview countdown)
+    const question = await waitForMessage(playerWs, 'QUESTION');
+    expect(question.payload.text).toBe('Question with image');
+
+    room.cleanup();
+  }, 10000);
+
+  it('ignores stale MEDIA_LOADED with wrong questionId', async () => {
+    const room = new GameRoom('TEST', db);
+    const hostWs = createMockWs({ data: { role: 'host' } });
+    room.setHost(hostWs);
+
+    const playerWs = createMockWs();
+    await room.addPlayer(playerWs, 'Alice');
+
+    // Configure with media set
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'CONFIGURE_GAME',
+        payload: { gameType: 'configured', questionSetId: 'media-set' },
+      }),
+    );
+    await wait(50);
+
+    // Start the game
+    room.handleHostMessage(hostWs, JSON.stringify({ type: 'START_GAME' }));
+
+    // Wait for countdown to finish and MEDIA_PREVIEW to be sent
+    const mediaPreview = await waitForMessage(playerWs, 'MEDIA_PREVIEW');
+    expect(mediaPreview.payload.questionId).toBeDefined();
+
+    // Send MEDIA_LOADED with a WRONG questionId — should be ignored
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({ type: 'MEDIA_LOADED', payload: { success: true, questionId: 'wrong-id' } }),
+    );
+
+    // QUESTION should NOT have been triggered yet (still waiting for correct signal)
+    await expectNoMessage(playerWs, 'QUESTION');
+
+    // Now send with correct questionId
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'MEDIA_LOADED',
+        payload: { success: true, questionId: mediaPreview.payload.questionId },
+      }),
+    );
+
+    // Wait for preview countdown to finish and QUESTION to be sent
+    await waitForMessage(playerWs, 'QUESTION');
+
+    room.cleanup();
+  }, 10000);
 
   it('sends QUESTION directly when question has no media', async () => {
     const room = new GameRoom('TEST', db);
@@ -298,16 +400,13 @@ describe('MEDIA_PREVIEW phase', () => {
     // Start
     room.handleHostMessage(hostWs, JSON.stringify({ type: 'START_GAME' }));
 
-    // Wait for countdown + buffer
-    await wait(3200);
+    // QUESTION should be sent directly (no MEDIA_PREVIEW for questions without media)
+    const question = await waitForMessage(playerWs, 'QUESTION');
+    expect(question).toBeDefined();
 
     // No MEDIA_PREVIEW should have been sent
     const mediaPreview = playerWs._messages.find((m: any) => m.type === 'MEDIA_PREVIEW');
     expect(mediaPreview).toBeUndefined();
-
-    // QUESTION should be sent directly
-    const question = playerWs._messages.find((m: any) => m.type === 'QUESTION');
-    expect(question).toBeDefined();
 
     room.cleanup();
   }, 10000);
@@ -337,12 +436,17 @@ describe('configured game mode', () => {
     // Start
     room.handleHostMessage(hostWs, JSON.stringify({ type: 'START_GAME' }));
 
-    // Wait for countdown (3s) + media preview (1s) + buffer
-    await wait(4500);
+    // Wait for countdown to finish and MEDIA_PREVIEW to be sent
+    await waitForMessage(playerWs, 'MEDIA_PREVIEW');
 
-    // The first question should be from media-set
-    const question = playerWs._messages.find((m: any) => m.type === 'QUESTION');
-    expect(question).toBeDefined();
+    // Signal image loaded so preview countdown starts
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({ type: 'MEDIA_LOADED', payload: { success: true } }),
+    );
+
+    // Wait for preview countdown to finish and QUESTION to be sent
+    const question = await waitForMessage(playerWs, 'QUESTION');
     expect(question.payload.text).toBe('Question with image');
 
     room.cleanup();
@@ -398,25 +502,14 @@ describe('timer cleanup', () => {
 
     room.handleHostMessage(hostWs, JSON.stringify({ type: 'START_GAME' }));
 
-    // Wait for countdown to finish, media preview starts
-    await wait(3200);
-
-    // Verify MEDIA_PREVIEW was sent
-    const mediaPreview = playerWs._messages.find((m: any) => m.type === 'MEDIA_PREVIEW');
-    expect(mediaPreview).toBeDefined();
+    // Wait for countdown to finish and MEDIA_PREVIEW to be sent
+    await waitForMessage(playerWs, 'MEDIA_PREVIEW');
 
     // Reset mid-preview
     room.handleHostMessage(hostWs, JSON.stringify({ type: 'RESET_GAME' }));
 
-    // Record message count
-    const countBefore = playerWs._messages.filter((m: any) => m.type === 'QUESTION').length;
-
-    // Wait longer than preview duration
-    await wait(2000);
-
-    // No new QUESTION should have arrived after reset
-    const countAfter = playerWs._messages.filter((m: any) => m.type === 'QUESTION').length;
-    expect(countAfter).toBe(countBefore);
+    // No QUESTION should arrive after reset (timer was cleaned up)
+    await expectNoMessage(playerWs, 'QUESTION', 2000);
 
     room.cleanup();
   }, 10000);

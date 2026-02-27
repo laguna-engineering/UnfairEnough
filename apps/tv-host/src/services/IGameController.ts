@@ -17,7 +17,7 @@ export interface IGameController {
     },
   ): void;
   setLanguage(language: string): void;
-  /** Signal that the media preview image has finished loading on the TV display. */
-  notifyMediaLoaded(): void;
+  /** Signal that the media preview image has finished loading (or failed) on the TV display. */
+  notifyMediaLoaded(success?: boolean, questionId?: string): void;
   cleanup(): void;
 }

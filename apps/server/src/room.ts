@@ -61,6 +61,7 @@ const TOTAL_QUESTIONS = 10;
 const COUNTDOWN_SECONDS = 3;
 const REVEAL_DELAY_MS = 2000;
 const RESULTS_DELAY_MS = 5000;
+const MEDIA_LOAD_TIMEOUT_MS = 10_000;
 
 type GamePhase =
   | 'LOBBY'
@@ -433,7 +434,7 @@ export class GameRoom {
         this.configurePromise = this.configureGame(message.payload);
         break;
       case 'MEDIA_LOADED':
-        this.onMediaLoaded();
+        this.onMediaLoaded(message.payload?.success ?? true, message.payload?.questionId);
         break;
     }
   }
@@ -794,6 +795,7 @@ export class GameRoom {
       this.broadcast({
         type: 'MEDIA_PREVIEW',
         payload: {
+          questionId: q.id,
           questionNumber: this.currentQuestionIndex + 1,
           totalQuestions: this.totalQuestionCount,
           media: { type: q.media.type, url: q.media.url },
@@ -801,29 +803,45 @@ export class GameRoom {
         },
       });
 
-      // Wait for the host TV to signal the image has loaded (max 5s),
+      // Wait for the host TV to signal the image has loaded (max 10s),
       // then start the actual preview countdown.
+      // If the image doesn't load within 10s, skip the preview entirely.
       this.waitingForMediaLoad = true;
       this.pendingMediaQuestion = q;
       this.pendingPreviewDuration = previewDuration;
 
       this.mediaLoadWaitTimeout = setTimeout(() => {
         this.mediaLoadWaitTimeout = null;
-        this.startPreviewCountdown();
-      }, 5000);
+        if (!this.waitingForMediaLoad) return;
+        this.waitingForMediaLoad = false;
+        this.pendingMediaQuestion = null;
+        this.sendQuestion(q);
+      }, MEDIA_LOAD_TIMEOUT_MS);
     } else {
       this.sendQuestion(q);
     }
   }
 
-  /** Host TV signals that the media preview image finished loading. */
-  private onMediaLoaded(): void {
+  /** Host TV signals that the media preview image finished loading (or failed). */
+  private onMediaLoaded(success = true, questionId?: string): void {
     if (!this.waitingForMediaLoad) return;
+    // Ignore stale messages from a previous question's media preview
+    if (questionId && this.pendingMediaQuestion && questionId !== this.pendingMediaQuestion.id)
+      return;
     if (this.mediaLoadWaitTimeout) {
       clearTimeout(this.mediaLoadWaitTimeout);
       this.mediaLoadWaitTimeout = null;
     }
-    this.startPreviewCountdown();
+
+    if (success) {
+      this.startPreviewCountdown();
+    } else {
+      // Image failed to load — skip preview, go straight to question
+      this.waitingForMediaLoad = false;
+      const q = this.pendingMediaQuestion;
+      this.pendingMediaQuestion = null;
+      if (q) this.sendQuestion(q);
+    }
   }
 
   /** Begin the preview countdown after the image loaded (or the load wait timed out). */
