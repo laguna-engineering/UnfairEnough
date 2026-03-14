@@ -19,7 +19,7 @@ questionSets.get('/', async (c) => {
 questionSets.get('/:id', async (c) => {
   const db = getDb();
   const id = c.req.param('id');
-  const set = await questionsRepo.getQuestionSet(db, id);
+  const set = await questionsRepo.getQuestionSet(db, id, c.get('hostId'));
   if (!set) {
     return c.json({ error: 'Question set not found' }, 404);
   }
@@ -92,7 +92,7 @@ questionSets.post('/', async (c) => {
 questionSets.delete('/:id', async (c) => {
   const db = getDb();
   const id = c.req.param('id');
-  const deleted = await questionsRepo.softDeleteQuestionSet(db, id);
+  const deleted = await questionsRepo.softDeleteQuestionSet(db, id, c.get('hostId'));
   if (!deleted) {
     return c.json({ error: 'Question set not found' }, 404);
   }

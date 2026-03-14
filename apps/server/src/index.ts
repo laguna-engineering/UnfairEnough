@@ -161,6 +161,12 @@ app.use('/media/*', serveStatic({ root: '../../questions/' }));
 
 // ── Admin dashboard ──────────────────────────────────────────
 app.get('/admin', (c) => c.redirect('/admin/'));
+app.use('/admin/*', async (c, next) => {
+  await next();
+  c.header('X-Frame-Options', 'DENY');
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+});
 app.use('/admin/*', serveStatic({ root: './' }));
 
 // ── TV host web build ────────────────────────────────────────

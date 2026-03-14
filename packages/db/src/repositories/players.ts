@@ -31,8 +31,21 @@ export async function findByDeviceId(
   return row ? rowToProfile(row) : null;
 }
 
-export async function getPlayer(db: DbAdapter, playerId: string): Promise<PlayerProfile | null> {
-  const row = await db.get<PlayerRow>('SELECT * FROM players WHERE id = ?', [playerId]);
+export async function getPlayer(
+  db: DbAdapter,
+  playerId: string,
+  hostId?: string | null,
+): Promise<PlayerProfile | null> {
+  let sql = 'SELECT * FROM players WHERE id = ?';
+  const params: SqlValue[] = [playerId];
+  // When hostId is provided (not undefined), enforce ownership
+  if (hostId !== undefined && hostId !== null) {
+    sql += ' AND host_id = ?';
+    params.push(hostId);
+  } else if (hostId === null) {
+    sql += ' AND host_id IS NULL';
+  }
+  const row = await db.get<PlayerRow>(sql, params);
   return row ? rowToProfile(row) : null;
 }
 
@@ -189,7 +202,19 @@ export async function listAvailableProfiles(
 }
 
 /** Delete a profile and cascade-delete its tag scores. */
-export async function deleteProfile(db: DbAdapter, id: string): Promise<boolean> {
-  const result = await db.run('DELETE FROM players WHERE id = ?', [id]);
+export async function deleteProfile(
+  db: DbAdapter,
+  id: string,
+  hostId?: string | null,
+): Promise<boolean> {
+  let sql = 'DELETE FROM players WHERE id = ?';
+  const params: SqlValue[] = [id];
+  if (hostId !== undefined && hostId !== null) {
+    sql += ' AND host_id = ?';
+    params.push(hostId);
+  } else if (hostId === null) {
+    sql += ' AND host_id IS NULL';
+  }
+  const result = await db.run(sql, params);
   return result.changes > 0;
 }

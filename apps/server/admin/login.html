@@ -95,19 +95,7 @@
         });
 
         if (res.ok) {
-          // Check if this was a TV login redirect
-          const params = new URLSearchParams(window.location.search);
-          if (params.get('redirect') === 'tv') {
-            document.querySelector('.login-card h1').textContent = 'TV Approved!';
-            form.style.display = 'none';
-            errorEl.style.display = 'block';
-            errorEl.style.color = '#16a34a';
-            errorEl.style.background = '#f0fdf4';
-            errorEl.style.borderColor = '#bbf7d0';
-            errorEl.textContent = 'You can close this tab now.';
-          } else {
-            window.location.href = '/admin/';
-          }
+          window.location.href = '/admin/';
         } else {
           const data = await res.json().catch(() => ({}));
           errorEl.textContent = data.error || 'Login failed';

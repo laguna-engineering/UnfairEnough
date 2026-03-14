@@ -5,6 +5,8 @@ import { getCookie } from 'hono/cookie';
 import { createMiddleware } from 'hono/factory';
 import { hashToken } from './tokens';
 
+export const SESSION_COOKIE = 'ue_session';
+
 export type AuthVariables = {
   hostId: string | null;
 };
@@ -28,14 +30,14 @@ export function refreshTenancyFlag(): void {
  * or session cookie. Does NOT fall through to cookie if auth header is
  * present but malformed.
  */
-function extractToken(c: Context): string | null {
+export function extractToken(c: Context): string | null {
   const authHeader = c.req.header('Authorization');
   if (authHeader) {
     const match = authHeader.match(/^Bearer\s+(.+)$/i);
     if (match && match[1].length <= 128) return match[1];
     return null;
   }
-  const cookie = getCookie(c, 'session');
+  const cookie = getCookie(c, SESSION_COOKIE);
   return cookie && cookie.length <= 128 ? cookie : null;
 }
 

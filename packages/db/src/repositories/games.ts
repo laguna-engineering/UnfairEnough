@@ -118,8 +118,20 @@ export async function insertRoundResults(
   }
 }
 
-export async function getGame(db: DbAdapter, gameId: string): Promise<GameSession | null> {
-  const row = await db.get<GameRow>('SELECT * FROM games WHERE id = ?', [gameId]);
+export async function getGame(
+  db: DbAdapter,
+  gameId: string,
+  hostId?: string | null,
+): Promise<GameSession | null> {
+  let sql = 'SELECT * FROM games WHERE id = ?';
+  const params: SqlValue[] = [gameId];
+  if (hostId !== undefined && hostId !== null) {
+    sql += ' AND host_id = ?';
+    params.push(hostId);
+  } else if (hostId === null) {
+    sql += ' AND host_id IS NULL';
+  }
+  const row = await db.get<GameRow>(sql, params);
   return row ? rowToGameSession(row) : null;
 }
 
