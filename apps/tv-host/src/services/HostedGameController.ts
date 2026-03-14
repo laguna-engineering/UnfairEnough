@@ -30,6 +30,12 @@ import type { IGameController } from './IGameController';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
+export interface AuthChallenge {
+  userCode: string;
+  verificationUrl: string;
+  expiresIn: number;
+}
+
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000];
 const PING_INTERVAL = 30000;
 
@@ -41,19 +47,34 @@ export class HostedGameController implements IGameController {
   private reconnectAttempt = 0;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
+  private authMode = false;
   private onRoomCreated?: (roomCode: string) => void;
   private onConnectionStateChange?: (state: ConnectionState) => void;
+  private onAuthChallenge?: (challenge: AuthChallenge) => void;
+  private onAuthSuccess?: (sessionToken: string, hostId: string, displayName: string) => void;
+  private onAuthFailed?: (reason: string) => void;
+  private onAuthExpired?: () => void;
 
   constructor(
     serverUrl: string,
     callbacks?: {
       onRoomCreated?: (roomCode: string) => void;
       onConnectionStateChange?: (state: ConnectionState) => void;
+      /** Device-flow auth callbacks (set authMode=true to use) */
+      onAuthChallenge?: (challenge: AuthChallenge) => void;
+      onAuthSuccess?: (sessionToken: string, hostId: string, displayName: string) => void;
+      onAuthFailed?: (reason: string) => void;
+      onAuthExpired?: () => void;
     },
   ) {
     this.serverUrl = serverUrl;
     this.onRoomCreated = callbacks?.onRoomCreated;
     this.onConnectionStateChange = callbacks?.onConnectionStateChange;
+    this.onAuthChallenge = callbacks?.onAuthChallenge;
+    this.onAuthSuccess = callbacks?.onAuthSuccess;
+    this.onAuthFailed = callbacks?.onAuthFailed;
+    this.onAuthExpired = callbacks?.onAuthExpired;
+    this.authMode = !!callbacks?.onAuthChallenge;
   }
 
   async initialize(): Promise<void> {
@@ -146,6 +167,14 @@ export class HostedGameController implements IGameController {
         this.reconnectAttempt = 0;
         this.setConnectionState('connected');
         this.startPingInterval();
+
+        if (this.authMode) {
+          // Device flow: send REQUEST_AUTH
+          const deviceCode = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+            .map((b) => b.toString(16).padStart(2, '0'))
+            .join('');
+          this.send({ type: 'REQUEST_AUTH', payload: { deviceCode } });
+        }
       };
 
       this.ws.onmessage = (event) => {
@@ -282,6 +311,27 @@ export class HostedGameController implements IGameController {
             totalQuestions: message.payload.questionCount,
           }),
         );
+        break;
+
+      case 'AUTH_CHALLENGE':
+        this.onAuthChallenge?.(message.payload);
+        break;
+
+      case 'AUTH_SUCCESS':
+        this.authMode = false; // Auth complete, switch to normal mode
+        this.onAuthSuccess?.(
+          message.payload.sessionToken,
+          message.payload.hostId,
+          message.payload.displayName,
+        );
+        break;
+
+      case 'AUTH_FAILED':
+        this.onAuthFailed?.(message.payload.reason);
+        break;
+
+      case 'AUTH_EXPIRED':
+        this.onAuthExpired?.();
         break;
 
       case 'ERROR':
