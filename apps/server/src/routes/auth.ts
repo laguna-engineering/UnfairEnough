@@ -1,11 +1,11 @@
-import { hostsRepo, sessionsRepo } from '@unfairenough/db';
+import { hostsRepo, invitationTokensRepo, playersRepo, sessionsRepo } from '@unfairenough/db';
 import { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { refreshTenancyFlag } from '../auth/middleware';
 import { approvePendingLogin, removePendingLogin } from '../auth/pendingLogins';
 import { generateSecureToken, hashToken } from '../auth/tokens';
 import { getDb } from '../db';
-import { createRoom } from '../roomManager';
+import { createRoom, destroyRoom, findRoomByHostId } from '../roomManager';
 import type { WSData } from '../types';
 
 const SESSION_COOKIE = 'ue_session';
@@ -68,13 +68,36 @@ auth.post('/login', async (c) => {
   return c.json({ host: { id: host.id, email: host.email, displayName: host.displayName } });
 });
 
-// POST /auth/logout — revoke session, clear cookie
+// POST /auth/logout — revoke session, clear cookie. Works for admin cookies and Bearer tokens (guest sessions).
 auth.post('/logout', async (c) => {
   const db = getDb();
-  const token = getCookie(c, SESSION_COOKIE);
+  // Check Bearer token first (mobile guest sessions), then cookie (admin sessions)
+  const bearerToken = c.req.header('Authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
+  const cookieToken = getCookie(c, SESSION_COOKIE);
+  const token = bearerToken ?? cookieToken;
+
   if (token) {
-    await sessionsRepo.revoke(db, hashToken(token));
-    deleteCookie(c, SESSION_COOKIE, { path: '/' });
+    // If it's a guest session, unbind the device from the player profile
+    const tokenHash = hashToken(token);
+    const session = await sessionsRepo.validate(db, tokenHash);
+    if (session?.type === 'guest') {
+      const sessionRow = await db.get<{ device_id: string | null }>(
+        'SELECT device_id FROM sessions WHERE token_hash = ? AND revoked = 0',
+        [tokenHash],
+      );
+      if (sessionRow?.device_id) {
+        const player = await playersRepo.findByDeviceId(db, sessionRow.device_id, session.hostId);
+        if (player) {
+          await playersRepo.unbindDevice(db, player.id);
+        }
+      }
+    }
+
+    await sessionsRepo.revoke(db, tokenHash);
+
+    if (cookieToken) {
+      deleteCookie(c, SESSION_COOKIE, { path: '/' });
+    }
   }
   return c.json({ message: 'Logged out' });
 });
@@ -99,10 +122,30 @@ auth.get('/me', async (c) => {
     return c.json({ error: 'Host account not found' }, 401);
   }
 
-  return c.json({
+  const result: Record<string, unknown> = {
     host: { id: host.id, email: host.email, displayName: host.displayName },
     sessionType: session.type,
-  });
+  };
+
+  // For guest sessions, also return the linked player info
+  if (session.type === 'guest') {
+    const sessionRow = await db.get<{ device_id: string | null }>(
+      'SELECT device_id FROM sessions WHERE token_hash = ? AND revoked = 0',
+      [hashToken(token)],
+    );
+    if (sessionRow?.device_id) {
+      const player = await playersRepo.findByDeviceId(db, sessionRow.device_id, session.hostId);
+      if (player) {
+        result.player = {
+          displayName: player.displayName,
+          avatarColor: player.avatarColor,
+          avatarEmoji: player.avatarEmoji,
+        };
+      }
+    }
+  }
+
+  return c.json(result);
 });
 
 // GET /auth/tv-login — serve the TV login approval page
@@ -166,6 +209,12 @@ auth.post('/tv-login', async (c) => {
     expiresAt,
   });
 
+  // Enforce one TV per host — destroy existing room if any
+  const existingRoom = findRoomByHostId(host.id);
+  if (existingRoom) {
+    destroyRoom(existingRoom);
+  }
+
   // Push AUTH_SUCCESS to the TV via WebSocket and create a room
   try {
     pending.hostWs.send(
@@ -185,9 +234,9 @@ auth.post('/tv-login', async (c) => {
     wsData.roomCode = room.roomCode;
     room.setHost(pending.hostWs);
 
-    // Generate invitation token for the game QR
+    // Generate invitation token for the game QR and store in DB
     const inviteToken = generateSecureToken(16);
-    // TODO: Phase 4 — store invitation token in DB for mobile guest linking
+    await invitationTokensRepo.create(db, hashToken(inviteToken), host.id, room.roomCode);
 
     pending.hostWs.send(
       JSON.stringify({

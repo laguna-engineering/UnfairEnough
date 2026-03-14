@@ -34,3 +34,11 @@ export function destroyRoom(code: string): void {
     rooms.delete(code);
   }
 }
+
+/** Check if a host already has an active room. Returns the room code if so. */
+export function findRoomByHostId(hostId: string): string | null {
+  for (const [code, room] of rooms) {
+    if (room.hostId === hostId) return code;
+  }
+  return null;
+}

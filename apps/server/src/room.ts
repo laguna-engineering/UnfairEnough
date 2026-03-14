@@ -2,9 +2,11 @@ import type { DbAdapter, QuestionWithMeta } from '@unfairenough/db';
 import {
   eventsRepo,
   gamesRepo,
+  invitationTokensRepo,
   playersRepo,
   playerTagScoresRepo,
   questionsRepo,
+  sessionsRepo,
 } from '@unfairenough/db';
 import type {
   AnswerKey,
@@ -37,6 +39,7 @@ import {
   ELO_BASELINE,
   resolvePlayerDifficulty,
 } from '../../../packages/game-logic/src/utils/tagScoring';
+import { generateSecureToken, hashToken } from './auth/tokens';
 import type { HostMessage, RoomPlayer, WSData } from './types';
 
 const COLORS = [
@@ -360,7 +363,12 @@ export class GameRoom {
 
     switch (message.type) {
       case 'IDENTIFY': {
-        this.handleIdentify(ws, message.payload.deviceId);
+        this.handleIdentify(
+          ws,
+          message.payload.deviceId,
+          message.payload.sessionToken,
+          message.payload.invitationToken,
+        );
         break;
       }
       case 'JOIN': {
@@ -933,12 +941,52 @@ export class GameRoom {
     return connected > 0 && this.answers.size >= connected;
   }
 
-  private async handleIdentify(ws: ServerWebSocket<WSData>, deviceId: string): Promise<void> {
+  private async handleIdentify(
+    ws: ServerWebSocket<WSData>,
+    deviceId: string,
+    sessionToken?: string,
+    invitationToken?: string,
+  ): Promise<void> {
     let payload: IdentityPayload = { profile: null };
+    let effectiveHostId = this.hostId;
+
     try {
-      const existing = await playersRepo.findByDeviceId(this.db, deviceId, this.hostId);
+      // If an invitation token is provided, validate it and link the device to the host
+      if (invitationToken && !sessionToken) {
+        const invite = await invitationTokensRepo.validate(this.db, hashToken(invitationToken));
+        if (invite) {
+          effectiveHostId = invite.hostId;
+          // Create a guest session (90-day TTL)
+          const GUEST_SESSION_TTL_DAYS = 90;
+          const rawToken = generateSecureToken();
+          const tokenHash = hashToken(rawToken);
+          const expiresAt = new Date(Date.now() + GUEST_SESSION_TTL_DAYS * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .replace('T', ' ')
+            .replace('Z', '');
+          await sessionsRepo.create(this.db, tokenHash, invite.hostId, 'guest', {
+            deviceId,
+            expiresAt,
+          });
+          // Include guest session token and server URL in the response
+          payload.guestSessionToken = rawToken;
+          // Derive server URL from the WS connection (best effort)
+          payload.serverUrl = `http://${(ws.data as WSData).roomCode ? 'server' : 'unknown'}`;
+        }
+      }
+
+      // If a session token is provided (returning user), validate it and use its hostId
+      if (sessionToken) {
+        const session = await sessionsRepo.validate(this.db, hashToken(sessionToken));
+        if (session) {
+          effectiveHostId = session.hostId;
+        }
+      }
+
+      const existing = await playersRepo.findByDeviceId(this.db, deviceId, effectiveHostId);
       if (existing) {
         payload = {
+          ...payload,
           profile: {
             displayName: existing.displayName,
             totalGames: existing.totalGames,
@@ -947,7 +995,7 @@ export class GameRoom {
         };
       } else {
         // No bound profile — include available admin-created profiles
-        const available = await playersRepo.listAvailableProfiles(this.db, this.hostId);
+        const available = await playersRepo.listAvailableProfiles(this.db, effectiveHostId);
         if (available.length > 0) {
           payload.availableProfiles = available.map((p) => ({
             id: p.id,
