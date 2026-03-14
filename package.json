@@ -25,7 +25,8 @@
     "release:install": "EXPO_TV=1 yarn tv android --variant release",
     "release:tvos:install": "EXPO_TV=1 yarn tv ios --configuration Release",
     "android": "expo run:android",
-    "ios": "expo run:ios"
+    "ios": "expo run:ios",
+    "validate:media": "bun scripts/validate-media.ts"
   },
   "resolutions": {
     "react": "19.1.0",
