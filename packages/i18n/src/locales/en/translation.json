@@ -119,6 +119,14 @@
     "approved": "Approved! Creating room...",
     "failed": "Authentication failed"
   },
+  "returning": {
+    "title": "Welcome Back!",
+    "play": "Play",
+    "connecting": "Connecting...",
+    "disconnect": "Disconnect from this server",
+    "error": "Could not connect to server",
+    "retry": "Retry"
+  },
   "connect": {
     "title": "Connect to Server",
     "serverUrl": "Server Address",

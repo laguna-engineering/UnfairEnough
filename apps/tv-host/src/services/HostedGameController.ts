@@ -48,6 +48,7 @@ export class HostedGameController implements IGameController {
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
   private authMode = false;
+  invitationToken: string | null = null;
   private onRoomCreated?: (roomCode: string) => void;
   private onConnectionStateChange?: (state: ConnectionState) => void;
   private onAuthChallenge?: (challenge: AuthChallenge) => void;
@@ -208,7 +209,8 @@ export class HostedGameController implements IGameController {
 
     switch (message.type) {
       case 'ROOM_CREATED': {
-        const { roomCode } = message.payload;
+        const { roomCode, invitationToken } = message.payload;
+        this.invitationToken = invitationToken ?? null;
         this.store.dispatch(setServerReady({ port: 0, localIp: this.serverUrl, roomCode }));
         this.onRoomCreated?.(roomCode);
         break;

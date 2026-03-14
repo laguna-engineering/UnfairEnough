@@ -28,7 +28,7 @@ const LANGUAGES: { code: SupportedLanguage; label: string }[] = [
 ];
 
 interface ScanScreenProps {
-  onConnect: (url: string) => void;
+  onConnect: (url: string, invitationToken?: string) => void;
   onLanguageChange: (lang: SupportedLanguage) => void;
 }
 
@@ -108,6 +108,7 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
       try {
         const url = new URL(data);
         const roomCode = url.searchParams.get('roomCode');
+        const inviteToken = url.searchParams.get('invite') || undefined;
         const serverHost = url.searchParams.get('server') || url.host;
         const wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
         const address = serverHost.includes(':') ? serverHost : `${serverHost}:${url.port || '80'}`;
@@ -115,7 +116,7 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
         const wsUrl = roomCode
           ? `${wsProtocol}//${serverHost}/ws?role=player&roomCode=${roomCode}`
           : `${wsProtocol}//${serverHost}/ws?role=player`;
-        onConnect(wsUrl);
+        onConnect(wsUrl, inviteToken);
       } catch {
         if (Platform.OS === 'web') {
           alert(t('scan.invalidQrMessage'));

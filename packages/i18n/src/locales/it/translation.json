@@ -119,6 +119,14 @@
     "approved": "Approvato! Creazione stanza...",
     "failed": "Autenticazione fallita"
   },
+  "returning": {
+    "title": "Bentornato!",
+    "play": "Gioca",
+    "connecting": "Connessione...",
+    "disconnect": "Disconnettiti da questo server",
+    "error": "Impossibile connettersi al server",
+    "retry": "Riprova"
+  },
   "connect": {
     "title": "Connetti al Server",
     "serverUrl": "Indirizzo Server",
