@@ -8,19 +8,32 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:8081',
     trace: 'on-first-retry',
   },
   projects: [
     {
       name: 'Mobile Chrome',
-      use: { ...devices['Pixel 5'] },
+      use: { ...devices['Pixel 5'], baseURL: 'http://localhost:8081' },
+      testDir: './e2e/mobile',
+    },
+    {
+      name: 'TV Host',
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:8082' },
+      testDir: './e2e/tv-host',
     },
   ],
-  webServer: {
-    command: 'yarn dev:mobile --web',
-    url: 'http://localhost:8081',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      command: 'yarn dev:mobile --web',
+      url: 'http://localhost:8081',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+    {
+      command: 'yarn tv web',
+      url: 'http://localhost:8082',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+  ],
 });

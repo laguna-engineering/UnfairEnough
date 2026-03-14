@@ -158,11 +158,15 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
     MOCK_QUESTION_SETS.filter((s) => !s.isMeta).reduce((sum, s) => sum + s.questionCount, 0),
   );
 
-  // Custom mode local state
-  const [selectedSetIds, setSelectedSetIds] = useState<string[]>([]);
-  const [customTotalQuestions, setCustomTotalQuestions] = useState(10);
-  const [customTimeLimit, setCustomTimeLimit] = useState(15);
-  const [adaptiveEnabled, setAdaptiveEnabled] = useState(true);
+  // Custom mode local state — restore from gameConfig when returning to lobby
+  const [selectedSetIds, setSelectedSetIds] = useState<string[]>(gameConfig.questionSetIds ?? []);
+  const [customTotalQuestions, setCustomTotalQuestions] = useState(
+    gameConfig.gameType === 'custom' ? gameConfig.totalQuestions : 10,
+  );
+  const [customTimeLimit, setCustomTimeLimit] = useState(
+    gameConfig.gameType === 'custom' ? gameConfig.questionTimeLimit : 15,
+  );
+  const [adaptiveEnabled, setAdaptiveEnabled] = useState(gameConfig.adaptiveMode ?? true);
 
   const currentLanguage = i18n.language;
 
@@ -433,7 +437,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
             <View style={styles.gameModeButtons}>
               <Pressable
                 ref={casualRef}
-                hasTVPreferredFocus
+                hasTVPreferredFocus={selectedMode === 'casual'}
                 onPress={() => handleModeChange('casual')}
                 style={(state) => [
                   styles.gameModeButton,
@@ -453,6 +457,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
               </Pressable>
               <Pressable
                 ref={configuredRef}
+                hasTVPreferredFocus={selectedMode === 'configured'}
                 onPress={() => handleModeChange('configured')}
                 nextFocusRight={focusTags.custom}
                 style={(state) => [
@@ -473,6 +478,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
               </Pressable>
               <Pressable
                 ref={customRef}
+                hasTVPreferredFocus={selectedMode === 'custom'}
                 onPress={() => handleModeChange('custom')}
                 nextFocusRight={focusTags.start}
                 style={(state) => [
