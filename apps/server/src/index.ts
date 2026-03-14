@@ -3,8 +3,10 @@ import { networkInterfaces } from 'node:os';
 import { Hono } from 'hono';
 import { serveStatic, upgradeWebSocket, websocket } from 'hono/bun';
 import { cors } from 'hono/cors';
-import { initDatabase } from './db';
+import { createAuthMiddleware } from './auth/middleware';
+import { getDb, initDatabase } from './db';
 import { createRoom, destroyRoom, getRoom, setDbAdapter } from './roomManager';
+import authRoutes from './routes/auth';
 import eventsRoutes from './routes/events';
 import gamesRoutes from './routes/games';
 import metaSetsRoutes from './routes/metaSets';
@@ -25,6 +27,14 @@ const localIp = Object.values(networkInterfaces())
 // ── CORS (allow local dev origins) ──────────────────────────────
 app.use('/api/*', cors());
 
+// ── Auth middleware (scoped when tenancy enabled) ───────────────
+// Uses getDb() lazily — DB is initialized before any requests arrive
+const { scopedAuth } = createAuthMiddleware(getDb);
+app.use('/api/*', scopedAuth);
+
+// ── Auth routes (no middleware — public) ──────────────────────
+app.route('/auth', authRoutes);
+
 // ── Health check ───────────────────────────────────────────────
 app.get('/api/health', (c) => {
   const mobilePort = mobileDevPort ? Number(mobileDevPort) : port;
@@ -33,7 +43,7 @@ app.get('/api/health', (c) => {
   return c.json({ status: 'ok', lanIp: localIp ?? null, port, mobileBaseUrl });
 });
 
-// ── REST API routes ───────────────────────────────────────────
+// ── REST API routes (scoped auth when tenancy enabled) ────────
 app.route('/api/question-sets', questionSetsRoutes);
 app.route('/api/meta-sets', metaSetsRoutes);
 app.route('/api/players', playersRoutes);

@@ -2,15 +2,16 @@ import { gamesRepo, playersRepo, playerTagScoresRepo } from '@unfairenough/db';
 import { AVATAR_COLORS, AVATAR_EMOJIS } from '@unfairenough/shared';
 import { sanitizeName } from '@unfairenough/ws-protocol';
 import { Hono } from 'hono';
+import type { AuthVariables } from '../auth/middleware';
 import { getDb } from '../db';
 
-const players = new Hono();
+const players = new Hono<{ Variables: AuthVariables }>();
 
 // GET /api/players — list all player profiles
 players.get('/', async (c) => {
   const db = getDb();
-  // TODO: Phase 2 — replace null with c.get('hostId') after auth middleware is applied
-  const allPlayers = await playersRepo.listPlayers(db, null);
+  const hostId = c.get('hostId');
+  const allPlayers = await playersRepo.listPlayers(db, hostId);
   return c.json({ players: allPlayers });
 });
 
@@ -45,7 +46,7 @@ players.post('/', async (c) => {
     displayName,
     avatarColor,
     avatarEmoji,
-    null,
+    c.get('hostId'),
   );
   return c.json({ player: profile }, 201);
 });
@@ -123,7 +124,7 @@ players.get('/:id/stats', async (c) => {
   }
 
   // Get recent games this player participated in
-  const recentGames = await gamesRepo.getRecentGames(db, null, 50);
+  const recentGames = await gamesRepo.getRecentGames(db, c.get('hostId'), 50);
   const playerGames: Array<{
     gameId: string;
     roomCode: string;
@@ -187,7 +188,7 @@ players.put('/:id/tags', async (c) => {
     return c.json({ error: 'Missing "score" (number)' }, 400);
   }
 
-  await playerTagScoresRepo.setTagScore(db, id, tag, score, null);
+  await playerTagScoresRepo.setTagScore(db, id, tag, score, c.get('hostId'));
   return c.json({ tag, score });
 });
 

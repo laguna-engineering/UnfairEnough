@@ -1,4 +1,6 @@
+import type { SqlValue } from '@unfairenough/db';
 import { Hono } from 'hono';
+import type { AuthVariables } from '../auth/middleware';
 import { getDb } from '../db';
 
 interface QuestionStatsRow {
@@ -16,13 +18,24 @@ interface QuestionStatsRow {
   correct_count: number;
 }
 
-const questions = new Hono();
+const questions = new Hono<{ Variables: AuthVariables }>();
 
 // GET /api/questions/stats — all questions with usage stats and % correct
 questions.get('/stats', async (c) => {
   const db = getDb();
+  const hostId = c.get('hostId');
 
-  const rows = await db.all<QuestionStatsRow>(`
+  let hostFilter: string;
+  const params: SqlValue[] = [];
+  if (hostId !== null) {
+    hostFilter = 'AND qs.host_id = ?';
+    params.push(hostId);
+  } else {
+    hostFilter = 'AND (qs.host_id IS NULL OR qs.id IS NULL)';
+  }
+
+  const rows = await db.all<QuestionStatsRow>(
+    `
     SELECT q.id, q.text, q.category, q.tags, q.difficulty, q.language,
            q.times_asked, q.last_asked_at, q.set_id,
            qs.name AS set_name,
@@ -31,12 +44,15 @@ questions.get('/stats', async (c) => {
     FROM questions q
     LEFT JOIN round_results rr ON rr.question_id = q.id
     LEFT JOIN question_sets qs ON qs.id = q.set_id AND qs.deleted_at IS NULL
-    WHERE q.set_id IS NULL OR q.set_id NOT IN (
+    WHERE (q.set_id IS NULL OR q.set_id NOT IN (
       SELECT id FROM question_sets WHERE deleted_at IS NOT NULL
-    )
+    ))
+    ${hostFilter}
     GROUP BY q.id
     ORDER BY q.times_asked DESC
-  `);
+  `,
+    params,
+  );
 
   const questions_list = rows.map((r) => {
     const totalAnswers = Number(r.total_answers);

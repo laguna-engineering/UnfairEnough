@@ -1,9 +1,10 @@
 import type { EventType } from '@unfairenough/db';
 import { eventsRepo } from '@unfairenough/db';
 import { Hono } from 'hono';
+import type { AuthVariables } from '../auth/middleware';
 import { getDb } from '../db';
 
-const events = new Hono();
+const events = new Hono<{ Variables: AuthVariables }>();
 
 // GET /api/events — list recent events
 events.get('/', async (c) => {
@@ -15,6 +16,7 @@ events.get('/', async (c) => {
   const rows = await eventsRepo.getEvents(db, {
     gameId,
     eventType,
+    hostId: c.get('hostId'),
     limit: Math.min(limit, 500),
   });
 

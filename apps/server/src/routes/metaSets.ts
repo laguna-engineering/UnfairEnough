@@ -1,19 +1,9 @@
 import { questionsRepo } from '@unfairenough/db';
 import { Hono } from 'hono';
+import type { AuthVariables } from '../auth/middleware';
 import { getDb } from '../db';
 
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
-
-const metaSets = new Hono();
-
-function requireAuth(c: any): boolean {
-  if (!ADMIN_TOKEN) return true;
-  const auth = c.req.header('Authorization');
-  if (!auth || auth !== `Bearer ${ADMIN_TOKEN}`) {
-    return false;
-  }
-  return true;
-}
+const metaSets = new Hono<{ Variables: AuthVariables }>();
 
 // GET /api/meta-sets/:id — get meta set with resolved children
 metaSets.get('/:id', async (c) => {
@@ -29,10 +19,6 @@ metaSets.get('/:id', async (c) => {
 
 // POST /api/meta-sets — create a meta set
 metaSets.post('/', async (c) => {
-  if (!requireAuth(c)) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
   const body = await c.req.json<{
     name: string;
     description?: string;
@@ -67,7 +53,7 @@ metaSets.post('/', async (c) => {
       id,
       body.name.trim(),
       body.childSetIds,
-      null,
+      c.get('hostId'),
       body.description?.trim(),
       body.defaultTimeLimit,
     );
@@ -89,10 +75,6 @@ metaSets.post('/', async (c) => {
 
 // PUT /api/meta-sets/:id — update a meta set
 metaSets.put('/:id', async (c) => {
-  if (!requireAuth(c)) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
   const id = c.req.param('id');
   const body = await c.req.json<{
     name: string;
@@ -148,10 +130,6 @@ metaSets.put('/:id', async (c) => {
 
 // DELETE /api/meta-sets/:id — soft-delete a meta set
 metaSets.delete('/:id', async (c) => {
-  if (!requireAuth(c)) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
   const db = getDb();
   const id = c.req.param('id');
 

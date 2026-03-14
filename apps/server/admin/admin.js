@@ -1,8 +1,13 @@
 // ── Shared admin dashboard utilities ─────────────────────────
 
 /** Fetch JSON from API, returning parsed data or throwing. */
-async function fetchJson(url) {
-  const res = await fetch(url);
+async function fetchJson(url, opts = {}) {
+  const res = await fetch(url, { credentials: "same-origin", ...opts });
+  if (res.status === 401) {
+    // Session expired or not authenticated — redirect to login
+    window.location.href = "/admin/login.html";
+    throw new Error("Not authenticated");
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `HTTP ${res.status}`);
@@ -128,5 +133,55 @@ function link(href, text) {
   return a;
 }
 
-// Initialize nav on DOMContentLoaded
-document.addEventListener("DOMContentLoaded", renderNav);
+/** Check auth on page load. Redirect to login if not authenticated and tenancy is enabled. */
+async function checkAuth() {
+  try {
+    const data = await fetch("/auth/me", { credentials: "same-origin" });
+    if (data.ok) {
+      const json = await data.json();
+      // Add logout button to nav
+      const nav = document.querySelector("nav");
+      if (nav && json.host) {
+        const spacer = document.createElement("span");
+        spacer.style.flex = "1";
+        nav.appendChild(spacer);
+
+        const info = document.createElement("span");
+        info.textContent = json.host.displayName;
+        info.style.color = "#999";
+        info.style.fontSize = "0.85rem";
+        info.style.marginRight = "0.5rem";
+        nav.appendChild(info);
+
+        const logoutBtn = document.createElement("a");
+        logoutBtn.href = "#";
+        logoutBtn.textContent = "Log out";
+        logoutBtn.style.color = "#f87171";
+        logoutBtn.addEventListener("click", async (e) => {
+          e.preventDefault();
+          await fetch("/auth/logout", { method: "POST", credentials: "same-origin" });
+          window.location.href = "/admin/login.html";
+        });
+        nav.appendChild(logoutBtn);
+      }
+    } else if (data.status === 401) {
+      // Check if this is because no accounts exist (tenancy disabled)
+      // If so, allow access without login
+      const health = await fetch("/api/health").then(r => r.json()).catch(() => null);
+      if (!health) return; // server issue, don't redirect
+      // 401 from /auth/me = tenancy enabled but not logged in → redirect
+      window.location.href = "/admin/login.html";
+    }
+  } catch {
+    // Network error — allow page to load (might be dev mode without accounts)
+  }
+}
+
+// Initialize nav and auth check on DOMContentLoaded
+document.addEventListener("DOMContentLoaded", () => {
+  renderNav();
+  // Skip auth check on the login page itself
+  if (!window.location.pathname.includes("login")) {
+    checkAuth();
+  }
+});
