@@ -128,7 +128,7 @@ export class GameRoom {
   private pendingMediaQuestion: QuestionWithMeta | null = null;
   private pendingPreviewDuration = 0;
 
-  constructor(roomCode: string, db: DbAdapter, hostId: string | null = null) {
+  constructor(roomCode: string, db: DbAdapter, hostId: string | null) {
     this.roomCode = roomCode;
     this.db = db;
     this.hostId = hostId;

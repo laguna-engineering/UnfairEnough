@@ -31,7 +31,6 @@ export type {
   GameType,
   Host,
   HostRow,
-  InvitationTokenRow,
   MediaType,
   MetaSetChildRow,
   PlayerProfile,
@@ -49,3 +48,5 @@ export type {
   SessionRow,
   SessionType,
 } from './schema';
+// Utilities
+export { hostScope } from './utils';

@@ -24,7 +24,8 @@ export async function createHost(
     displayName,
   ]);
   const row = await db.get<HostRow>('SELECT * FROM hosts WHERE id = ?', [id]);
-  return rowToHost(row!);
+  if (!row) throw new Error(`BUG: host row missing after insert (id=${id})`);
+  return rowToHost(row);
 }
 
 export async function findByEmail(db: DbAdapter, email: string): Promise<Host | null> {
@@ -43,14 +44,6 @@ export async function getPasswordHash(db: DbAdapter, email: string): Promise<str
     [email],
   );
   return row?.password_hash ?? null;
-}
-
-export async function updatePassword(
-  db: DbAdapter,
-  id: string,
-  passwordHash: string,
-): Promise<void> {
-  await db.run('UPDATE hosts SET password_hash = ? WHERE id = ?', [passwordHash, id]);
 }
 
 export async function exists(db: DbAdapter): Promise<boolean> {

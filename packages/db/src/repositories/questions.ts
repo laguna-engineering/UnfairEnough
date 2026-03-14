@@ -7,6 +7,7 @@ import type {
   QuestionSetWithMeta,
   QuestionWithMeta,
 } from '../schema';
+import { hostScope } from '../utils';
 
 function rowToQuestionWithMeta(row: QuestionRow): QuestionWithMeta {
   return {
@@ -61,7 +62,7 @@ export async function importQuestionSet(
   setId: string,
   input: QuestionSetInput,
   generateId: () => string,
-  hostId: string | null = null,
+  hostId: string | null,
 ): Promise<string> {
   const setLanguage = input.language ?? 'en';
   await db.run(
@@ -125,15 +126,12 @@ export async function getRandomQuestions(
   )) AND (set_id IS NULL OR set_id NOT IN (
     SELECT id FROM question_sets WHERE available_in_casual = 0
   ))`;
-  const params: (string | number)[] = [];
+  const params: SqlValue[] = [];
 
   // Scope to host's question sets
-  if (hostId !== null) {
-    sql += ` AND (set_id IS NULL OR set_id IN (SELECT id FROM question_sets WHERE host_id = ?))`;
-    params.push(hostId);
-  } else {
-    sql += ` AND (set_id IS NULL OR set_id IN (SELECT id FROM question_sets WHERE host_id IS NULL))`;
-  }
+  const { clause: hostClause, params: hostParams } = hostScope(hostId);
+  sql += ` AND (set_id IS NULL OR set_id IN (SELECT id FROM question_sets WHERE ${hostClause}))`;
+  params.push(...hostParams);
 
   if (excludeSetIds && excludeSetIds.length > 0) {
     const placeholders = excludeSetIds.map(() => '?').join(',');
@@ -195,12 +193,9 @@ export async function getQuestionSets(
      WHERE qs.deleted_at IS NULL`;
   const params: SqlValue[] = [];
 
-  if (hostId !== null) {
-    sql += ' AND qs.host_id = ?';
-    params.push(hostId);
-  } else {
-    sql += ' AND qs.host_id IS NULL';
-  }
+  const { clause: hostClause, params: hostParams } = hostScope(hostId);
+  sql += ` AND qs.${hostClause}`;
+  params.push(...hostParams);
 
   if (language) {
     sql += ' AND qs.language = ?';

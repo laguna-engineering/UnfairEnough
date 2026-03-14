@@ -1,4 +1,5 @@
-import type { DbAdapter } from '../adapter';
+import type { DbAdapter, SqlValue } from '../adapter';
+import { hostScope } from '../utils';
 
 export type EventType =
   | 'QUESTION_SENT'
@@ -56,7 +57,7 @@ export async function getEvents(
   },
 ): Promise<EventRow[]> {
   const conditions: string[] = [];
-  const params: (string | number)[] = [];
+  const params: SqlValue[] = [];
 
   if (opts?.gameId) {
     conditions.push('game_id = ?');
@@ -67,12 +68,9 @@ export async function getEvents(
     params.push(opts.eventType);
   }
   if (opts?.hostId !== undefined) {
-    if (opts.hostId !== null) {
-      conditions.push('host_id = ?');
-      params.push(opts.hostId);
-    } else {
-      conditions.push('host_id IS NULL');
-    }
+    const { clause, params: scopeParams } = hostScope(opts.hostId);
+    conditions.push(clause);
+    params.push(...scopeParams);
   }
 
   let sql = 'SELECT * FROM events';
@@ -94,13 +92,9 @@ export async function getRecentEvents(
   hostId: string | null,
   limit = 100,
 ): Promise<EventRow[]> {
-  if (hostId !== null) {
-    return db.all<EventRow>('SELECT * FROM events WHERE host_id = ? ORDER BY id DESC LIMIT ?', [
-      hostId,
-      limit,
-    ]);
-  }
-  return db.all<EventRow>('SELECT * FROM events WHERE host_id IS NULL ORDER BY id DESC LIMIT ?', [
+  const { clause, params } = hostScope(hostId);
+  return db.all<EventRow>(`SELECT * FROM events WHERE ${clause} ORDER BY id DESC LIMIT ?`, [
+    ...params,
     limit,
   ]);
 }

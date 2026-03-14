@@ -1,5 +1,6 @@
-import type { DbAdapter, SqlValue } from '../adapter';
+import type { DbAdapter } from '../adapter';
 import type { GameRow, GameSession, GameType, RoundResultEntry, RoundResultRow } from '../schema';
+import { hostScope } from '../utils';
 
 function rowToGameSession(row: GameRow): GameSession {
   return {
@@ -128,12 +129,11 @@ export async function getRecentGames(
   hostId: string | null,
   limit = 20,
 ): Promise<GameSession[]> {
-  const sql =
-    hostId !== null
-      ? 'SELECT * FROM games WHERE host_id = ? ORDER BY started_at DESC LIMIT ?'
-      : 'SELECT * FROM games WHERE host_id IS NULL ORDER BY started_at DESC LIMIT ?';
-  const params: SqlValue[] = hostId !== null ? [hostId, limit] : [limit];
-  const rows = await db.all<GameRow>(sql, params);
+  const { clause, params } = hostScope(hostId);
+  const rows = await db.all<GameRow>(
+    `SELECT * FROM games WHERE ${clause} ORDER BY started_at DESC LIMIT ?`,
+    [...params, limit],
+  );
   return rows.map(rowToGameSession);
 }
 

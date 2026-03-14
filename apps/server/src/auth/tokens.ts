@@ -20,23 +20,3 @@ export function hashToken(token: string): string {
   hasher.update(token);
   return hasher.digest('hex');
 }
-
-/**
- * Generate a human-readable 8-char code for the device-flow login.
- * Uses a 20-char consonant alphabet (no vowels to avoid accidental words,
- * no ambiguous chars like 0/O, 1/I/L).
- * Rejection sampling eliminates modulo bias.
- */
-export function generateUserCode(): string {
-  const alphabet = 'BCDFGHJKLMNPQRSTVWXZ';
-  const limit = 256 - (256 % alphabet.length); // 240
-  const code: string[] = [];
-  while (code.length < 8) {
-    const bytes = new Uint8Array(1);
-    crypto.getRandomValues(bytes);
-    if (bytes[0] < limit) {
-      code.push(alphabet[bytes[0] % alphabet.length]);
-    }
-  }
-  return `${code.slice(0, 4).join('')}-${code.slice(4).join('')}`;
-}

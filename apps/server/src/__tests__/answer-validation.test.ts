@@ -101,7 +101,7 @@ afterAll(() => {
 });
 
 async function setupGameAndStartQuestion(playerCount = 1) {
-  const room = new GameRoom('TEST', db);
+  const room = new GameRoom('TEST', db, null);
   const hostWs = createMockWs({ data: { role: 'host' } });
   room.setHost(hostWs);
 
@@ -502,7 +502,7 @@ describe('player identity in answers', () => {
   }, 15000);
 
   it('ws.data.playerId is bound to the correct WebSocket', async () => {
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
 

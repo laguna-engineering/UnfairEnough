@@ -1,5 +1,6 @@
 import type { DbAdapter, SqlValue } from '../adapter';
 import type { PlayerProfile, PlayerRow } from '../schema';
+import { hostScope } from '../utils';
 
 function rowToProfile(row: PlayerRow): PlayerProfile {
   return {
@@ -22,12 +23,11 @@ export async function findByDeviceId(
   deviceId: string,
   hostId: string | null,
 ): Promise<PlayerProfile | null> {
-  const sql =
-    hostId !== null
-      ? 'SELECT * FROM players WHERE device_id = ? AND host_id = ?'
-      : 'SELECT * FROM players WHERE device_id = ? AND host_id IS NULL';
-  const params: SqlValue[] = hostId !== null ? [deviceId, hostId] : [deviceId];
-  const row = await db.get<PlayerRow>(sql, params);
+  const { clause, params: scopeParams } = hostScope(hostId);
+  const row = await db.get<PlayerRow>(`SELECT * FROM players WHERE device_id = ? AND ${clause}`, [
+    deviceId,
+    ...scopeParams,
+  ]);
   return row ? rowToProfile(row) : null;
 }
 
@@ -50,7 +50,8 @@ export async function createPlayer(
     [id, deviceId ?? null, displayName, avatarColor, hostId],
   );
   const profile = await getPlayer(db, id);
-  return profile!;
+  if (!profile) throw new Error(`BUG: player row missing after insert (id=${id})`);
+  return profile;
 }
 
 export async function updateDisplayName(
@@ -84,12 +85,11 @@ export async function incrementWins(db: DbAdapter, playerId: string): Promise<vo
 }
 
 export async function listPlayers(db: DbAdapter, hostId: string | null): Promise<PlayerProfile[]> {
-  const sql =
-    hostId !== null
-      ? 'SELECT * FROM players WHERE host_id = ? ORDER BY last_seen_at DESC'
-      : 'SELECT * FROM players WHERE host_id IS NULL ORDER BY last_seen_at DESC';
-  const params: SqlValue[] = hostId !== null ? [hostId] : [];
-  const rows = await db.all<PlayerRow>(sql, params);
+  const { clause, params } = hostScope(hostId);
+  const rows = await db.all<PlayerRow>(
+    `SELECT * FROM players WHERE ${clause} ORDER BY last_seen_at DESC`,
+    params,
+  );
   return rows.map(rowToProfile);
 }
 
@@ -108,7 +108,8 @@ export async function createProfile(
     [id, displayName, avatarColor, avatarEmoji, hostId],
   );
   const profile = await getPlayer(db, id);
-  return profile!;
+  if (!profile) throw new Error(`BUG: player profile missing after insert (id=${id})`);
+  return profile;
 }
 
 /** Update an existing profile's display fields. */
@@ -147,7 +148,9 @@ export async function unbindDevice(db: DbAdapter, playerId: string): Promise<voi
 /**
  * Atomically claim an unbound profile for a device.
  * Returns true if the claim succeeded, false if already claimed.
- * Scoped by hostId to avoid unbinding from other hosts.
+ * Scoped by hostId to prevent cross-tenant profile claiming.
+ *
+ * Wrapped in a transaction so the old binding is preserved if the claim fails.
  */
 export async function claimProfile(
   db: DbAdapter,
@@ -155,23 +158,20 @@ export async function claimProfile(
   deviceId: string,
   hostId: string | null,
 ): Promise<boolean> {
-  // Unbind any other profile this device has within the SAME host
-  if (hostId !== null) {
-    await db.run('UPDATE players SET device_id = NULL WHERE device_id = ? AND host_id = ?', [
+  return db.transaction(async () => {
+    // Unbind any other profile this device has within the SAME host
+    const { clause, params: scopeParams } = hostScope(hostId);
+    await db.run(`UPDATE players SET device_id = NULL WHERE device_id = ? AND ${clause}`, [
       deviceId,
-      hostId,
+      ...scopeParams,
     ]);
-  } else {
-    await db.run('UPDATE players SET device_id = NULL WHERE device_id = ? AND host_id IS NULL', [
-      deviceId,
-    ]);
-  }
-  // Atomically claim the target profile only if it's unbound
-  const result = await db.run(
-    'UPDATE players SET device_id = ? WHERE id = ? AND device_id IS NULL',
-    [deviceId, profileId],
-  );
-  return result.changes > 0;
+    // Atomically claim the target profile only if it's unbound AND in the same host scope
+    const result = await db.run(
+      `UPDATE players SET device_id = ? WHERE id = ? AND device_id IS NULL AND ${clause}`,
+      [deviceId, profileId, ...scopeParams],
+    );
+    return result.changes > 0;
+  });
 }
 
 /** List admin-created profiles that are not bound to any device. */
@@ -179,12 +179,11 @@ export async function listAvailableProfiles(
   db: DbAdapter,
   hostId: string | null,
 ): Promise<PlayerProfile[]> {
-  const sql =
-    hostId !== null
-      ? "SELECT * FROM players WHERE source = 'admin' AND device_id IS NULL AND host_id = ? ORDER BY display_name ASC"
-      : "SELECT * FROM players WHERE source = 'admin' AND device_id IS NULL AND host_id IS NULL ORDER BY display_name ASC";
-  const params: SqlValue[] = hostId !== null ? [hostId] : [];
-  const rows = await db.all<PlayerRow>(sql, params);
+  const { clause, params } = hostScope(hostId);
+  const rows = await db.all<PlayerRow>(
+    `SELECT * FROM players WHERE source = 'admin' AND device_id IS NULL AND ${clause} ORDER BY display_name ASC`,
+    params,
+  );
   return rows.map(rowToProfile);
 }
 

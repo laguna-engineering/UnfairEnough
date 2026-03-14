@@ -252,11 +252,3 @@ export interface Session {
   lastSeenAt: string;
   revoked: boolean;
 }
-
-export interface InvitationTokenRow {
-  token_hash: string;
-  host_id: string;
-  room_code: string;
-  created_at: string;
-  expires_at: string | null;
-}
