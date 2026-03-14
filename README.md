@@ -1,3 +1,7 @@
+<p align="center">
+  <img src=".github/banner.png" alt="Unfair Enough!" width="600">
+</p>
+
 # Unfair Enough!
 
 A multiplayer quiz game where a TV acts as the host display and phones are player controllers. Supports two modes:
