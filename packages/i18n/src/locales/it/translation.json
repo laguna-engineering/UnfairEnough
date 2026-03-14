@@ -103,10 +103,21 @@
   },
   "mode": {
     "title": "Scegli Modalità",
+    "account": "Ho un Account",
+    "accountDescription": "Accedi al tuo server",
     "local": "Partita Locale",
     "localDescription": "Gioca direttamente da questa TV — nessun server necessario",
-    "hosted": "Partita Online",
-    "hostedDescription": "Connettiti a un server per domande personalizzate e profili giocatore"
+    "hosted": "Ho un Server Locale",
+    "hostedDescription": "Connettiti a un server sulla tua rete locale"
+  },
+  "accountLogin": {
+    "title": "Scansiona per Accedere",
+    "instruction": "Scansiona questo codice QR con il tuo telefono e accedi",
+    "waitingForApproval": "In attesa di approvazione...",
+    "codeExpired": "Codice scaduto. Ne sto richiedendo uno nuovo...",
+    "cancel": "Annulla",
+    "approved": "Approvato! Creazione stanza...",
+    "failed": "Autenticazione fallita"
   },
   "connect": {
     "title": "Connetti al Server",

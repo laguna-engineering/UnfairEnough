@@ -4,7 +4,10 @@ export type ClientMessage =
       type: 'JOIN';
       payload: { name: string; roomCode?: string; deviceId?: string; profileId?: string };
     }
-  | { type: 'IDENTIFY'; payload: { deviceId: string } }
+  | {
+      type: 'IDENTIFY';
+      payload: { deviceId: string; sessionToken?: string; invitationToken?: string };
+    }
   | { type: 'UNBIND'; payload: { deviceId: string } }
   | { type: 'RECONNECT'; payload: { playerId: string } }
   | { type: 'ANSWER'; payload: { questionId: string; answer: AnswerKey } }
@@ -15,7 +18,7 @@ export type ClientMessage =
 export type ServerMessage =
   | { type: 'WELCOME'; payload: WelcomePayload }
   | { type: 'IDENTITY'; payload: IdentityPayload }
-  | { type: 'ROOM_CREATED'; payload: { roomCode: string } }
+  | { type: 'ROOM_CREATED'; payload: { roomCode: string; invitationToken?: string } }
   | { type: 'PLAYER_JOINED'; payload: PlayerInfo }
   | { type: 'PLAYER_LEFT'; payload: { playerId: string } }
   | { type: 'PLAYER_DISCONNECTED'; payload: { playerId: string } }
@@ -40,7 +43,14 @@ export type ServerMessage =
       };
     }
   | { type: 'PONG' }
-  | { type: 'ERROR'; payload: { code: string; message: string } };
+  | { type: 'ERROR'; payload: { code: string; message: string } }
+  | {
+      type: 'AUTH_CHALLENGE';
+      payload: { userCode: string; verificationUrl: string; expiresIn: number };
+    }
+  | { type: 'AUTH_SUCCESS'; payload: { sessionToken: string; hostId: string; displayName: string } }
+  | { type: 'AUTH_FAILED'; payload: { reason: string } }
+  | { type: 'AUTH_EXPIRED' };
 
 // Shared types
 export type AnswerKey = 'A' | 'B' | 'C' | 'D';
@@ -72,6 +82,8 @@ export interface IdentityPayload {
     totalWins: number;
   } | null;
   availableProfiles?: ProfileSummary[];
+  guestSessionToken?: string;
+  serverUrl?: string;
 }
 
 export interface PlayerInfo {
@@ -158,7 +170,8 @@ export type HostMessage =
   | { type: 'RESET_GAME' }
   | { type: 'SET_LANGUAGE'; payload: { language: string } }
   | { type: 'CONFIGURE_GAME'; payload: ConfigureGamePayload }
-  | { type: 'MEDIA_LOADED'; payload?: { success: boolean; questionId?: string } };
+  | { type: 'MEDIA_LOADED'; payload?: { success: boolean; questionId?: string } }
+  | { type: 'REQUEST_AUTH'; payload: { deviceCode: string } };
 
 export interface ConfigureGamePayload {
   gameType: 'casual' | 'configured' | 'custom';

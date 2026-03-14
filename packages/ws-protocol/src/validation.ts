@@ -73,13 +73,19 @@ export function parseClientMessage(data: unknown): ClientMessage {
       if (!payload || typeof payload !== 'object') {
         throw new Error('IDENTIFY requires payload');
       }
-      const p = payload as { deviceId?: unknown };
+      const p = payload as {
+        deviceId?: unknown;
+        sessionToken?: unknown;
+        invitationToken?: unknown;
+      };
       if (typeof p.deviceId !== 'string' || !isValidUUID(p.deviceId)) {
         throw new Error('Valid deviceId is required');
       }
+      const sessionToken = typeof p.sessionToken === 'string' ? p.sessionToken : undefined;
+      const invitationToken = typeof p.invitationToken === 'string' ? p.invitationToken : undefined;
       return {
         type: 'IDENTIFY',
-        payload: { deviceId: p.deviceId },
+        payload: { deviceId: p.deviceId, sessionToken, invitationToken },
       };
     }
 

@@ -103,10 +103,21 @@
   },
   "mode": {
     "title": "Choose Game Mode",
+    "account": "I Have an Account",
+    "accountDescription": "Log in to your hosted server",
     "local": "Local Game",
     "localDescription": "Run the game directly from this TV — no server needed",
-    "hosted": "Hosted Game",
-    "hostedDescription": "Connect to a server for custom questions & player profiles"
+    "hosted": "I Have a Local Server",
+    "hostedDescription": "Connect to a server on your local network"
+  },
+  "accountLogin": {
+    "title": "Scan to Log In",
+    "instruction": "Scan this QR code with your phone and log in",
+    "waitingForApproval": "Waiting for approval...",
+    "codeExpired": "Code expired. Requesting a new one...",
+    "cancel": "Cancel",
+    "approved": "Approved! Creating room...",
+    "failed": "Authentication failed"
   },
   "connect": {
     "title": "Connect to Server",

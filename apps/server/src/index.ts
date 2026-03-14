@@ -1,9 +1,11 @@
 import { readdir } from 'node:fs/promises';
 import { networkInterfaces } from 'node:os';
+import type { ServerWebSocket } from 'bun';
 import { Hono } from 'hono';
 import { serveStatic, upgradeWebSocket, websocket } from 'hono/bun';
 import { cors } from 'hono/cors';
 import { createAuthMiddleware } from './auth/middleware';
+import { createPendingLogin, removePendingLoginByWs } from './auth/pendingLogins';
 import { getDb, initDatabase } from './db';
 import { createRoom, destroyRoom, getRoom, setDbAdapter } from './roomManager';
 import authRoutes from './routes/auth';
@@ -53,13 +55,31 @@ app.route('/api/questions', questionsRoutes);
 app.route('/api/events', eventsRoutes);
 
 // ── WebSocket endpoint ─────────────────────────────────────────
+
+// Track host WSs that are awaiting auth (device flow, no room yet)
+const awaitingAuthHosts = new Set<ServerWebSocket<WSData>>();
+
+/** Create a room for an authenticated host and send ROOM_CREATED */
+function createRoomForHost(
+  hostWs: ServerWebSocket<WSData>,
+  hostId: string | null,
+  invitationToken?: string,
+): void {
+  const room = createRoom(hostId);
+  const data = hostWs.data as WSData;
+  data.roomCode = room.roomCode;
+  room.setHost(hostWs);
+  const payload: { roomCode: string; invitationToken?: string } = { roomCode: room.roomCode };
+  if (invitationToken) payload.invitationToken = invitationToken;
+  hostWs.send(JSON.stringify({ type: 'ROOM_CREATED', payload }));
+}
+
 app.get(
   '/ws',
   upgradeWebSocket((c) => {
     const role = c.req.query('role') as 'host' | 'player' | undefined;
     const roomCode = c.req.query('roomCode')?.toUpperCase();
 
-    // Prepare ws data that Bun attaches to the connection
     const wsData: WSData = {
       roomCode: '',
       role: role ?? 'player',
@@ -71,12 +91,12 @@ app.get(
         const raw = ws.raw!;
 
         if (role === 'host') {
-          // Host creates a new room
-          const room = createRoom();
-          wsData.roomCode = room.roomCode;
-          raw.data = { ...raw.data, roomCode: room.roomCode, role: 'host' };
-          room.setHost(raw);
-          raw.send(JSON.stringify({ type: 'ROOM_CREATED', payload: { roomCode: room.roomCode } }));
+          // Don't create room yet — host may need to authenticate first (device flow).
+          // Room is created when:
+          // a) Host sends REQUEST_AUTH → device flow → approved → room created
+          // b) Host sends any other message (legacy mode) → room created immediately
+          raw.data = { ...raw.data, roomCode: '', role: 'host' };
+          awaitingAuthHosts.add(raw);
         } else if (role === 'player' && roomCode) {
           const room = getRoom(roomCode);
           if (!room) {
@@ -91,7 +111,6 @@ app.get(
           }
           wsData.roomCode = roomCode;
           raw.data = { ...raw.data, roomCode, role: 'player' };
-          // Player sends JOIN message separately (standard protocol)
         } else {
           raw.send(
             JSON.stringify({
@@ -109,30 +128,72 @@ app.get(
       onMessage(event, ws) {
         const raw = ws.raw!;
         const data = raw.data as WSData;
-        const room = getRoom(data.roomCode);
-        if (!room) return;
 
         if (data.role === 'host') {
-          room.handleHostMessage(raw, event.data as string);
+          // If host has no room yet (awaiting auth or legacy)
+          if (!data.roomCode) {
+            try {
+              const msg = JSON.parse(event.data as string);
+              if (msg.type === 'REQUEST_AUTH') {
+                // Device flow: create pending login, send challenge
+                const pending = createPendingLogin(raw);
+                const serverUrl = `${c.req.url.startsWith('https') ? 'https' : 'http'}://${c.req.header('host')}`;
+                raw.send(
+                  JSON.stringify({
+                    type: 'AUTH_CHALLENGE',
+                    payload: {
+                      userCode: pending.userCode,
+                      verificationUrl: `${serverUrl}/auth/tv-login?code=${pending.userCode}`,
+                      expiresIn: pending.expiresIn,
+                    },
+                  }),
+                );
+                awaitingAuthHosts.delete(raw);
+                return;
+              }
+              if (msg.type === 'PING') {
+                raw.send(JSON.stringify({ type: 'PONG' }));
+                return;
+              }
+            } catch {
+              // Parse error — treat as legacy
+            }
+
+            // Legacy mode: first non-auth message → create room immediately
+            awaitingAuthHosts.delete(raw);
+            createRoomForHost(raw, null);
+            // Fall through to handle the message in the room
+          }
+
+          const room = getRoom(data.roomCode);
+          if (room) {
+            room.handleHostMessage(raw, event.data as string);
+          }
         } else {
-          room.handlePlayerMessage(raw, event.data as string);
+          const room = getRoom(data.roomCode);
+          if (room) {
+            room.handlePlayerMessage(raw, event.data as string);
+          }
         }
       },
 
       onClose(_event, ws) {
         const raw = ws.raw!;
         const data = raw.data as WSData;
+
+        // Clean up pending login if host disconnects before auth
+        awaitingAuthHosts.delete(raw);
+        removePendingLoginByWs(raw);
+
         const room = getRoom(data.roomCode);
         if (!room) return;
 
         if (data.role === 'host') {
           room.removeHost();
         } else if (data.playerId) {
-          // Network drop — start grace period instead of immediate removal
           room.handlePlayerDisconnect(data.playerId);
         }
 
-        // Only destroy room if truly empty (no players at all, not just disconnected)
         if (room.isEmpty) {
           destroyRoom(data.roomCode);
         }

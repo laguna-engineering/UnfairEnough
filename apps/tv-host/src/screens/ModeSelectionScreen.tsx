@@ -7,11 +7,16 @@ const TV_SAFE_HORIZONTAL = 96;
 const TV_SAFE_VERTICAL = 54;
 
 interface Props {
+  onSelectAccount: () => void;
   onSelectLocal: () => void;
   onSelectHosted: () => void;
 }
 
-export const ModeSelectionScreen: React.FC<Props> = ({ onSelectLocal, onSelectHosted }) => {
+export const ModeSelectionScreen: React.FC<Props> = ({
+  onSelectAccount,
+  onSelectLocal,
+  onSelectHosted,
+}) => {
   const { t } = useTranslation();
 
   return (
@@ -21,6 +26,20 @@ export const ModeSelectionScreen: React.FC<Props> = ({ onSelectLocal, onSelectHo
       <View style={styles.cardsRow}>
         <Pressable
           hasTVPreferredFocus
+          style={(state) => [
+            styles.cardWrapper,
+            (state as any).focused && styles.focused,
+            state.pressed && styles.pressed,
+          ]}
+          onPress={onSelectAccount}
+        >
+          <Card style={styles.card} variant="glow" glowColor="#10b981">
+            <Text style={styles.cardTitle}>{t('mode.account')}</Text>
+            <Text style={styles.cardDescription}>{t('mode.accountDescription')}</Text>
+          </Card>
+        </Pressable>
+
+        <Pressable
           style={(state) => [
             styles.cardWrapper,
             (state as any).focused && styles.focused,
@@ -70,7 +89,7 @@ const styles = StyleSheet.create({
   },
   cardWrapper: {
     flex: 1,
-    maxWidth: 400,
+    maxWidth: 360,
     borderRadius: 20,
     borderWidth: 3,
     borderColor: 'transparent',
