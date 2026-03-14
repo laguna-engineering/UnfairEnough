@@ -4,6 +4,7 @@ import type { QuestionOption } from '@unfairenough/ws-protocol';
 
 export interface QuestionSetRow {
   id: string;
+  host_id: string | null;
   name: string;
   author: string | null;
   description: string | null;
@@ -51,6 +52,7 @@ export interface QuestionRow {
 export interface PlayerRow {
   id: string;
   device_id: string | null;
+  host_id: string | null;
   display_name: string;
   avatar_color: string;
   avatar_emoji: string | null;
@@ -64,6 +66,7 @@ export interface PlayerRow {
 
 export interface GameRow {
   id: string;
+  host_id: string | null;
   question_set_id: string | null;
   question_set_ids: string | null;
   room_code: string;
@@ -94,6 +97,7 @@ export interface RoundResultRow {
 
 export interface PlayerTagScoreRow {
   id: string;
+  host_id: string | null;
   player_id: string;
   tag: string;
   score: number;
@@ -204,4 +208,55 @@ export interface PlayerTagScore {
   totalIncorrect: number;
   gamesPlayed: number;
   lastUpdated: string;
+}
+
+// ── Auth types ────────────────────────────────────────────────
+
+export type SessionType = 'host_tv' | 'host_admin' | 'guest';
+
+export interface HostRow {
+  id: string;
+  email: string;
+  password_hash: string;
+  display_name: string;
+  created_at: string;
+}
+
+export interface Host {
+  id: string;
+  email: string;
+  displayName: string;
+  createdAt: string;
+}
+
+export interface SessionRow {
+  token_hash: string;
+  host_id: string;
+  type: SessionType;
+  device_id: string | null;
+  device_info: string | null;
+  created_at: string;
+  expires_at: string | null;
+  last_seen_at: string;
+  revoked: number; // 0 or 1
+}
+
+export interface Session {
+  tokenHash: string;
+  hostId: string;
+  type: SessionType;
+  deviceId: string | null;
+  deviceInfo: string | null;
+  createdAt: string;
+  expiresAt: string | null;
+  lastSeenAt: string;
+  revoked: boolean;
+}
+
+export interface InvitationTokenRow {
+  token_hash: string;
+  host_id: string;
+  room_code: string;
+  created_at: string;
+  expires_at: string | null;
 }

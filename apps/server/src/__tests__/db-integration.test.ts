@@ -189,7 +189,7 @@ describe('questions repository', () => {
       ],
     };
 
-    const setId = await questionsRepo.importQuestionSet(db, 'set-1', input, () => 'q-uuid-1');
+    const setId = await questionsRepo.importQuestionSet(db, 'set-1', input, () => 'q-uuid-1', null);
     expect(setId).toBe('set-1');
 
     const set = await questionsRepo.getQuestionSet(db, 'set-1');
@@ -215,9 +215,9 @@ describe('questions repository', () => {
     };
 
     let counter = 0;
-    await questionsRepo.importQuestionSet(db, 'pool-set', input, () => `q-${counter++}`);
+    await questionsRepo.importQuestionSet(db, 'pool-set', input, () => `q-${counter++}`, null);
 
-    const questions = await questionsRepo.getRandomQuestions(db, 3);
+    const questions = await questionsRepo.getRandomQuestions(db, 3, null);
     expect(questions).toHaveLength(3);
     expect(questions[0].options).toHaveLength(2);
   });
@@ -249,7 +249,7 @@ describe('questions repository', () => {
     };
 
     let counter = 0;
-    await questionsRepo.importQuestionSet(db, 'ordered-set', input, () => `ord-${counter++}`);
+    await questionsRepo.importQuestionSet(db, 'ordered-set', input, () => `ord-${counter++}`, null);
 
     const questions = await questionsRepo.getQuestionsBySet(db, 'ordered-set');
     expect(questions).toHaveLength(2);
@@ -274,11 +274,11 @@ describe('questions repository', () => {
       ],
     };
 
-    await questionsRepo.importQuestionSet(db, 'del-set', input, () => 'del-q');
+    await questionsRepo.importQuestionSet(db, 'del-set', input, () => 'del-q', null);
     const deleted = await questionsRepo.softDeleteQuestionSet(db, 'del-set');
     expect(deleted).toBe(true);
 
-    const sets = await questionsRepo.getQuestionSets(db);
+    const sets = await questionsRepo.getQuestionSets(db, null);
     expect(sets.find((s) => s.id === 'del-set')).toBeUndefined();
   });
 
@@ -300,10 +300,16 @@ describe('questions repository', () => {
     };
 
     let counter = 0;
-    await questionsRepo.importQuestionSet(db, 'hidden-set', input, () => `hidden-${counter++}`);
+    await questionsRepo.importQuestionSet(
+      db,
+      'hidden-set',
+      input,
+      () => `hidden-${counter++}`,
+      null,
+    );
     await questionsRepo.softDeleteQuestionSet(db, 'hidden-set');
 
-    const questions = await questionsRepo.getRandomQuestions(db, 100);
+    const questions = await questionsRepo.getRandomQuestions(db, 100, null);
     expect(questions.every((q) => q.text !== 'Hidden Q')).toBe(true);
   });
 });
@@ -312,21 +318,28 @@ describe('questions repository', () => {
 
 describe('players repository', () => {
   it('creates and finds a player by device ID', async () => {
-    const player = await playersRepo.createPlayer(db, 'p-1', 'Alice', '#FF6B9D', 'device-123');
+    const player = await playersRepo.createPlayer(
+      db,
+      'p-1',
+      'Alice',
+      '#FF6B9D',
+      null,
+      'device-123',
+    );
     expect(player.displayName).toBe('Alice');
 
-    const found = await playersRepo.findByDeviceId(db, 'device-123');
+    const found = await playersRepo.findByDeviceId(db, 'device-123', null);
     expect(found).not.toBeNull();
     expect(found!.id).toBe('p-1');
   });
 
   it('returns null for unknown device ID', async () => {
-    const found = await playersRepo.findByDeviceId(db, 'nonexistent');
+    const found = await playersRepo.findByDeviceId(db, 'nonexistent', null);
     expect(found).toBeNull();
   });
 
   it('increments game count', async () => {
-    await playersRepo.createPlayer(db, 'p-2', 'Bob', '#4ECDC4');
+    await playersRepo.createPlayer(db, 'p-2', 'Bob', '#4ECDC4', null);
     await playersRepo.incrementGames(db, 'p-2', 500);
 
     const player = await playersRepo.getPlayer(db, 'p-2');
@@ -335,7 +348,7 @@ describe('players repository', () => {
   });
 
   it('increments win count', async () => {
-    await playersRepo.createPlayer(db, 'p-3', 'Charlie', '#FFE66D');
+    await playersRepo.createPlayer(db, 'p-3', 'Charlie', '#FFE66D', null);
     await playersRepo.incrementWins(db, 'p-3');
 
     const player = await playersRepo.getPlayer(db, 'p-3');
@@ -347,7 +360,7 @@ describe('players repository', () => {
 
 describe('games repository', () => {
   it('creates a game and records round results', async () => {
-    const game = await gamesRepo.createGame(db, 'g-1', 'ABCD', 'casual', 2, 3);
+    const game = await gamesRepo.createGame(db, 'g-1', 'ABCD', 'casual', 2, 3, null);
     expect(game.id).toBe('g-1');
     expect(game.gameType).toBe('casual');
 
@@ -385,7 +398,7 @@ describe('games repository', () => {
   });
 
   it('ends a game with winner', async () => {
-    await gamesRepo.createGame(db, 'g-2', 'EFGH', 'casual', 2, 1);
+    await gamesRepo.createGame(db, 'g-2', 'EFGH', 'casual', 2, 1, null);
     await gamesRepo.endGame(db, 'g-2', 'p-1', 'Alice');
 
     const game = await gamesRepo.getGame(db, 'g-2');
@@ -394,10 +407,10 @@ describe('games repository', () => {
   });
 
   it('lists recent games', async () => {
-    await gamesRepo.createGame(db, 'g-3', 'AAAA', 'casual', 2, 1);
-    await gamesRepo.createGame(db, 'g-4', 'BBBB', 'configured', 4, 10);
+    await gamesRepo.createGame(db, 'g-3', 'AAAA', 'casual', 2, 1, null);
+    await gamesRepo.createGame(db, 'g-4', 'BBBB', 'configured', 4, 10, null);
 
-    const recent = await gamesRepo.getRecentGames(db);
+    const recent = await gamesRepo.getRecentGames(db, null);
     expect(recent.length).toBeGreaterThanOrEqual(2);
   });
 });

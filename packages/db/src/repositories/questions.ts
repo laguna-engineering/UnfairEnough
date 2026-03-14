@@ -1,4 +1,4 @@
-import type { DbAdapter } from '../adapter';
+import type { DbAdapter, SqlValue } from '../adapter';
 import type { QuestionSetInput } from '../import/validator';
 import type {
   MetaSetChildRow,
@@ -61,11 +61,12 @@ export async function importQuestionSet(
   setId: string,
   input: QuestionSetInput,
   generateId: () => string,
+  hostId: string | null = null,
 ): Promise<string> {
   const setLanguage = input.language ?? 'en';
   await db.run(
-    `INSERT INTO question_sets (id, name, author, description, default_time_limit, tags, question_count, available_in_casual, language)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO question_sets (id, name, author, description, default_time_limit, tags, question_count, available_in_casual, language, host_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       setId,
       input.name,
@@ -76,6 +77,7 @@ export async function importQuestionSet(
       input.questions.length,
       input.availableInCasual === false ? 0 : 1,
       setLanguage,
+      hostId,
     ],
   );
 
@@ -114,6 +116,7 @@ export async function importQuestionSet(
 export async function getRandomQuestions(
   db: DbAdapter,
   count: number,
+  hostId: string | null,
   excludeSetIds?: string[],
   language?: string,
 ): Promise<QuestionWithMeta[]> {
@@ -123,6 +126,14 @@ export async function getRandomQuestions(
     SELECT id FROM question_sets WHERE available_in_casual = 0
   ))`;
   const params: (string | number)[] = [];
+
+  // Scope to host's question sets
+  if (hostId !== null) {
+    sql += ` AND (set_id IS NULL OR set_id IN (SELECT id FROM question_sets WHERE host_id = ?))`;
+    params.push(hostId);
+  } else {
+    sql += ` AND (set_id IS NULL OR set_id IN (SELECT id FROM question_sets WHERE host_id IS NULL))`;
+  }
 
   if (excludeSetIds && excludeSetIds.length > 0) {
     const placeholders = excludeSetIds.map(() => '?').join(',');
@@ -166,6 +177,7 @@ export async function getQuestionsBySet(db: DbAdapter, setId: string): Promise<Q
 
 export async function getQuestionSets(
   db: DbAdapter,
+  hostId: string | null,
   language?: string,
 ): Promise<QuestionSetWithMeta[]> {
   // For meta sets, compute question_count dynamically from child sets
@@ -181,7 +193,14 @@ export async function getQuestionSets(
        END AS question_count
      FROM question_sets qs
      WHERE qs.deleted_at IS NULL`;
-  const params: string[] = [];
+  const params: SqlValue[] = [];
+
+  if (hostId !== null) {
+    sql += ' AND qs.host_id = ?';
+    params.push(hostId);
+  } else {
+    sql += ' AND qs.host_id IS NULL';
+  }
 
   if (language) {
     sql += ' AND qs.language = ?';
@@ -274,13 +293,14 @@ export async function createMetaSet(
   id: string,
   name: string,
   childSetIds: string[],
+  hostId: string | null,
   description?: string,
   defaultTimeLimit?: number,
 ): Promise<string> {
   await db.run(
-    `INSERT INTO question_sets (id, name, description, default_time_limit, is_meta, question_count)
-     VALUES (?, ?, ?, ?, 1, 0)`,
-    [id, name, description ?? null, defaultTimeLimit ?? 10],
+    `INSERT INTO question_sets (id, name, description, default_time_limit, is_meta, question_count, host_id)
+     VALUES (?, ?, ?, ?, 1, 0, ?)`,
+    [id, name, description ?? null, defaultTimeLimit ?? 10, hostId],
   );
 
   for (let i = 0; i < childSetIds.length; i++) {

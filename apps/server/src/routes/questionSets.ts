@@ -24,7 +24,7 @@ function requireAuth(c: any): boolean {
 questionSets.get('/', async (c) => {
   const db = getDb();
   const language = c.req.query('language') || undefined;
-  const sets = await questionsRepo.getQuestionSets(db, language);
+  const sets = await questionsRepo.getQuestionSets(db, null, language);
   return c.json({ sets });
 });
 
@@ -83,7 +83,7 @@ questionSets.post('/', async (c) => {
   const db = getDb();
   const setId = crypto.randomUUID();
   await db.transaction(async () => {
-    await questionsRepo.importQuestionSet(db, setId, result.data, () => crypto.randomUUID());
+    await questionsRepo.importQuestionSet(db, setId, result.data, () => crypto.randomUUID(), null);
   });
 
   const set = await questionsRepo.getQuestionSet(db, setId);

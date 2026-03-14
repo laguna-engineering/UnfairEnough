@@ -67,6 +67,7 @@ metaSets.post('/', async (c) => {
       id,
       body.name.trim(),
       body.childSetIds,
+      null,
       body.description?.trim(),
       body.defaultTimeLimit,
     );

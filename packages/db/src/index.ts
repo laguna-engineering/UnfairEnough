@@ -18,15 +18,20 @@ export { configurePragmas, runMigrations } from './migrations';
 export type { EventType } from './repositories/events';
 export * as eventsRepo from './repositories/events';
 export * as gamesRepo from './repositories/games';
+export * as hostsRepo from './repositories/hosts';
 export * as playersRepo from './repositories/players';
 export * as playerTagScoresRepo from './repositories/playerTagScores';
 // Repositories
 export * as questionsRepo from './repositories/questions';
+export * as sessionsRepo from './repositories/sessions';
 // Schema types
 export type {
   GameRow,
   GameSession,
   GameType,
+  Host,
+  HostRow,
+  InvitationTokenRow,
   MediaType,
   MetaSetChildRow,
   PlayerProfile,
@@ -40,4 +45,7 @@ export type {
   QuestionWithMeta,
   RoundResultEntry,
   RoundResultRow,
+  Session,
+  SessionRow,
+  SessionType,
 } from './schema';

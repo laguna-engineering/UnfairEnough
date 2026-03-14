@@ -16,6 +16,7 @@ export interface EventRow {
   room_code: string | null;
   event_type: string;
   player_id: string | null;
+  host_id: string | null;
   data: string | null;
   created_at: string;
 }
@@ -27,17 +28,19 @@ export async function logEvent(
     roomCode?: string;
     eventType: EventType;
     playerId?: string | null;
+    hostId?: string | null;
     data?: Record<string, unknown>;
   },
 ): Promise<void> {
   await db.run(
-    `INSERT INTO events (game_id, room_code, event_type, player_id, data)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO events (game_id, room_code, event_type, player_id, host_id, data)
+     VALUES (?, ?, ?, ?, ?, ?)`,
     [
       event.gameId ?? null,
       event.roomCode ?? null,
       event.eventType,
       event.playerId ?? null,
+      event.hostId ?? null,
       event.data ? JSON.stringify(event.data) : null,
     ],
   );
@@ -48,6 +51,7 @@ export async function getEvents(
   opts?: {
     gameId?: string;
     eventType?: EventType;
+    hostId?: string | null;
     limit?: number;
   },
 ): Promise<EventRow[]> {
@@ -61,6 +65,14 @@ export async function getEvents(
   if (opts?.eventType) {
     conditions.push('event_type = ?');
     params.push(opts.eventType);
+  }
+  if (opts?.hostId !== undefined) {
+    if (opts.hostId !== null) {
+      conditions.push('host_id = ?');
+      params.push(opts.hostId);
+    } else {
+      conditions.push('host_id IS NULL');
+    }
   }
 
   let sql = 'SELECT * FROM events';
@@ -77,6 +89,18 @@ export async function getEvents(
   return db.all<EventRow>(sql, params);
 }
 
-export async function getRecentEvents(db: DbAdapter, limit = 100): Promise<EventRow[]> {
-  return db.all<EventRow>('SELECT * FROM events ORDER BY id DESC LIMIT ?', [limit]);
+export async function getRecentEvents(
+  db: DbAdapter,
+  hostId: string | null,
+  limit = 100,
+): Promise<EventRow[]> {
+  if (hostId !== null) {
+    return db.all<EventRow>('SELECT * FROM events WHERE host_id = ? ORDER BY id DESC LIMIT ?', [
+      hostId,
+      limit,
+    ]);
+  }
+  return db.all<EventRow>('SELECT * FROM events WHERE host_id IS NULL ORDER BY id DESC LIMIT ?', [
+    limit,
+  ]);
 }

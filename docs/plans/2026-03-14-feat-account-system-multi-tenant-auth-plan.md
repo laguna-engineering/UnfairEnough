@@ -39,7 +39,7 @@ erDiagram
         TEXT email UK "NOT NULL"
         TEXT password_hash "NOT NULL"
         TEXT display_name "NOT NULL"
-        TEXT created_at "DEFAULT now"
+        TEXT created_at "datetime('now')"
     }
     sessions {
         TEXT token_hash PK "SHA-256 of raw token"
@@ -47,35 +47,27 @@ erDiagram
         TEXT type "host_tv | host_admin | guest"
         TEXT device_id "nullable, for guest sessions"
         TEXT device_info "user agent / device name"
-        INTEGER created_at "unixepoch"
-        INTEGER expires_at "unixepoch"
-        INTEGER last_seen_at "unixepoch"
+        TEXT created_at "datetime('now')"
+        TEXT expires_at "datetime, nullable"
+        TEXT last_seen_at "datetime"
         INTEGER revoked "DEFAULT 0"
-    }
-    pending_logins {
-        TEXT code PK "8-char alphanumeric"
-        TEXT device_code "high-entropy, for WS matching"
-        TEXT host_id "NULL until approved"
-        TEXT ws_id "WebSocket connection identifier"
-        INTEGER created_at "unixepoch"
-        INTEGER expires_at "unixepoch, +5min"
-        TEXT status "pending | approved | expired"
     }
     invitation_tokens {
         TEXT token_hash PK "SHA-256 of raw token"
         TEXT host_id FK "NOT NULL"
         TEXT room_code "NOT NULL"
-        INTEGER created_at "unixepoch"
-        INTEGER expires_at "unixepoch"
+        TEXT created_at "datetime('now')"
+        TEXT expires_at "datetime"
     }
 
     hosts ||--o{ sessions : "has"
-    hosts ||--o{ pending_logins : "approves"
     hosts ||--o{ invitation_tokens : "generates"
     hosts ||--o{ players : "owns"
     hosts ||--o{ question_sets : "owns"
     hosts ||--o{ games : "owns"
 ```
+
+> **Note:** `pending_logins` are stored in-memory only (5-minute TTL, lost on restart is fine). No DB table needed.
 
 #### Existing Tables — Add `host_id` Column
 
@@ -83,31 +75,45 @@ All tenant-scoped tables get a nullable `host_id TEXT REFERENCES hosts(id)`:
 
 | Table | Change | Index |
 |-------|--------|-------|
-| `players` | Add `host_id`, change UNIQUE from `(device_id)` to `(host_id, device_id)` | `idx_players_host` |
+| `players` | Add `host_id`, add two partial unique indexes (see below) | `idx_players_host` |
 | `question_sets` | Add `host_id` | `idx_question_sets_host` |
 | `questions` | Scoped via `question_set_id` FK (no direct `host_id` needed) | — |
-| `meta_sets` | Add `host_id` | `idx_meta_sets_host` |
+| `question_sets` (where `is_meta=1`) | Scoped via `host_id` on `question_sets` (no separate `meta_sets` table exists) | — |
 | `games` | Add `host_id` | `idx_games_host` |
 | `round_results` | Scoped via `game_id` FK | — |
 | `player_tag_scores` | Add `host_id` | `idx_player_tag_scores_host` |
 | `events` | Add `host_id` | `idx_events_host` |
 
-**Backward compatibility:** `host_id IS NULL` means unscoped data (pre-account or unauthenticated mode). Repo functions accept an optional `hostId` parameter; when `undefined`, they omit the WHERE clause (matching current behavior).
+**Players UNIQUE constraint:** SQLite treats NULLs as distinct in UNIQUE constraints, so `UNIQUE(host_id, device_id)` won't enforce uniqueness when `host_id IS NULL`. Use two partial unique indexes instead:
+```sql
+-- Keep existing uniqueness for unscoped (pre-account) data
+CREATE UNIQUE INDEX idx_players_device_unscoped ON players(device_id) WHERE host_id IS NULL;
+-- Per-tenant uniqueness for authenticated hosts
+CREATE UNIQUE INDEX idx_players_host_device ON players(host_id, device_id) WHERE host_id IS NOT NULL;
+```
+This avoids the SQLite table rebuild required to drop the existing UNIQUE constraint.
+
+**Backward compatibility:** `host_id IS NULL` means unscoped data (pre-account or unauthenticated mode). Repo functions take `hostId: string | null` as a **required** parameter (not optional). Callers must explicitly pass `null` for unscoped mode — this turns "forgot to pass hostId" from a silent bug into a compile-time error.
+
+**Tenancy mode:** On server startup, check if any host accounts exist in the DB and cache a `tenancyEnabled` flag. When tenancy is enabled:
+- Requests with no token → 401 (not silent fallback to unscoped)
+- Requests with invalid/expired token → 401 (not silent fallback)
+- Only allow unscoped access when `tenancyEnabled = false` (no accounts exist)
 
 #### Token Architecture
 
 ```
 Token Type        | Entropy  | Storage        | TTL        | Use
 ------------------|----------|----------------|------------|--------------------
-Host session (TV) | 32 bytes | DB (SHA-256)   | No expiry* | TV ↔ server auth
+Host session (TV) | 32 bytes | DB (SHA-256)   | 365 days   | TV ↔ server auth
 Host session (admin) | 32 bytes | Cookie (SHA-256 in DB) | 7 days | Admin panel
 Guest session     | 32 bytes | DB (SHA-256)   | 90 days    | Mobile persistent link
 Invitation token  | 16 bytes | DB (SHA-256)   | Room lifetime | QR guest linking
 Pending login code | 8 chars | In-memory Map  | 5 minutes  | TV device flow
 Device code       | 32 bytes | In-memory Map  | 5 minutes  | TV WS matching
-
-* TV sessions persist until explicit logout or password change
 ```
+
+Password change calls `revokeAllForHost()` to invalidate all existing sessions.
 
 All tokens: generated with `crypto.getRandomValues()`, stored as `SHA-256(token)`, never stored raw.
 
@@ -156,8 +162,7 @@ export async function updatePassword(db: DbAdapter, id: string, passwordHash: st
 **`apps/server/src/auth/tokens.ts`:**
 
 ```typescript
-import { createHash } from "crypto";
-
+// Use Bun-native crypto (consistent with rest of codebase — no Node.js "crypto" import)
 export function generateSecureToken(byteLength = 32): string {
   const bytes = new Uint8Array(byteLength);
   crypto.getRandomValues(bytes);
@@ -165,15 +170,23 @@ export function generateSecureToken(byteLength = 32): string {
 }
 
 export function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
+  const hasher = new Bun.CryptoHasher("sha256");
+  hasher.update(token);
+  return hasher.digest("hex");
 }
 
 export function generateUserCode(): string {
-  const alphabet = 'BCDFGHJKLMNPQRSTVWXZ'; // no vowels, no ambiguous chars
-  const bytes = new Uint8Array(8);
-  crypto.getRandomValues(bytes);
-  const code = Array.from(bytes).map(b => alphabet[b % alphabet.length]).join('');
-  return `${code.slice(0, 4)}-${code.slice(4)}`;
+  const alphabet = 'BCDFGHJKLMNPQRSTVWXZ'; // 20 chars, no vowels, no ambiguous
+  const limit = 256 - (256 % alphabet.length); // 240 — rejection sampling to avoid modulo bias
+  const code: string[] = [];
+  while (code.length < 8) {
+    const bytes = new Uint8Array(1);
+    crypto.getRandomValues(bytes);
+    if (bytes[0] < limit) {
+      code.push(alphabet[bytes[0] % alphabet.length]);
+    }
+  }
+  return `${code.slice(0, 4).join('')}-${code.slice(4).join('')}`;
 }
 ```
 
@@ -184,12 +197,24 @@ import { createMiddleware } from 'hono/factory';
 import { getCookie } from 'hono/cookie';
 
 type AuthVariables = {
-  hostId: string | null;  // null = unauthenticated (backward-compat mode)
+  hostId: string | null;  // null = no tenancy (no accounts exist on server)
 };
 
-// For routes that REQUIRE auth
+// Extract token from Authorization header (case-insensitive) or session cookie
+function extractToken(c: Context): string | null {
+  const authHeader = c.req.header('Authorization');
+  if (authHeader) {
+    const match = authHeader.match(/^Bearer\s+(.+)$/i);
+    if (match && match[1].length <= 128) return match[1];
+    return null; // Malformed auth header — don't fall through to cookie
+  }
+  const cookie = getCookie(c, 'session');
+  return cookie && cookie.length <= 128 ? cookie : null;
+}
+
+// For routes that REQUIRE auth (always, regardless of tenancy mode)
 export const requireHostAuth = createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '') ?? getCookie(c, 'session');
+  const token = extractToken(c);
   if (!token) return c.json({ error: 'Unauthorized' }, 401);
   const session = await sessionsRepo.validate(getDb(), hashToken(token));
   if (!session) return c.json({ error: 'Invalid session' }, 401);
@@ -197,18 +222,25 @@ export const requireHostAuth = createMiddleware<{ Variables: AuthVariables }>(as
   await next();
 });
 
-// For routes that OPTIONALLY scope by host (backward compat)
-export const optionalHostAuth = createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '') ?? getCookie(c, 'session');
-  if (token) {
+// For routes that scope by host when tenancy is enabled, or allow unscoped when no accounts exist
+// CRITICAL: Never silently degrade from scoped to unscoped on invalid tokens
+export const scopedAuth = createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
+  const token = extractToken(c);
+  if (isTenancyEnabled()) {
+    // Tenancy mode: token is required
+    if (!token) return c.json({ error: 'Unauthorized' }, 401);
     const session = await sessionsRepo.validate(getDb(), hashToken(token));
-    c.set('hostId', session?.hostId ?? null);
+    if (!session) return c.json({ error: 'Invalid session' }, 401);
+    c.set('hostId', session.hostId);
   } else {
+    // Legacy mode: no accounts exist, all data is unscoped
     c.set('hostId', null);
   }
   await next();
 });
 ```
+
+> **`isTenancyEnabled()`** checks a cached flag set on server startup (and refreshed when accounts are created via CLI). Returns `true` if any row exists in `hosts` table.
 
 **`apps/server/src/scripts/create-account.ts`:**
 
@@ -218,30 +250,44 @@ export const optionalHostAuth = createMiddleware<{ Variables: AuthVariables }>(a
 // Writes to DB directly (safe with WAL mode even if server is running)
 ```
 
-**Migration V13** in `packages/db/src/migrations.ts`:
+**Migration V13** in `packages/db/src/migrations.ts` (new tables only):
 
-- Create `hosts` table
+- Create `hosts` table (timestamps use `TEXT DEFAULT (datetime('now'))` — matching existing convention)
 - Create `sessions` table
-- Create `pending_logins` table (or keep in-memory only — see below)
 - Create `invitation_tokens` table
-- Add `host_id` column (nullable) to: `players`, `question_sets`, `meta_sets`, `games`, `player_tag_scores`, `events`
-- Drop UNIQUE on `players.device_id`, add UNIQUE on `(host_id, device_id)`
-- Add indexes on `host_id` for all modified tables
+- No `pending_logins` table — stored in-memory only
+
+**Migration V14** in `packages/db/src/migrations.ts` (alter existing tables):
+
+- Add `host_id TEXT REFERENCES hosts(id)` column to: `players`, `question_sets`, `games`, `player_tag_scores`, `events`
+- Add partial unique indexes on `players`: `idx_players_device_unscoped` (WHERE host_id IS NULL) + `idx_players_host_device` (WHERE host_id IS NOT NULL)
+- Add `host_id` indexes on all modified tables
+- Drop existing `idx_players_device_id` index (replaced by partial indexes)
+- Wrap in transaction for atomicity
+
+> **Note:** No table rebuild needed for `players` — we keep the existing column-level `UNIQUE(device_id)` as-is and add partial indexes on top. The old UNIQUE constraint is stricter than needed but harmless — it prevents the same device from appearing twice even with different `host_id` values, which is actually correct since a device should only be bound to one profile per host and we enforce one-host-at-a-time on the client side.
+
+**Migration runner improvement:** Wrap each migration's statements in `BEGIN...COMMIT` for atomicity. This protects against partial failures leaving the DB inconsistent.
 
 **Tasks:**
 
-- [ ] Write migration V13 SQL in `packages/db/src/migrations.ts`
-- [ ] Add `Host` type to `packages/db/src/schema.ts`
-- [ ] Add `Session` type to `packages/db/src/schema.ts`
-- [ ] Create `packages/db/src/repositories/hosts.ts` (create, findByEmail, findById, updatePassword)
-- [ ] Create `packages/db/src/repositories/sessions.ts` (create, validate, revoke, revokeAllForHost, cleanup)
+- [ ] Write migration V13 SQL (new tables) in `packages/db/src/migrations.ts`
+- [ ] Write migration V14 SQL (alter existing tables) in `packages/db/src/migrations.ts`
+- [ ] Wrap migration runner in transactions (`BEGIN`/`COMMIT` per migration)
+- [ ] Add `HostRow` + `Host` types to `packages/db/src/schema.ts` (both row and domain types, per existing convention)
+- [ ] Add `SessionRow` + `Session` types to `packages/db/src/schema.ts`
+- [ ] Add `SessionType = 'host_tv' | 'host_admin' | 'guest'` type alias
+- [ ] Create `packages/db/src/repositories/hosts.ts` with `rowToHost()` converter (create, findByEmail, findById, updatePassword)
+- [ ] Create `packages/db/src/repositories/sessions.ts` with `rowToSession()` converter (create, validate, revoke, revokeAllForHost, cleanup)
 - [ ] Export new repos from `packages/db/src/index.ts`
-- [ ] Create `apps/server/src/auth/tokens.ts` (generateSecureToken, hashToken, generateUserCode)
-- [ ] Create `apps/server/src/auth/middleware.ts` (requireHostAuth, optionalHostAuth)
-- [ ] Create `apps/server/src/scripts/create-account.ts`
+- [ ] Create `apps/server/src/auth/tokens.ts` (generateSecureToken using `crypto.getRandomValues`, hashToken using `Bun.CryptoHasher`, generateUserCode with rejection sampling)
+- [ ] Create `apps/server/src/auth/middleware.ts` (requireHostAuth, scopedAuth, extractToken, isTenancyEnabled)
+- [ ] Create `apps/server/src/scripts/create-account.ts` (with email format validation, min 12-char password, duplicate email check)
 - [ ] Add `create-account` script to `apps/server/package.json`
-- [ ] Update all existing repo functions to accept optional `hostId` parameter and conditionally filter
-- [ ] Update `packages/db/src/schema.ts` types for tables with new `host_id` field
+- [ ] Update all existing repo functions: change `db: DbAdapter` to accept `hostId: string | null` as a **required** parameter (not optional) and conditionally filter queries
+- [ ] Update `packages/db/src/schema.ts` row types for tables with new `host_id` field
+- [ ] Add `hostId: string | null` to `GameRoom` constructor and `roomManager.createRoom()` — propagate through all repo calls in room.ts
+- [ ] Add `isTenancyEnabled()` function: check if any host exists, cache on startup, refresh on account creation
 
 #### Phase 2: Admin Panel Auth
 
@@ -284,7 +330,7 @@ export const optionalHostAuth = createMiddleware<{ Variables: AuthVariables }>(a
 - [ ] Add auth check to `apps/server/admin/admin.js` (fetch `/auth/me` on load, redirect to login if 401)
 - [ ] Update `admin.js` `fetchJson()` to include credentials (cookies)
 - [ ] Apply `requireHostAuth` middleware to mutation routes (POST/PUT/DELETE on `/api/*`)
-- [ ] Apply `optionalHostAuth` middleware to read routes (GET on `/api/*`)
+- [ ] Apply `scopedAuth` middleware to read routes (GET on `/api/*`)
 - [ ] Update all route handlers to pass `c.get('hostId')` to repo functions
 - [ ] Remove duplicate `requireAuth()` from `questionSets.ts` and `metaSets.ts`
 - [ ] Remove `ADMIN_TOKEN` env var support (replaced by session auth)
@@ -462,16 +508,17 @@ App opens
 **Usage:**
 
 ```bash
-bun run apps/server/src/scripts/migrate-data.ts --host-email alice@example.com --mode copy
+bun run apps/server/src/scripts/migrate-data.ts --host-email alice@example.com
 ```
 
 **Behavior:**
-- Finds all rows where `host_id IS NULL` in: `players`, `question_sets`, `meta_sets`, `games`, `player_tag_scores`, `events`
-- Sets their `host_id` to the specified host's ID
-- `--mode copy`: Duplicates rows (original stays unscoped, copy goes to host) — safer
-- `--mode move`: Updates `host_id` in-place — cleaner
-- Runs in a transaction for atomicity
+- Looks up host account by email
+- Finds all rows where `host_id IS NULL` in: `players`, `question_sets`, `games`, `player_tag_scores`, `events`
+- Updates `host_id` in-place (`UPDATE ... SET host_id = ? WHERE host_id IS NULL`)
+- Runs in a single transaction for atomicity
 - Reports counts of migrated rows per table
+
+> **Note:** Only `--mode move` is supported. A `--mode copy` was considered but rejected: cascading FK dependencies (players → tag_scores → round_results → games → question_sets) make deep-copying extremely complex and error-prone. Move is safe and sufficient — the data simply gets assigned to the host.
 
 **Tasks:**
 
@@ -497,7 +544,7 @@ bun run apps/server/src/scripts/migrate-data.ts --host-email alice@example.com -
 - [ ] Local mode works unchanged (no auth, TV is server)
 - [ ] Unauthenticated hosted mode works unchanged (enter URL, no auth)
 - [ ] Server with no accounts works exactly as today (all data unscoped)
-- [ ] CLI migration script copies/moves unscoped data to a host account
+- [ ] CLI migration script moves unscoped data to a host account
 
 ### Non-Functional Requirements
 
@@ -526,17 +573,33 @@ bun run apps/server/src/scripts/migrate-data.ts --host-email alice@example.com -
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Tenant data leakage (missing `host_id` filter) | High | Middleware-level `hostId` injection, CI grep for queries missing `host_id` on scoped tables |
-| Breaking backward compatibility | High | All `host_id` columns nullable, all repo functions backward-compatible with `hostId = undefined` |
-| Pending login code brute-force | Medium | 8-char base-20 code (~34.5 bits), 5-minute TTL, rate-limit `/auth/tv-login` POST |
+| Tenant data leakage (missing `host_id` filter) | High | `hostId: string | null` is required (not optional) — compile-time safety. `scopedAuth` middleware returns 401 when tenancy is enabled and token is missing/invalid — no silent fallback. CI grep for queries missing `host_id`. |
+| Breaking backward compatibility | High | All `host_id` columns nullable. `isTenancyEnabled()` flag controls whether auth is enforced. |
+| `room.ts` writing unscoped data | High | `GameRoom` constructor receives `hostId`, propagates through all repo calls. |
+| Password change leaving stolen tokens valid | High | `updatePassword()` calls `revokeAllForHost()`. All sessions (TV, admin, guest) invalidated. |
+| Pending login code brute-force | Medium | 8-char base-20 code with rejection sampling (~34.5 bits), 5-minute TTL, rate-limit `/auth/tv-login` POST |
+| SQLite NULL UNIQUE semantics | Medium | Partial unique indexes on `players` instead of composite UNIQUE constraint. |
 | Invitation token interception | Low | Short-lived (room lifetime), multi-use by design, HTTPS enforced |
-| SQLite concurrent access during CLI operations | Low | WAL mode already enabled, `busy_timeout = 5000ms` already set |
+| SQLite concurrent access during CLI | Low | WAL mode + `busy_timeout = 5000ms`. Migrations run at startup before server accepts connections. |
+
+## Resolved Questions (from code review)
+
+1. **`optionalHostAuth` fallback** — Replaced with `scopedAuth` that returns 401 when tenancy is enabled. No silent degradation.
+2. **UNIQUE(host_id, device_id) with NULLs** — Use partial unique indexes instead. No table rebuild needed.
+3. **`pending_logins` in DB vs memory** — In-memory only. No DB table.
+4. **TV session TTL** — 365 days (not infinite). Password change revokes all sessions.
+5. **Timestamp format** — Use `TEXT DEFAULT (datetime('now'))` for all new tables (matches existing convention).
+6. **Crypto imports** — Use `Bun.CryptoHasher` for hashing (no Node.js `"crypto"` import). Use global `crypto.getRandomValues()` for token generation.
+7. **Row types** — Define both `HostRow`/`Host` and `SessionRow`/`Session` with `rowToHost()`/`rowToSession()` converters (matches existing repo pattern).
+8. **Migration splitting** — V13 for new tables, V14 for ALTER existing tables. Each wrapped in transaction.
+9. **`--mode copy`** — Dropped. Only `--mode move` supported (cascading FK deps make copy impractical).
 
 ## Open Questions (to resolve during implementation)
 
 1. **CSRF protection for admin panel** — Should admin form submissions include a CSRF token? (Low risk since admin is on a private server, but good practice.)
 2. **Session cleanup frequency** — Periodic timer vs on-demand cleanup of expired sessions/tokens?
 3. **TV reconnection after brief disconnect** — Reuse session token or require re-auth? (Recommend: reuse token, same as mobile.)
+4. **`claimProfile` cross-tenant unbind** — Currently unbinds ALL profiles matching a device_id. Must be scoped to `host_id` to avoid unbinding from other hosts.
 
 ## References & Research
 

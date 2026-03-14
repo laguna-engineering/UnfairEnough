@@ -44,7 +44,13 @@ export const ImportQuestionsModal: React.FC<Props> = ({ visible, onClose, onImpo
 
       const db = getDb();
       const setId = Crypto.randomUUID();
-      await questionsRepo.importQuestionSet(db, setId, result.data, () => Crypto.randomUUID());
+      await questionsRepo.importQuestionSet(
+        db,
+        setId,
+        result.data,
+        () => Crypto.randomUUID(),
+        null,
+      );
 
       setSuccess(t('gameConfig.importSuccess', { count: result.data.questions.length }));
       setUrl('');

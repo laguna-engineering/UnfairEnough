@@ -1,4 +1,4 @@
-import type { DbAdapter } from '../adapter';
+import type { DbAdapter, SqlValue } from '../adapter';
 import type { PlayerTagScore, PlayerTagScoreRow } from '../schema';
 
 function rowToTagScore(row: PlayerTagScoreRow): PlayerTagScore {
@@ -57,11 +57,12 @@ export async function upsertTagScore(
   tag: string,
   delta: number,
   isCorrect: boolean,
+  hostId: string | null,
   initialScore = 0,
 ): Promise<void> {
   await db.run(
-    `INSERT INTO player_tag_scores (id, player_id, tag, score, total_correct, total_incorrect, last_updated)
-     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+    `INSERT INTO player_tag_scores (id, player_id, tag, score, total_correct, total_incorrect, host_id, last_updated)
+     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(player_id, tag) DO UPDATE SET
        score = score + ?,
        total_correct = total_correct + ?,
@@ -74,6 +75,7 @@ export async function upsertTagScore(
       initialScore + delta,
       isCorrect ? 1 : 0,
       isCorrect ? 0 : 1,
+      hostId,
       delta,
       isCorrect ? 1 : 0,
       isCorrect ? 0 : 1,
@@ -94,15 +96,16 @@ export async function setTagScore(
   playerId: string,
   tag: string,
   score: number,
+  hostId: string | null,
 ): Promise<void> {
   const id = crypto.randomUUID();
   await db.run(
-    `INSERT INTO player_tag_scores (id, player_id, tag, score, total_correct, total_incorrect, last_updated)
-     VALUES (?, ?, ?, ?, 0, 0, datetime('now'))
+    `INSERT INTO player_tag_scores (id, player_id, tag, score, total_correct, total_incorrect, host_id, last_updated)
+     VALUES (?, ?, ?, ?, 0, 0, ?, datetime('now'))
      ON CONFLICT(player_id, tag) DO UPDATE SET
        score = ?,
        last_updated = datetime('now')`,
-    [id, playerId, tag, score, score],
+    [id, playerId, tag, score, hostId, score],
   );
 }
 
@@ -118,22 +121,33 @@ export async function deleteTagScore(
   return result.changes > 0;
 }
 
-export async function getScoresByTag(db: DbAdapter, tag: string): Promise<PlayerTagScore[]> {
-  const rows = await db.all<PlayerTagScoreRow>(
-    'SELECT * FROM player_tag_scores WHERE tag = ? ORDER BY score DESC',
-    [tag],
-  );
+export async function getScoresByTag(
+  db: DbAdapter,
+  tag: string,
+  hostId: string | null,
+): Promise<PlayerTagScore[]> {
+  const sql =
+    hostId !== null
+      ? 'SELECT * FROM player_tag_scores WHERE tag = ? AND host_id = ? ORDER BY score DESC'
+      : 'SELECT * FROM player_tag_scores WHERE tag = ? AND host_id IS NULL ORDER BY score DESC';
+  const params: SqlValue[] = hostId !== null ? [tag, hostId] : [tag];
+  const rows = await db.all<PlayerTagScoreRow>(sql, params);
   return rows.map(rowToTagScore);
 }
 
 export async function getAllTags(
   db: DbAdapter,
+  hostId: string | null,
 ): Promise<Array<{ tag: string; playerCount: number }>> {
-  const rows = await db.all<{ tag: string; player_count: number }>(
-    `SELECT tag, COUNT(DISTINCT player_id) as player_count
-     FROM player_tag_scores
-     GROUP BY tag
-     ORDER BY player_count DESC`,
-  );
+  const sql =
+    hostId !== null
+      ? `SELECT tag, COUNT(DISTINCT player_id) as player_count
+       FROM player_tag_scores WHERE host_id = ?
+       GROUP BY tag ORDER BY player_count DESC`
+      : `SELECT tag, COUNT(DISTINCT player_id) as player_count
+       FROM player_tag_scores WHERE host_id IS NULL
+       GROUP BY tag ORDER BY player_count DESC`;
+  const params: SqlValue[] = hostId !== null ? [hostId] : [];
+  const rows = await db.all<{ tag: string; player_count: number }>(sql, params);
   return rows.map((r) => ({ tag: r.tag, playerCount: r.player_count }));
 }

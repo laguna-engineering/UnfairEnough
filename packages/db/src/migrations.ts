@@ -188,6 +188,57 @@ const MIGRATION_V12 = `
 ALTER TABLE games ADD COLUMN question_set_ids TEXT;
 `;
 
+const MIGRATION_V13 = `
+CREATE TABLE IF NOT EXISTS hosts (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash TEXT PRIMARY KEY,
+  host_id TEXT NOT NULL REFERENCES hosts(id),
+  type TEXT NOT NULL DEFAULT 'host_admin',
+  device_id TEXT,
+  device_info TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at TEXT,
+  last_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+  revoked INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_host ON sessions(host_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+
+CREATE TABLE IF NOT EXISTS invitation_tokens (
+  token_hash TEXT PRIMARY KEY,
+  host_id TEXT NOT NULL REFERENCES hosts(id),
+  room_code TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_invitation_tokens_host ON invitation_tokens(host_id);
+CREATE INDEX IF NOT EXISTS idx_invitation_tokens_room ON invitation_tokens(room_code);
+`;
+
+const MIGRATION_V14 = `
+ALTER TABLE players ADD COLUMN host_id TEXT REFERENCES hosts(id);
+ALTER TABLE question_sets ADD COLUMN host_id TEXT REFERENCES hosts(id);
+ALTER TABLE games ADD COLUMN host_id TEXT REFERENCES hosts(id);
+ALTER TABLE player_tag_scores ADD COLUMN host_id TEXT REFERENCES hosts(id);
+ALTER TABLE events ADD COLUMN host_id TEXT REFERENCES hosts(id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_players_device_unscoped ON players(device_id) WHERE host_id IS NULL AND device_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_players_host_device ON players(host_id, device_id) WHERE host_id IS NOT NULL AND device_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_players_host ON players(host_id);
+CREATE INDEX IF NOT EXISTS idx_question_sets_host ON question_sets(host_id);
+CREATE INDEX IF NOT EXISTS idx_games_host ON games(host_id);
+CREATE INDEX IF NOT EXISTS idx_player_tag_scores_host ON player_tag_scores(host_id);
+CREATE INDEX IF NOT EXISTS idx_events_host ON events(host_id);
+`;
+
 const migrations: Migration[] = [
   { version: 1, sql: MIGRATION_V1 },
   { version: 2, sql: MIGRATION_V2 },
@@ -201,6 +252,8 @@ const migrations: Migration[] = [
   { version: 10, sql: MIGRATION_V10 },
   { version: 11, sql: MIGRATION_V11 },
   { version: 12, sql: MIGRATION_V12 },
+  { version: 13, sql: MIGRATION_V13 },
+  { version: 14, sql: MIGRATION_V14 },
 ];
 
 /**
@@ -227,11 +280,18 @@ export async function runMigrations(db: DbAdapter): Promise<number> {
 
   for (const migration of migrations) {
     if (migration.version > currentVersion) {
-      // Execute migration SQL (multiple statements)
-      for (const statement of splitStatements(migration.sql)) {
-        await db.exec(statement);
+      // Wrap each migration in a transaction for atomicity
+      await db.exec('BEGIN');
+      try {
+        for (const statement of splitStatements(migration.sql)) {
+          await db.exec(statement);
+        }
+        await db.exec(`PRAGMA user_version = ${migration.version}`);
+        await db.exec('COMMIT');
+      } catch (err) {
+        await db.exec('ROLLBACK');
+        throw err;
       }
-      await db.exec(`PRAGMA user_version = ${migration.version}`);
       currentVersion = migration.version;
     }
   }

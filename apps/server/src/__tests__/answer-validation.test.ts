@@ -92,6 +92,7 @@ beforeEach(async () => {
       ],
     },
     () => crypto.randomUUID(),
+    null,
   );
 });
 

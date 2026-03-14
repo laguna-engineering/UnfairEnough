@@ -9,7 +9,8 @@ const players = new Hono();
 // GET /api/players — list all player profiles
 players.get('/', async (c) => {
   const db = getDb();
-  const allPlayers = await playersRepo.listPlayers(db);
+  // TODO: Phase 2 — replace null with c.get('hostId') after auth middleware is applied
+  const allPlayers = await playersRepo.listPlayers(db, null);
   return c.json({ players: allPlayers });
 });
 
@@ -38,7 +39,14 @@ players.post('/', async (c) => {
   }
 
   const id = crypto.randomUUID();
-  const profile = await playersRepo.createProfile(db, id, displayName, avatarColor, avatarEmoji);
+  const profile = await playersRepo.createProfile(
+    db,
+    id,
+    displayName,
+    avatarColor,
+    avatarEmoji,
+    null,
+  );
   return c.json({ player: profile }, 201);
 });
 
@@ -115,7 +123,7 @@ players.get('/:id/stats', async (c) => {
   }
 
   // Get recent games this player participated in
-  const recentGames = await gamesRepo.getRecentGames(db, 50);
+  const recentGames = await gamesRepo.getRecentGames(db, null, 50);
   const playerGames: Array<{
     gameId: string;
     roomCode: string;
@@ -179,7 +187,7 @@ players.put('/:id/tags', async (c) => {
     return c.json({ error: 'Missing "score" (number)' }, 400);
   }
 
-  await playerTagScoresRepo.setTagScore(db, id, tag, score);
+  await playerTagScoresRepo.setTagScore(db, id, tag, score, null);
   return c.json({ tag, score });
 });
 

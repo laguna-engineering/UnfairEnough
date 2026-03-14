@@ -67,6 +67,7 @@ beforeEach(async () => {
       })),
     },
     () => crypto.randomUUID(),
+    null,
   );
 
   // Seed questions WITH media (very short preview for testing)
@@ -101,6 +102,7 @@ beforeEach(async () => {
       ],
     },
     () => crypto.randomUUID(),
+    null,
   );
 });
 
@@ -190,6 +192,7 @@ describe('CONFIGURE_GAME', () => {
         questions: [],
       },
       () => crypto.randomUUID(),
+      null,
     );
 
     const room = new GameRoom('TEST', db);

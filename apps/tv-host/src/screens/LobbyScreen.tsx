@@ -174,7 +174,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
     try {
       if (mode === 'local') {
         const db = getDb();
-        const sets = await questionsRepo.getQuestionSets(db, currentLanguage);
+        const sets = await questionsRepo.getQuestionSets(db, null, currentLanguage);
         setQuestionSets(sets);
         const count = await questionsRepo.getTotalQuestionCount(db, currentLanguage);
         setTotalQuestions(count);

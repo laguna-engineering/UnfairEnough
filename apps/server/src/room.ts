@@ -79,6 +79,7 @@ interface PlayerAnswer {
 
 export class GameRoom {
   readonly roomCode: string;
+  readonly hostId: string | null;
   private readonly db: DbAdapter;
 
   private phase: GamePhase = 'LOBBY';
@@ -127,9 +128,10 @@ export class GameRoom {
   private pendingMediaQuestion: QuestionWithMeta | null = null;
   private pendingPreviewDuration = 0;
 
-  constructor(roomCode: string, db: DbAdapter) {
+  constructor(roomCode: string, db: DbAdapter, hostId: string | null = null) {
     this.roomCode = roomCode;
     this.db = db;
+    this.hostId = hostId;
   }
 
   // ── Host management ──────────────────────────────────────────
@@ -178,7 +180,12 @@ export class GameRoom {
     if (claimProfileId && deviceId) {
       // Claiming a pre-created profile
       try {
-        const claimed = await playersRepo.claimProfile(this.db, claimProfileId, deviceId);
+        const claimed = await playersRepo.claimProfile(
+          this.db,
+          claimProfileId,
+          deviceId,
+          this.hostId,
+        );
         if (!claimed) {
           this.sendTo(ws, {
             type: 'ERROR',
@@ -200,7 +207,7 @@ export class GameRoom {
       }
     } else if (deviceId) {
       try {
-        const existingProfile = await playersRepo.findByDeviceId(this.db, deviceId);
+        const existingProfile = await playersRepo.findByDeviceId(this.db, deviceId, this.hostId);
         if (existingProfile) {
           profileId = existingProfile.id;
           playerColor = existingProfile.avatarColor;
@@ -216,7 +223,14 @@ export class GameRoom {
           // Create new auto-profile
           profileId = crypto.randomUUID();
           const autoColor = COLORS[this.colorIndex++ % COLORS.length];
-          await playersRepo.createPlayer(this.db, profileId, name, autoColor, deviceId);
+          await playersRepo.createPlayer(
+            this.db,
+            profileId,
+            name,
+            autoColor,
+            this.hostId,
+            deviceId,
+          );
           playerColor = autoColor;
         }
       } catch (err) {
@@ -690,6 +704,7 @@ export class GameRoom {
         rawPool = await questionsRepo.getRandomQuestions(
           this.db,
           requestedCount * 3,
+          this.hostId,
           undefined,
           this.language,
         );
@@ -724,6 +739,7 @@ export class GameRoom {
           this.gameType,
           this.players.size,
           this.totalQuestionCount,
+          this.hostId,
           this.questionSetId ?? undefined,
           this.questionSetIds.length > 0 ? this.questionSetIds : undefined,
         )
@@ -920,7 +936,7 @@ export class GameRoom {
   private async handleIdentify(ws: ServerWebSocket<WSData>, deviceId: string): Promise<void> {
     let payload: IdentityPayload = { profile: null };
     try {
-      const existing = await playersRepo.findByDeviceId(this.db, deviceId);
+      const existing = await playersRepo.findByDeviceId(this.db, deviceId, this.hostId);
       if (existing) {
         payload = {
           profile: {
@@ -931,7 +947,7 @@ export class GameRoom {
         };
       } else {
         // No bound profile — include available admin-created profiles
-        const available = await playersRepo.listAvailableProfiles(this.db);
+        const available = await playersRepo.listAvailableProfiles(this.db, this.hostId);
         if (available.length > 0) {
           payload.availableProfiles = available.map((p) => ({
             id: p.id,
@@ -951,7 +967,7 @@ export class GameRoom {
   private async handleUnbind(ws: ServerWebSocket<WSData>, deviceId: string): Promise<void> {
     try {
       // Find the profile bound to this device and unbind it
-      const existing = await playersRepo.findByDeviceId(this.db, deviceId);
+      const existing = await playersRepo.findByDeviceId(this.db, deviceId, this.hostId);
       if (existing) {
         await playersRepo.unbindDevice(this.db, existing.id);
       }
@@ -1355,6 +1371,7 @@ export class GameRoom {
             update.tag,
             update.delta,
             result.isCorrect,
+            this.hostId,
             ELO_BASELINE,
           )
           .catch((err) => console.error('Failed to upsert tag score:', err));
@@ -1474,6 +1491,7 @@ export class GameRoom {
         roomCode: this.roomCode,
         eventType,
         playerId,
+        hostId: this.hostId,
         data,
       })
       .catch((err) => console.error('Failed to log event:', err));

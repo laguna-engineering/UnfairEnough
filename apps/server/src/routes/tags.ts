@@ -8,9 +8,9 @@ const tags = new Hono();
 tags.get('/', async (c) => {
   const db = getDb();
   const [playerTags, questions, allPlayers] = await Promise.all([
-    playerTagScoresRepo.getAllTags(db),
-    questionsRepo.getRandomQuestions(db, 10000), // Get all questions to count tags
-    playersRepo.listPlayers(db),
+    playerTagScoresRepo.getAllTags(db, null),
+    questionsRepo.getRandomQuestions(db, 10000, null), // Get all questions to count tags
+    playersRepo.listPlayers(db, null),
   ]);
 
   // Count questions per tag
@@ -41,8 +41,8 @@ tags.get('/:tag/players', async (c) => {
   const tag = decodeURIComponent(c.req.param('tag')).toLowerCase().trim();
 
   const [allPlayers, tagScores] = await Promise.all([
-    playersRepo.listPlayers(db),
-    playerTagScoresRepo.getScoresByTag(db, tag),
+    playersRepo.listPlayers(db, null),
+    playerTagScoresRepo.getScoresByTag(db, tag, null),
   ]);
 
   const scoreByPlayerId = new Map(tagScores.map((ts) => [ts.playerId, ts.score]));

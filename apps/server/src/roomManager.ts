@@ -10,7 +10,7 @@ export function setDbAdapter(db: DbAdapter): void {
   dbAdapter = db;
 }
 
-export function createRoom(): GameRoom {
+export function createRoom(hostId: string | null = null): GameRoom {
   if (!dbAdapter) throw new Error('DB adapter not set. Call setDbAdapter() first.');
 
   let code: string;
@@ -18,7 +18,7 @@ export function createRoom(): GameRoom {
     code = generateRoomCode();
   } while (rooms.has(code));
 
-  const room = new GameRoom(code, dbAdapter);
+  const room = new GameRoom(code, dbAdapter, hostId);
   rooms.set(code, room);
   return room;
 }

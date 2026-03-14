@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "bun --hot src/index.ts",
     "start": "bun src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "create-account": "bun src/scripts/create-account.ts"
   },
   "dependencies": {
     "hono": "^4.7.0",
