@@ -150,7 +150,8 @@ export async function getQuestionsBySetIds(
   const placeholders = setIds.map(() => '?').join(',');
   const rows = await db.all<QuestionRow>(
     `SELECT * FROM questions WHERE set_id IN (${placeholders})
-     AND set_id NOT IN (SELECT id FROM question_sets WHERE deleted_at IS NOT NULL)`,
+     AND set_id NOT IN (SELECT id FROM question_sets WHERE deleted_at IS NOT NULL)
+     ORDER BY last_asked_at IS NOT NULL, last_asked_at ASC, RANDOM()`,
     setIds,
   );
   return rows.map(rowToQuestionWithMeta);

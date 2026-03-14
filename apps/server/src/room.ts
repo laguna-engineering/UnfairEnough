@@ -657,13 +657,16 @@ export class GameRoom {
         });
         this.questions = this.questionPool.slice(0, requestedCount);
       } else {
-        // Non-adaptive: Fisher-Yates shuffle then slice
-        const shuffled = [...rawPool];
-        for (let i = shuffled.length - 1; i > 0; i--) {
+        // Non-adaptive: pick freshest questions, then shuffle for presentation order.
+        // The DB returns questions ordered by freshness (never-asked first, then
+        // least-recently-asked, with RANDOM() among ties), so slicing from the
+        // front gives us the freshest subset.
+        const selected = rawPool.slice(0, requestedCount);
+        for (let i = selected.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
-          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+          [selected[i], selected[j]] = [selected[j], selected[i]];
         }
-        this.questions = shuffled.slice(0, requestedCount);
+        this.questions = selected;
         this.questionPool = [];
       }
     } else if (this.gameType === 'configured' && this.questionSetId && !this.isMetaSet) {
