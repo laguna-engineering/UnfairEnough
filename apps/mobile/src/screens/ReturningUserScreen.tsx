@@ -6,19 +6,12 @@ import type { GuestSession } from '../services/authStorage';
 
 interface Props {
   session: GuestSession;
-  isConnecting: boolean;
   error: string | null;
   onPlay: () => void;
   onDisconnect: () => void;
 }
 
-export const ReturningUserScreen: React.FC<Props> = ({
-  session,
-  isConnecting,
-  error,
-  onPlay,
-  onDisconnect,
-}) => {
+export const ReturningUserScreen: React.FC<Props> = ({ session, error, onPlay, onDisconnect }) => {
   const { t } = useTranslation();
 
   return (
@@ -44,14 +37,8 @@ export const ReturningUserScreen: React.FC<Props> = ({
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-      <Pressable
-        style={[styles.playButton, isConnecting && styles.buttonDisabled]}
-        onPress={onPlay}
-        disabled={isConnecting}
-      >
-        <Text style={styles.playButtonText}>
-          {isConnecting ? t('returning.connecting') : t('returning.play')}
-        </Text>
+      <Pressable style={styles.playButton} onPress={onPlay}>
+        <Text style={styles.playButtonText}>{t('returning.play')}</Text>
       </Pressable>
 
       <Pressable style={styles.disconnectButton} onPress={onDisconnect}>
@@ -107,7 +94,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     ...typography.bodySmall,
-    color: '#f87171',
+    color: colors.error,
     marginBottom: spacing.md,
     textAlign: 'center',
   },
@@ -124,9 +111,6 @@ const styles = StyleSheet.create({
   playButtonText: {
     ...typography.h3,
     color: '#fff',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
   },
   disconnectButton: {
     paddingHorizontal: spacing.xl,

@@ -5,6 +5,7 @@ import {
   playersRepo,
   playerTagScoresRepo,
   questionsRepo,
+  sessionsRepo,
 } from '@unfairenough/db';
 import type {
   AnswerKey,
@@ -37,6 +38,7 @@ import {
   ELO_BASELINE,
   resolvePlayerDifficulty,
 } from '../../../packages/game-logic/src/utils/tagScoring';
+import { generateSecureToken, hashToken } from './auth/tokens';
 import type { HostMessage, RoomPlayer, WSData } from './types';
 
 const COLORS = [
@@ -77,10 +79,20 @@ interface PlayerAnswer {
   serverReceivedAt: number;
 }
 
+/** In-memory guest session: maps token hash → { hostId, roomCode } */
+const guestSessions = new Map<string, { hostId: string; roomCode: string }>();
+
+/** Look up a guest session by raw token. Returns hostId + roomCode if valid. */
+export function resolveGuestSession(rawToken: string): { hostId: string; roomCode: string } | null {
+  const hash = hashToken(rawToken);
+  return guestSessions.get(hash) ?? null;
+}
+
 export class GameRoom {
   readonly roomCode: string;
   readonly hostId: string | null;
   private readonly db: DbAdapter;
+  private readonly invitationToken: string | undefined;
 
   private phase: GamePhase = 'LOBBY';
   private players = new Map<string, RoomPlayer>();
@@ -128,10 +140,16 @@ export class GameRoom {
   private pendingMediaQuestion: QuestionWithMeta | null = null;
   private pendingPreviewDuration = 0;
 
-  constructor(roomCode: string, db: DbAdapter, hostId: string | null = null) {
+  constructor(
+    roomCode: string,
+    db: DbAdapter,
+    hostId: string | null = null,
+    invitationToken?: string,
+  ) {
     this.roomCode = roomCode;
     this.db = db;
     this.hostId = hostId;
+    this.invitationToken = invitationToken;
   }
 
   // ── Host management ──────────────────────────────────────────
@@ -360,7 +378,12 @@ export class GameRoom {
 
     switch (message.type) {
       case 'IDENTIFY': {
-        this.handleIdentify(ws, message.payload.deviceId);
+        this.handleIdentify(
+          ws,
+          message.payload.deviceId,
+          message.payload.sessionToken,
+          message.payload.invitationToken,
+        );
         break;
       }
       case 'JOIN': {
@@ -933,7 +956,12 @@ export class GameRoom {
     return connected > 0 && this.answers.size >= connected;
   }
 
-  private async handleIdentify(ws: ServerWebSocket<WSData>, deviceId: string): Promise<void> {
+  private async handleIdentify(
+    ws: ServerWebSocket<WSData>,
+    deviceId: string,
+    _sessionToken?: string,
+    invitationToken?: string,
+  ): Promise<void> {
     let payload: IdentityPayload = { profile: null };
     try {
       const existing = await playersRepo.findByDeviceId(this.db, deviceId, this.hostId);
@@ -961,6 +989,42 @@ export class GameRoom {
     } catch (err) {
       console.error('IDENTIFY lookup failed:', err);
     }
+
+    // Guest linking: if the client provides an invitationToken, validate it
+    // against this room's stored token and create a guest session
+    if (invitationToken && this.invitationToken && this.hostId) {
+      if (invitationToken === this.invitationToken) {
+        try {
+          const rawGuestToken = generateSecureToken();
+          const guestTokenHash = hashToken(rawGuestToken);
+
+          // Persist guest session in DB (type 'guest')
+          await sessionsRepo.create(this.db, guestTokenHash, this.hostId, 'guest', {
+            deviceInfo: `Guest device ${deviceId}`,
+          });
+
+          // Store in-memory mapping so AUTO room resolution works
+          guestSessions.set(guestTokenHash, {
+            hostId: this.hostId,
+            roomCode: this.roomCode,
+          });
+
+          payload.guestSessionToken = rawGuestToken;
+
+          // Derive server URL from the host WS connection if available
+          if (this.hostWs) {
+            // The server URL is inferred from the listening port
+            const port = process.env.PORT || '3000';
+            payload.serverUrl = `http://localhost:${port}`;
+          }
+        } catch (err) {
+          console.error('Guest session creation failed:', err);
+        }
+      } else {
+        console.warn(`Invalid invitation token for room ${this.roomCode} from device ${deviceId}`);
+      }
+    }
+
     this.sendTo(ws, { type: 'IDENTITY', payload });
   }
 

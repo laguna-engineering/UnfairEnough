@@ -23,8 +23,21 @@ export async function getGuestSession(): Promise<GuestSession | null> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (raw) {
-      cached = JSON.parse(raw);
-      return cached;
+      const parsed = JSON.parse(raw);
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        typeof parsed.sessionToken === 'string' &&
+        typeof parsed.serverUrl === 'string' &&
+        typeof parsed.playerName === 'string' &&
+        typeof parsed.playerColor === 'string'
+      ) {
+        cached = parsed as GuestSession;
+        return cached;
+      }
+      // Invalid shape — clear corrupted data
+      await AsyncStorage.removeItem(STORAGE_KEY);
+      return null;
     }
   } catch {
     // Storage error
@@ -48,8 +61,4 @@ export async function clearGuestSession(): Promise<void> {
   } catch (err) {
     console.error('Failed to clear guest session:', err);
   }
-}
-
-export function getCachedGuestSession(): GuestSession | null {
-  return cached;
 }

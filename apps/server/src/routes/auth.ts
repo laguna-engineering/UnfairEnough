@@ -179,15 +179,12 @@ auth.post('/tv-login', async (c) => {
       }),
     );
 
-    // Create room for the authenticated host
-    const room = createRoom(host.id);
+    // Generate invitation token for the game QR and create room with it
+    const inviteToken = generateSecureToken(16);
+    const room = createRoom(host.id, inviteToken);
     const wsData = pending.hostWs.data as WSData;
     wsData.roomCode = room.roomCode;
     room.setHost(pending.hostWs);
-
-    // Generate invitation token for the game QR
-    const inviteToken = generateSecureToken(16);
-    // TODO: Phase 4 — store invitation token in DB for mobile guest linking
 
     pending.hostWs.send(
       JSON.stringify({
