@@ -83,6 +83,8 @@ export default function App() {
   const [hostedServerUrl, setHostedServerUrl] = useState<string>('');
   const [hostedMobileBaseUrl, setHostedMobileBaseUrl] = useState<string | null>(null);
   const hostedControllerRef = useRef<HostedGameController | null>(null);
+  const authRetryCount = useRef(0);
+  const MAX_AUTH_RETRIES = 3;
   const [authChallenge, setAuthChallenge] = useState<AuthChallenge | null>(null);
   const [authLoginState, setAuthLoginState] = useState<
     'connecting' | 'waiting' | 'expired' | 'approved' | 'failed'
@@ -139,6 +141,7 @@ export default function App() {
     setHostedServerUrl(configServerUrl);
     setAuthChallenge(null);
     setAuthLoginState('connecting');
+    authRetryCount.current = 0;
 
     hostedControllerRef.current?.cleanup();
     hostedControllerRef.current = new HostedGameController(configServerUrl, {
@@ -158,6 +161,11 @@ export default function App() {
       },
       onAuthFailed: () => setAuthLoginState('failed'),
       onAuthExpired: () => {
+        authRetryCount.current++;
+        if (authRetryCount.current >= MAX_AUTH_RETRIES) {
+          setAuthLoginState('failed');
+          return;
+        }
         setAuthLoginState('expired');
         // Auto-reconnect to get a new code
         setTimeout(() => {

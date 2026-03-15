@@ -56,22 +56,19 @@ app.route('/api/events', eventsRoutes);
 
 // ── WebSocket endpoint ─────────────────────────────────────────
 
-// Track host WSs that are awaiting auth (device flow, no room yet)
-const awaitingAuthHosts = new Set<ServerWebSocket<WSData>>();
+// Server base URL for QR codes. Use SERVER_BASE_URL env var if behind a proxy.
+const serverBaseUrl = process.env.SERVER_BASE_URL ?? `http://${localIp ?? 'localhost'}:${port}`;
 
-/** Create a room for an authenticated host and send ROOM_CREATED */
-function createRoomForHost(
-  hostWs: ServerWebSocket<WSData>,
-  hostId: string | null,
-  invitationToken?: string,
-): void {
+// Idle timeout for host WS connections that haven't sent any message
+const HOST_IDLE_TIMEOUT_MS = 30_000;
+
+/** Create a room for a host and send ROOM_CREATED */
+function createRoomForHost(hostWs: ServerWebSocket<WSData>, hostId: string | null): void {
   const room = createRoom(hostId);
   const data = hostWs.data as WSData;
   data.roomCode = room.roomCode;
   room.setHost(hostWs);
-  const payload: { roomCode: string; invitationToken?: string } = { roomCode: room.roomCode };
-  if (invitationToken) payload.invitationToken = invitationToken;
-  hostWs.send(JSON.stringify({ type: 'ROOM_CREATED', payload }));
+  hostWs.send(JSON.stringify({ type: 'ROOM_CREATED', payload: { roomCode: room.roomCode } }));
 }
 
 app.get(
@@ -96,7 +93,17 @@ app.get(
           // a) Host sends REQUEST_AUTH → device flow → approved → room created
           // b) Host sends any other message (legacy mode) → room created immediately
           raw.data = { ...raw.data, roomCode: '', role: 'host' };
-          awaitingAuthHosts.add(raw);
+          // Close idle host connections that never send a message
+          const idleTimer = setTimeout(() => {
+            if (!(raw.data as WSData).roomCode) {
+              try {
+                raw.close();
+              } catch {
+                /* already closed */
+              }
+            }
+          }, HOST_IDLE_TIMEOUT_MS);
+          (raw.data as any)._idleTimer = idleTimer;
         } else if (role === 'player' && roomCode) {
           const room = getRoom(roomCode);
           if (!room) {
@@ -132,23 +139,36 @@ app.get(
         if (data.role === 'host') {
           // If host has no room yet (awaiting auth or legacy)
           if (!data.roomCode) {
+            // Clear idle timer — host sent a message
+            if ((data as any)._idleTimer) {
+              clearTimeout((data as any)._idleTimer);
+              (data as any)._idleTimer = null;
+            }
+
             try {
               const msg = JSON.parse(event.data as string);
               if (msg.type === 'REQUEST_AUTH') {
                 // Device flow: create pending login, send challenge
                 const pending = createPendingLogin(raw);
-                const serverUrl = `${c.req.url.startsWith('https') ? 'https' : 'http'}://${c.req.header('host')}`;
+                if (!pending) {
+                  raw.send(
+                    JSON.stringify({
+                      type: 'AUTH_FAILED',
+                      payload: { reason: 'Too many pending logins. Try again later.' },
+                    }),
+                  );
+                  return;
+                }
                 raw.send(
                   JSON.stringify({
                     type: 'AUTH_CHALLENGE',
                     payload: {
                       userCode: pending.userCode,
-                      verificationUrl: `${serverUrl}/auth/tv-login?code=${pending.userCode}`,
+                      verificationUrl: `${serverBaseUrl}/auth/tv-login?code=${pending.userCode}`,
                       expiresIn: pending.expiresIn,
                     },
                   }),
                 );
-                awaitingAuthHosts.delete(raw);
                 return;
               }
               if (msg.type === 'PING') {
@@ -160,7 +180,6 @@ app.get(
             }
 
             // Legacy mode: first non-auth message → create room immediately
-            awaitingAuthHosts.delete(raw);
             createRoomForHost(raw, null);
             // Fall through to handle the message in the room
           }
@@ -181,8 +200,10 @@ app.get(
         const raw = ws.raw!;
         const data = raw.data as WSData;
 
-        // Clean up pending login if host disconnects before auth
-        awaitingAuthHosts.delete(raw);
+        // Clean up idle timer and pending login if host disconnects before auth
+        if ((data as any)._idleTimer) {
+          clearTimeout((data as any)._idleTimer);
+        }
         removePendingLoginByWs(raw);
 
         const room = getRoom(data.roomCode);

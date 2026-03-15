@@ -169,11 +169,7 @@ export class HostedGameController implements IGameController {
         this.startPingInterval();
 
         if (this.authMode) {
-          // Device flow: send REQUEST_AUTH
-          const deviceCode = Array.from(crypto.getRandomValues(new Uint8Array(32)))
-            .map((b) => b.toString(16).padStart(2, '0'))
-            .join('');
-          this.send({ type: 'REQUEST_AUTH', payload: { deviceCode } });
+          this.send({ type: 'REQUEST_AUTH' });
         }
       };
 
