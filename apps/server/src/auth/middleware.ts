@@ -35,7 +35,7 @@ function extractToken(c: Context): string | null {
     if (match && match[1].length <= 128) return match[1];
     return null;
   }
-  const cookie = getCookie(c, 'session');
+  const cookie = getCookie(c, 'ue_session');
   return cookie && cookie.length <= 128 ? cookie : null;
 }
 

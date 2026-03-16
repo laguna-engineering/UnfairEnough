@@ -8,6 +8,7 @@ export interface WSData {
   roomCode: string;
   role: 'host' | 'player';
   playerId: string;
+  serverBaseUrl?: string;
 }
 
 /** Internal player record within a game room */

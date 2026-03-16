@@ -39,7 +39,7 @@ import {
   ELO_BASELINE,
   resolvePlayerDifficulty,
 } from '../../../packages/game-logic/src/utils/tagScoring';
-import { generateSecureToken, hashToken } from './auth/tokens';
+import { generateSecureToken, hashToken, sqliteDateFromNow } from './auth/tokens';
 import type { HostMessage, RoomPlayer, WSData } from './types';
 
 const COLORS = [
@@ -65,6 +65,7 @@ const COUNTDOWN_SECONDS = 3;
 const REVEAL_DELAY_MS = 2000;
 const RESULTS_DELAY_MS = 5000;
 const MEDIA_LOAD_TIMEOUT_MS = 10_000;
+const GUEST_SESSION_TTL_DAYS = 90;
 
 type GamePhase =
   | 'LOBBY'
@@ -956,22 +957,19 @@ export class GameRoom {
         const invite = await invitationTokensRepo.validate(this.db, hashToken(invitationToken));
         if (invite) {
           effectiveHostId = invite.hostId;
+          // Revoke any existing guest sessions for this device+host to prevent accumulation
+          await sessionsRepo.revokeGuestByDevice(this.db, deviceId, invite.hostId);
           // Create a guest session (90-day TTL)
-          const GUEST_SESSION_TTL_DAYS = 90;
           const rawToken = generateSecureToken();
           const tokenHash = hashToken(rawToken);
-          const expiresAt = new Date(Date.now() + GUEST_SESSION_TTL_DAYS * 24 * 60 * 60 * 1000)
-            .toISOString()
-            .replace('T', ' ')
-            .replace('Z', '');
+          const expiresAt = sqliteDateFromNow(GUEST_SESSION_TTL_DAYS);
           await sessionsRepo.create(this.db, tokenHash, invite.hostId, 'guest', {
             deviceId,
             expiresAt,
           });
           // Include guest session token and server URL in the response
           payload.guestSessionToken = rawToken;
-          // Derive server URL from the WS connection (best effort)
-          payload.serverUrl = `http://${(ws.data as WSData).roomCode ? 'server' : 'unknown'}`;
+          payload.serverUrl = (ws.data as WSData).serverBaseUrl || '';
         }
       }
 
@@ -1516,6 +1514,34 @@ export class GameRoom {
   }
 
   cleanup(): void {
+    // Notify all connected clients before closing
+    const closeMsg = JSON.stringify({
+      type: 'ERROR',
+      payload: { code: 'ROOM_CLOSED', message: 'Room has been closed' },
+    });
+
+    // Notify host
+    if (this.hostWs) {
+      try {
+        this.hostWs.send(closeMsg);
+        this.hostWs.close();
+      } catch {
+        /* WS may already be closed */
+      }
+    }
+
+    // Notify all players
+    for (const player of this.players.values()) {
+      if (player.ws) {
+        try {
+          player.ws.send(closeMsg);
+          player.ws.close();
+        } catch {
+          /* WS may already be closed */
+        }
+      }
+    }
+
     this.clearAllTimers();
     for (const player of this.players.values()) {
       if (player.disconnectTimer) {

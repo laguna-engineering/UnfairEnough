@@ -3,13 +3,28 @@ import { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { refreshTenancyFlag } from '../auth/middleware';
 import { approvePendingLogin, removePendingLogin } from '../auth/pendingLogins';
-import { generateSecureToken, hashToken } from '../auth/tokens';
+import { generateSecureToken, hashToken, sqliteDateFromNow } from '../auth/tokens';
 import { getDb } from '../db';
 import { createRoom, destroyRoom, findRoomByHostId } from '../roomManager';
 import type { WSData } from '../types';
 
 const SESSION_COOKIE = 'ue_session';
 const ADMIN_SESSION_TTL_DAYS = 7;
+const TV_SESSION_TTL_DAYS = 365;
+
+/** Verify host credentials. Returns the host on success, null on failure. */
+async function authenticateHost(
+  db: ReturnType<typeof getDb>,
+  email: string,
+  password: string,
+): Promise<Awaited<ReturnType<typeof hostsRepo.findByEmail>> | null> {
+  const host = await hostsRepo.findByEmail(db, email);
+  if (!host) return null;
+  const hash = await hostsRepo.getPasswordHash(db, email);
+  if (!hash) return null;
+  const valid = await Bun.password.verify(password, hash);
+  return valid ? host : null;
+}
 
 const auth = new Hono();
 
@@ -26,30 +41,15 @@ auth.post('/login', async (c) => {
     return c.json({ error: 'Email and password are required' }, 400);
   }
 
-  // Look up host
-  const host = await hostsRepo.findByEmail(db, email);
+  const host = await authenticateHost(db, email, password);
   if (!host) {
-    return c.json({ error: 'Invalid email or password' }, 401);
-  }
-
-  // Verify password
-  const passwordHash = await hostsRepo.getPasswordHash(db, email);
-  if (!passwordHash) {
-    return c.json({ error: 'Invalid email or password' }, 401);
-  }
-
-  const valid = await Bun.password.verify(password, passwordHash);
-  if (!valid) {
     return c.json({ error: 'Invalid email or password' }, 401);
   }
 
   // Create session
   const rawToken = generateSecureToken();
   const tokenHash = hashToken(rawToken);
-  const expiresAt = new Date(Date.now() + ADMIN_SESSION_TTL_DAYS * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .replace('T', ' ')
-    .replace('Z', '');
+  const expiresAt = sqliteDateFromNow(ADMIN_SESSION_TTL_DAYS);
 
   await sessionsRepo.create(db, tokenHash, host.id, 'host_admin', {
     deviceInfo: c.req.header('User-Agent') ?? undefined,
@@ -80,16 +80,10 @@ auth.post('/logout', async (c) => {
     // If it's a guest session, unbind the device from the player profile
     const tokenHash = hashToken(token);
     const session = await sessionsRepo.validate(db, tokenHash);
-    if (session?.type === 'guest') {
-      const sessionRow = await db.get<{ device_id: string | null }>(
-        'SELECT device_id FROM sessions WHERE token_hash = ? AND revoked = 0',
-        [tokenHash],
-      );
-      if (sessionRow?.device_id) {
-        const player = await playersRepo.findByDeviceId(db, sessionRow.device_id, session.hostId);
-        if (player) {
-          await playersRepo.unbindDevice(db, player.id);
-        }
+    if (session?.type === 'guest' && session.deviceId) {
+      const player = await playersRepo.findByDeviceId(db, session.deviceId, session.hostId);
+      if (player) {
+        await playersRepo.unbindDevice(db, player.id);
       }
     }
 
@@ -128,20 +122,14 @@ auth.get('/me', async (c) => {
   };
 
   // For guest sessions, also return the linked player info
-  if (session.type === 'guest') {
-    const sessionRow = await db.get<{ device_id: string | null }>(
-      'SELECT device_id FROM sessions WHERE token_hash = ? AND revoked = 0',
-      [hashToken(token)],
-    );
-    if (sessionRow?.device_id) {
-      const player = await playersRepo.findByDeviceId(db, sessionRow.device_id, session.hostId);
-      if (player) {
-        result.player = {
-          displayName: player.displayName,
-          avatarColor: player.avatarColor,
-          avatarEmoji: player.avatarEmoji,
-        };
-      }
+  if (session.type === 'guest' && session.deviceId) {
+    const player = await playersRepo.findByDeviceId(db, session.deviceId, session.hostId);
+    if (player) {
+      result.player = {
+        displayName: player.displayName,
+        avatarColor: player.avatarColor,
+        avatarEmoji: player.avatarEmoji,
+      };
     }
   }
 
@@ -173,19 +161,8 @@ auth.post('/tv-login', async (c) => {
     return c.json({ error: 'Code, email, and password are required' }, 400);
   }
 
-  // Verify credentials
-  const host = await hostsRepo.findByEmail(db, email);
+  const host = await authenticateHost(db, email, password);
   if (!host) {
-    return c.json({ error: 'Invalid email or password' }, 401);
-  }
-
-  const passwordHash = await hostsRepo.getPasswordHash(db, email);
-  if (!passwordHash) {
-    return c.json({ error: 'Invalid email or password' }, 401);
-  }
-
-  const valid = await Bun.password.verify(password, passwordHash);
-  if (!valid) {
     return c.json({ error: 'Invalid email or password' }, 401);
   }
 
@@ -196,13 +173,9 @@ auth.post('/tv-login', async (c) => {
   }
 
   // Create a TV session token (365-day TTL)
-  const TV_SESSION_TTL_DAYS = 365;
   const rawToken = generateSecureToken();
   const tokenHash = hashToken(rawToken);
-  const expiresAt = new Date(Date.now() + TV_SESSION_TTL_DAYS * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .replace('T', ' ')
-    .replace('Z', '');
+  const expiresAt = sqliteDateFromNow(TV_SESSION_TTL_DAYS);
 
   await sessionsRepo.create(db, tokenHash, host.id, 'host_tv', {
     deviceInfo: 'TV Host',

@@ -1,4 +1,4 @@
-import type { DbAdapter } from '@unfairenough/db';
+import { type DbAdapter, invitationTokensRepo } from '@unfairenough/db';
 import { generateRoomCode } from '@unfairenough/ws-protocol';
 import { GameRoom } from './room';
 
@@ -31,6 +31,7 @@ export function destroyRoom(code: string): void {
   const room = rooms.get(code);
   if (room) {
     room.cleanup();
+    invitationTokensRepo.removeByRoom(dbAdapter, code);
     rooms.delete(code);
   }
 }

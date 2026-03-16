@@ -6,12 +6,16 @@ export async function create(
   tokenHash: string,
   hostId: string,
   roomCode: string,
+  ttlHours = 24,
 ): Promise<void> {
-  await db.run('INSERT INTO invitation_tokens (token_hash, host_id, room_code) VALUES (?, ?, ?)', [
-    tokenHash,
-    hostId,
-    roomCode,
-  ]);
+  const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000)
+    .toISOString()
+    .replace('T', ' ')
+    .replace('Z', '');
+  await db.run(
+    'INSERT INTO invitation_tokens (token_hash, host_id, room_code, expires_at) VALUES (?, ?, ?, ?)',
+    [tokenHash, hostId, roomCode, expiresAt],
+  );
 }
 
 export async function validate(
