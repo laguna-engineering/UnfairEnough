@@ -6,15 +6,13 @@ import {
   colors,
   ScreenBackground,
   spacing,
+  tvSafeArea,
   typography,
 } from '@unfairenough/ui';
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { addRecentServer, getRecentServers, initRecentServers } from '../services/recentServers';
-
-const TV_SAFE_HORIZONTAL = 96;
-const TV_SAFE_VERTICAL = 54;
 
 type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'failed';
 
@@ -155,8 +153,8 @@ export const ConnectScreen: React.FC<Props> = ({ onConnected, onBack }) => {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: TV_SAFE_HORIZONTAL,
-    paddingVertical: TV_SAFE_VERTICAL,
+    paddingHorizontal: tvSafeArea.horizontal,
+    paddingVertical: tvSafeArea.vertical,
     justifyContent: 'center',
     alignItems: 'center',
   },

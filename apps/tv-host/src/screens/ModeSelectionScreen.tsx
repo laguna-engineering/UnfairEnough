@@ -1,17 +1,19 @@
 import { useTranslation } from '@unfairenough/i18n';
-import { Card, colors, ScreenBackground, spacing, typography } from '@unfairenough/ui';
+import { Card, colors, ScreenBackground, spacing, tvSafeArea, typography } from '@unfairenough/ui';
 import type React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-const TV_SAFE_HORIZONTAL = 96;
-const TV_SAFE_VERTICAL = 54;
-
 interface Props {
+  onSelectAccount: () => void;
   onSelectLocal: () => void;
   onSelectHosted: () => void;
 }
 
-export const ModeSelectionScreen: React.FC<Props> = ({ onSelectLocal, onSelectHosted }) => {
+export const ModeSelectionScreen: React.FC<Props> = ({
+  onSelectAccount,
+  onSelectLocal,
+  onSelectHosted,
+}) => {
   const { t } = useTranslation();
 
   return (
@@ -21,6 +23,20 @@ export const ModeSelectionScreen: React.FC<Props> = ({ onSelectLocal, onSelectHo
       <View style={styles.cardsRow}>
         <Pressable
           hasTVPreferredFocus
+          style={(state) => [
+            styles.cardWrapper,
+            (state as any).focused && styles.focused,
+            state.pressed && styles.pressed,
+          ]}
+          onPress={onSelectAccount}
+        >
+          <Card style={styles.card} variant="glow" glowColor="#10b981">
+            <Text style={styles.cardTitle}>{t('mode.account')}</Text>
+            <Text style={styles.cardDescription}>{t('mode.accountDescription')}</Text>
+          </Card>
+        </Pressable>
+
+        <Pressable
           style={(state) => [
             styles.cardWrapper,
             (state as any).focused && styles.focused,
@@ -54,8 +70,8 @@ export const ModeSelectionScreen: React.FC<Props> = ({ onSelectLocal, onSelectHo
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: TV_SAFE_HORIZONTAL,
-    paddingVertical: TV_SAFE_VERTICAL,
+    paddingHorizontal: tvSafeArea.horizontal,
+    paddingVertical: tvSafeArea.vertical,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -70,7 +86,7 @@ const styles = StyleSheet.create({
   },
   cardWrapper: {
     flex: 1,
-    maxWidth: 400,
+    maxWidth: 360,
     borderRadius: 20,
     borderWidth: 3,
     borderColor: 'transparent',

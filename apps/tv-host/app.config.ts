@@ -178,5 +178,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   extra: {
     defaultLang: env.DEFAULT_LANG || 'en',
+    serverUrl: env.SERVER_URL || '',
   },
 });

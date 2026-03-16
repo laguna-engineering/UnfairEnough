@@ -41,7 +41,7 @@ export async function create(
 export async function validate(
   db: DbAdapter,
   tokenHash: string,
-): Promise<{ hostId: string; type: SessionType } | null> {
+): Promise<{ hostId: string; type: SessionType; deviceId: string | null } | null> {
   const row = await db.get<SessionRow>(
     `SELECT * FROM sessions
      WHERE token_hash = ?
@@ -56,7 +56,7 @@ export async function validate(
     tokenHash,
   ]);
 
-  return { hostId: row.host_id, type: row.type };
+  return { hostId: row.host_id, type: row.type, deviceId: row.device_id ?? null };
 }
 
 export async function revoke(db: DbAdapter, tokenHash: string): Promise<void> {
@@ -68,6 +68,17 @@ export async function revokeAllForHost(db: DbAdapter, hostId: string): Promise<n
     hostId,
   ]);
   return result.changes;
+}
+
+export async function revokeGuestByDevice(
+  db: DbAdapter,
+  deviceId: string,
+  hostId: string,
+): Promise<void> {
+  await db.run(
+    "UPDATE sessions SET revoked = 1 WHERE device_id = ? AND host_id = ? AND type = 'guest' AND revoked = 0",
+    [deviceId, hostId],
+  );
 }
 
 export async function cleanup(db: DbAdapter): Promise<number> {

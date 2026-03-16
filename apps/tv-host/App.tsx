@@ -12,9 +12,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Platform } from 'react-native';
 import * as SplashScreen from './modules/tv-splash-screen/src';
 import { GameModeProvider } from './src/context/GameModeContext';
+import { AccountLoginScreen } from './src/screens/AccountLoginScreen';
 import { ConnectScreen } from './src/screens/ConnectScreen';
 import { GameScreen } from './src/screens/GameScreen';
 import { ModeSelectionScreen } from './src/screens/ModeSelectionScreen';
+import { clearAuthState, loadAuthState, saveAuthState } from './src/services/AuthService';
+import type { AuthChallenge } from './src/services/HostedGameController';
 import { HostedGameController } from './src/services/HostedGameController';
 import type { IGameController } from './src/services/IGameController';
 import '@unfairenough/i18n';
@@ -22,7 +25,11 @@ import '@unfairenough/i18n';
 const defaultLang = Constants.expoConfig?.extra?.defaultLang;
 if (defaultLang) changeLanguage(defaultLang as SupportedLanguage);
 
+const configServerUrl: string = Constants.expoConfig?.extra?.serverUrl || '';
+
 SplashScreen.preventAutoHideAsync();
+
+const MAX_AUTH_RETRIES = 3;
 
 const VALID_PREVIEW_PHASES: GamePhase[] = [
   'LOBBY',
@@ -41,7 +48,13 @@ function getWebPreviewPhase(): GamePhase | null {
   return phase && VALID_PREVIEW_PHASES.includes(phase) ? phase : null;
 }
 
-type AppScreen = 'mode_select' | 'local_game' | 'connect' | 'hosted_game' | 'preview';
+type AppScreen =
+  | 'mode_select'
+  | 'account_login'
+  | 'local_game'
+  | 'connect'
+  | 'hosted_game'
+  | 'preview';
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -72,6 +85,12 @@ export default function App() {
   const [hostedServerUrl, setHostedServerUrl] = useState<string>('');
   const [hostedMobileBaseUrl, setHostedMobileBaseUrl] = useState<string | null>(null);
   const hostedControllerRef = useRef<HostedGameController | null>(null);
+  const [authChallenge, setAuthChallenge] = useState<AuthChallenge | null>(null);
+  const [authLoginState, setAuthLoginState] = useState<
+    'connecting' | 'waiting' | 'expired' | 'approved' | 'failed'
+  >('connecting');
+  const authRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const authRetryCountRef = useRef(0);
   const previewControllerRef = useRef<IGameController | null>(
     webPreviewPhase
       ? new (require('./src/preview/PreviewGameController').PreviewGameController)(webPreviewPhase)
@@ -96,6 +115,81 @@ export default function App() {
         // Not a valid URL — ignore
       }
     });
+  }, []);
+
+  // Auto-connect if stored auth exists
+  useEffect(() => {
+    if (Platform.OS === 'web') return; // Web goes straight to connect
+    loadAuthState().then((auth) => {
+      if (auth) {
+        // Have stored credentials — connect as authenticated host
+        setHostedServerUrl(auth.serverUrl);
+        hostedControllerRef.current?.cleanup();
+        hostedControllerRef.current = new HostedGameController(auth.serverUrl, {
+          onRoomCreated: () => setScreen('hosted_game'),
+          sessionToken: auth.sessionToken,
+          onSessionInvalid: () => {
+            // Session expired or revoked — clear stored auth and go to login
+            hostedControllerRef.current?.cleanup();
+            hostedControllerRef.current = null;
+            clearAuthState();
+            setScreen('mode_select');
+          },
+        });
+        hostedControllerRef.current.initialize();
+      }
+    });
+  }, []);
+
+  const handleSelectAccount = useCallback((isRetry = false) => {
+    if (!configServerUrl) {
+      // No server URL configured — fall back to connect screen
+      setScreen('connect');
+      return;
+    }
+
+    if (!isRetry) {
+      authRetryCountRef.current = 0;
+    }
+
+    setHostedServerUrl(configServerUrl);
+    setAuthChallenge(null);
+    setAuthLoginState('connecting');
+
+    hostedControllerRef.current?.cleanup();
+    hostedControllerRef.current = new HostedGameController(configServerUrl, {
+      onRoomCreated: () => setScreen('hosted_game'),
+      onAuthChallenge: (challenge) => {
+        setAuthChallenge(challenge);
+        setAuthLoginState('waiting');
+      },
+      onAuthSuccess: (sessionToken, hostId, displayName) => {
+        setAuthLoginState('approved');
+        saveAuthState({
+          sessionToken,
+          serverUrl: configServerUrl,
+          hostDisplayName: displayName,
+          hostId,
+        });
+      },
+      onAuthFailed: () => setAuthLoginState('failed'),
+      onAuthExpired: () => {
+        authRetryCountRef.current += 1;
+        if (authRetryCountRef.current >= MAX_AUTH_RETRIES) {
+          setAuthLoginState('failed');
+          return;
+        }
+        setAuthLoginState('expired');
+        // Auto-reconnect to get a new code
+        authRetryTimeoutRef.current = setTimeout(() => {
+          authRetryTimeoutRef.current = null;
+          hostedControllerRef.current?.cleanup();
+          handleSelectAccount(true);
+        }, 1500);
+      },
+    });
+    hostedControllerRef.current.initialize();
+    setScreen('account_login');
   }, []);
 
   const handleSelectLocal = useCallback(() => {
@@ -125,8 +219,14 @@ export default function App() {
   }, []);
 
   const handleBack = useCallback(() => {
+    if (authRetryTimeoutRef.current) {
+      clearTimeout(authRetryTimeoutRef.current);
+      authRetryTimeoutRef.current = null;
+    }
+    authRetryCountRef.current = 0;
     hostedControllerRef.current?.cleanup();
     hostedControllerRef.current = null;
+    clearAuthState();
     setScreen(Platform.OS === 'web' ? 'connect' : 'mode_select');
   }, []);
 
@@ -141,8 +241,21 @@ export default function App() {
         <>
           <StatusBar style="light" hidden />
           <ModeSelectionScreen
+            onSelectAccount={handleSelectAccount}
             onSelectLocal={handleSelectLocal}
             onSelectHosted={handleSelectHosted}
+          />
+        </>
+      );
+
+    case 'account_login':
+      return (
+        <>
+          <StatusBar style="light" hidden />
+          <AccountLoginScreen
+            challenge={authChallenge}
+            loginState={authLoginState}
+            onCancel={handleBack}
           />
         </>
       );

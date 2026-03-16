@@ -334,3 +334,60 @@ button:disabled {
 .pct-green { color: #16a34a; font-weight: 600; }
 .pct-yellow { color: #ca8a04; font-weight: 600; }
 .pct-red { color: #dc2626; font-weight: 600; }
+
+/* Shared login form styles (used by login.html and tv-login.html) */
+.login-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+.login-card {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  padding: 2rem;
+  width: 100%;
+  max-width: 360px;
+}
+.login-card h1 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  font-size: 1.3rem;
+}
+.login-card label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #555;
+  margin-bottom: 0.25rem;
+}
+.login-card input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  margin-bottom: 1rem;
+}
+.login-card input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.15);
+}
+.login-card button {
+  width: 100%;
+  padding: 0.6rem;
+  font-size: 0.95rem;
+}
+.login-error {
+  display: none;
+  color: #dc2626;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+}

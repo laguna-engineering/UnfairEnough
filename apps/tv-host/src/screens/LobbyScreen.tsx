@@ -9,6 +9,7 @@ import {
   PlayerAvatar,
   ScreenBackground,
   spacing,
+  tvSafeArea,
   typography,
 } from '@unfairenough/ui';
 import type React from 'react';
@@ -19,9 +20,6 @@ import { useGameController } from '../hooks/useGameController';
 import { getDb } from '../services/database';
 import { ImportQuestionsModal } from './ImportQuestionsModal';
 
-// TV safe zone padding (5% of 1080p)
-const TV_SAFE_HORIZONTAL = 96;
-const TV_SAFE_VERTICAL = 54;
 const QR_SIZE = 200;
 
 const LANGUAGES: { code: SupportedLanguage; label: string }[] = [
@@ -742,8 +740,8 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: TV_SAFE_HORIZONTAL,
-    paddingVertical: TV_SAFE_VERTICAL,
+    paddingHorizontal: tvSafeArea.horizontal,
+    paddingVertical: tvSafeArea.vertical,
   },
   header: {
     flexDirection: 'row',

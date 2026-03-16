@@ -11,6 +11,7 @@ import { MediaPreviewScreen } from './MediaPreviewScreen';
 import { PlayScreen } from './PlayScreen';
 import { ProfilePickerScreen } from './ProfilePickerScreen';
 import { ResultScreen } from './ResultScreen';
+import { ReturningUserScreen } from './ReturningUserScreen';
 import { ScanScreen } from './ScanScreen';
 import { WaitingScreen } from './WaitingScreen';
 import { WelcomeBackScreen } from './WelcomeBackScreen';
@@ -30,7 +31,12 @@ export const GameScreen: React.FC = () => {
     gameResult,
     mediaPreview,
     error,
+    storedSession,
+    returningError,
     connect,
+    connectFromSession,
+    disconnectFromHost,
+    checkStoredSession,
     join,
     confirmIdentity,
     claimProfile,
@@ -41,22 +47,38 @@ export const GameScreen: React.FC = () => {
     setLanguageOverride,
   } = useGameState();
 
-  // Load deviceId early, then auto-connect on web if roomCode is in the URL
+  // Load deviceId, check stored session, then auto-connect on web if roomCode is in the URL
   useEffect(() => {
     initDeviceId().then(() => {
-      if (Platform.OS !== 'web') return;
-      const params = new URLSearchParams(window.location.search);
-      const roomCode = params.get('roomCode');
-      if (roomCode) {
-        // The "server" param points to the game server (may differ from the page host in dev)
-        const serverHost = params.get('server') || window.location.host;
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        connect(`${wsProtocol}//${serverHost}/ws?role=player&roomCode=${roomCode}`);
+      if (Platform.OS === 'web') {
+        const params = new URLSearchParams(window.location.search);
+        const roomCode = params.get('roomCode');
+        if (roomCode) {
+          const serverHost = params.get('server') || window.location.host;
+          const inviteToken = params.get('invite') || undefined;
+          const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          connect(`${wsProtocol}//${serverHost}/ws?role=player&roomCode=${roomCode}`, inviteToken);
+          return;
+        }
       }
+      // Check for stored session (returning user)
+      checkStoredSession();
     });
-  }, [connect]);
+  }, [connect, checkStoredSession]);
 
   switch (phase) {
+    case 'RETURNING':
+      if (!storedSession)
+        return <ScanScreen onConnect={connect} onLanguageChange={setLanguageOverride} />;
+      return (
+        <ReturningUserScreen
+          session={storedSession}
+          error={returningError}
+          onPlay={() => connectFromSession(storedSession)}
+          onDisconnect={disconnectFromHost}
+        />
+      );
+
     case 'SCAN':
       return <ScanScreen onConnect={connect} onLanguageChange={setLanguageOverride} />;
 
