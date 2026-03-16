@@ -5,12 +5,10 @@
 
 import type { ServerWebSocket } from 'bun';
 import type { WSData } from '../types';
-import { generateSecureToken } from './tokens';
+import { generateSecureToken, generateUserCode } from './tokens';
 
 const PENDING_LOGIN_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-const USER_CODE_ALPHABET = 'BCDFGHJKLMNPQRSTVWXZ';
-const USER_CODE_LENGTH = 8;
+const MAX_PENDING_LOGINS = 100;
 
 export interface PendingLogin {
   userCode: string;
@@ -26,24 +24,15 @@ const pendingByDeviceCode = new Map<string, PendingLogin>();
 // Keyed by userCode (human-readable, for web form lookup)
 const pendingByUserCode = new Map<string, PendingLogin>();
 
-function generateUserCode(): string {
-  const limit = 256 - (256 % USER_CODE_ALPHABET.length);
-  const code: string[] = [];
-  while (code.length < USER_CODE_LENGTH) {
-    const bytes = new Uint8Array(1);
-    crypto.getRandomValues(bytes);
-    if (bytes[0] < limit) {
-      code.push(USER_CODE_ALPHABET[bytes[0] % USER_CODE_ALPHABET.length]);
-    }
-  }
-  return `${code.slice(0, 4).join('')}-${code.slice(4).join('')}`;
-}
-
 export function createPendingLogin(hostWs: ServerWebSocket<WSData>): {
   userCode: string;
   deviceCode: string;
   expiresIn: number;
-} {
+} | null {
+  if (pendingByDeviceCode.size >= MAX_PENDING_LOGINS) {
+    return null;
+  }
+
   const deviceCode = generateSecureToken(32);
 
   // Generate a unique user code
@@ -81,14 +70,6 @@ export function createPendingLogin(hostWs: ServerWebSocket<WSData>): {
     deviceCode,
     expiresIn: Math.floor(PENDING_LOGIN_TTL_MS / 1000),
   };
-}
-
-export function findByUserCode(userCode: string): PendingLogin | undefined {
-  return pendingByUserCode.get(userCode.toUpperCase().replace(/[^A-Z]/g, ''));
-}
-
-export function findByDeviceCode(deviceCode: string): PendingLogin | undefined {
-  return pendingByDeviceCode.get(deviceCode);
 }
 
 export function approvePendingLogin(userCode: string, hostId: string): PendingLogin | null {

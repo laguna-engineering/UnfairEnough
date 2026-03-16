@@ -165,11 +165,6 @@ async function checkAuth() {
         nav.appendChild(logoutBtn);
       }
     } else if (data.status === 401) {
-      // Check if this is because no accounts exist (tenancy disabled)
-      // If so, allow access without login
-      const health = await fetch("/api/health").then(r => r.json()).catch(() => null);
-      if (!health) return; // server issue, don't redirect
-      // 401 from /auth/me = tenancy enabled but not logged in → redirect
       window.location.href = "/admin/login.html";
     }
   } catch {

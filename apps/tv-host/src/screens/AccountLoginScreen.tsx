@@ -1,13 +1,11 @@
 import { useTranslation } from '@unfairenough/i18n';
-import { Card, colors, ScreenBackground, spacing, typography } from '@unfairenough/ui';
+import { Card, colors, ScreenBackground, spacing, tvSafeArea, typography } from '@unfairenough/ui';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import type { AuthChallenge } from '../services/HostedGameController';
 
-const TV_SAFE_HORIZONTAL = 96;
-const TV_SAFE_VERTICAL = 54;
 const QR_SIZE = 280;
 
 type LoginState = 'connecting' | 'waiting' | 'expired' | 'approved' | 'failed';
@@ -90,8 +88,8 @@ export const AccountLoginScreen: React.FC<Props> = ({ challenge, loginState, onC
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: TV_SAFE_HORIZONTAL,
-    paddingVertical: TV_SAFE_VERTICAL,
+    paddingHorizontal: tvSafeArea.horizontal,
+    paddingVertical: tvSafeArea.vertical,
     justifyContent: 'center',
     alignItems: 'center',
   },

@@ -17,7 +17,7 @@ games.get('/', async (c) => {
 games.get('/:id', async (c) => {
   const db = getDb();
   const id = c.req.param('id');
-  const game = await gamesRepo.getGame(db, id);
+  const game = await gamesRepo.getGame(db, id, c.get('hostId'));
   if (!game) {
     return c.json({ error: 'Game not found' }, 404);
   }

@@ -9,7 +9,7 @@ const metaSets = new Hono<{ Variables: AuthVariables }>();
 metaSets.get('/:id', async (c) => {
   const db = getDb();
   const id = c.req.param('id');
-  const set = await questionsRepo.getQuestionSet(db, id);
+  const set = await questionsRepo.getQuestionSet(db, id, c.get('hostId'));
   if (!set || !set.isMeta) {
     return c.json({ error: 'Meta set not found' }, 404);
   }
@@ -133,13 +133,13 @@ metaSets.delete('/:id', async (c) => {
   const db = getDb();
   const id = c.req.param('id');
 
-  // Verify it's actually a meta set
-  const set = await questionsRepo.getQuestionSet(db, id);
+  // Verify it's actually a meta set owned by this host
+  const set = await questionsRepo.getQuestionSet(db, id, c.get('hostId'));
   if (!set || !set.isMeta) {
     return c.json({ error: 'Meta set not found' }, 404);
   }
 
-  const deleted = await questionsRepo.softDeleteQuestionSet(db, id);
+  const deleted = await questionsRepo.softDeleteQuestionSet(db, id, c.get('hostId'));
   if (!deleted) {
     return c.json({ error: 'Meta set not found' }, 404);
   }

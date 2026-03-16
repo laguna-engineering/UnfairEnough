@@ -1,10 +1,7 @@
 import { useTranslation } from '@unfairenough/i18n';
-import { Card, colors, ScreenBackground, spacing, typography } from '@unfairenough/ui';
+import { Card, colors, ScreenBackground, spacing, tvSafeArea, typography } from '@unfairenough/ui';
 import type React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-
-const TV_SAFE_HORIZONTAL = 96;
-const TV_SAFE_VERTICAL = 54;
 
 interface Props {
   onSelectAccount: () => void;
@@ -73,8 +70,8 @@ export const ModeSelectionScreen: React.FC<Props> = ({
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: TV_SAFE_HORIZONTAL,
-    paddingVertical: TV_SAFE_VERTICAL,
+    paddingHorizontal: tvSafeArea.horizontal,
+    paddingVertical: tvSafeArea.vertical,
     justifyContent: 'center',
     alignItems: 'center',
   },

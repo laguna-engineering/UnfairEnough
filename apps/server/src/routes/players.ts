@@ -55,7 +55,7 @@ players.post('/', async (c) => {
 players.put('/:id', async (c) => {
   const db = getDb();
   const id = c.req.param('id');
-  const player = await playersRepo.getPlayer(db, id);
+  const player = await playersRepo.getPlayer(db, id, c.get('hostId'));
   if (!player) {
     return c.json({ error: 'Player not found' }, 404);
   }
@@ -95,7 +95,7 @@ players.put('/:id', async (c) => {
 players.put('/:id/unbind', async (c) => {
   const db = getDb();
   const id = c.req.param('id');
-  const player = await playersRepo.getPlayer(db, id);
+  const player = await playersRepo.getPlayer(db, id, c.get('hostId'));
   if (!player) {
     return c.json({ error: 'Player not found' }, 404);
   }
@@ -107,7 +107,7 @@ players.put('/:id/unbind', async (c) => {
 players.delete('/:id', async (c) => {
   const db = getDb();
   const id = c.req.param('id');
-  const deleted = await playersRepo.deleteProfile(db, id);
+  const deleted = await playersRepo.deleteProfile(db, id, c.get('hostId'));
   if (!deleted) {
     return c.json({ error: 'Player not found' }, 404);
   }
@@ -118,7 +118,7 @@ players.delete('/:id', async (c) => {
 players.get('/:id/stats', async (c) => {
   const db = getDb();
   const id = c.req.param('id');
-  const player = await playersRepo.getPlayer(db, id);
+  const player = await playersRepo.getPlayer(db, id, c.get('hostId'));
   if (!player) {
     return c.json({ error: 'Player not found' }, 404);
   }
@@ -173,7 +173,7 @@ players.get('/:id/stats', async (c) => {
 players.put('/:id/tags', async (c) => {
   const db = getDb();
   const id = c.req.param('id');
-  const player = await playersRepo.getPlayer(db, id);
+  const player = await playersRepo.getPlayer(db, id, c.get('hostId'));
   if (!player) {
     return c.json({ error: 'Player not found' }, 404);
   }

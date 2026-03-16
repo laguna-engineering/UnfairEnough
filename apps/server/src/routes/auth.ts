@@ -1,29 +1,49 @@
 import { hostsRepo, invitationTokensRepo, playersRepo, sessionsRepo } from '@unfairenough/db';
 import { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { refreshTenancyFlag } from '../auth/middleware';
+import { extractToken, SESSION_COOKIE } from '../auth/middleware';
 import { approvePendingLogin, removePendingLogin } from '../auth/pendingLogins';
 import { generateSecureToken, hashToken, sqliteDateFromNow } from '../auth/tokens';
 import { getDb } from '../db';
 import { createRoom, destroyRoom, findRoomByHostId } from '../roomManager';
 import type { WSData } from '../types';
 
-const SESSION_COOKIE = 'ue_session';
 const ADMIN_SESSION_TTL_DAYS = 7;
 const TV_SESSION_TTL_DAYS = 365;
 
-/** Verify host credentials. Returns the host on success, null on failure. */
-async function authenticateHost(
+// ── Login rate limiting ─────────────────────────────────────
+const MAX_ATTEMPTS_PER_EMAIL = 5;
+const MAX_ATTEMPTS_PER_IP = 20;
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
+const loginAttempts = new Map<string, { count: number; firstAttempt: number }>();
+
+function isRateLimited(key: string, max: number): boolean {
+  const now = Date.now();
+  const entry = loginAttempts.get(key);
+  if (!entry || now - entry.firstAttempt > RATE_LIMIT_WINDOW_MS) {
+    loginAttempts.set(key, { count: 1, firstAttempt: now });
+    return false;
+  }
+  entry.count++;
+  return entry.count > max;
+}
+
+function resetRateLimit(key: string): void {
+  loginAttempts.delete(key);
+}
+
+/** Verify email + password, return host or null. Single DB query. */
+async function verifyCredentials(
   db: ReturnType<typeof getDb>,
   email: string,
   password: string,
-): Promise<Awaited<ReturnType<typeof hostsRepo.findByEmail>> | null> {
-  const host = await hostsRepo.findByEmail(db, email);
-  if (!host) return null;
-  const hash = await hostsRepo.getPasswordHash(db, email);
-  if (!hash) return null;
-  const valid = await Bun.password.verify(password, hash);
-  return valid ? host : null;
+): Promise<{ id: string; email: string; displayName: string } | null> {
+  const result = await hostsRepo.findByEmailWithHash(db, email);
+  if (!result) return null;
+  const valid = await Bun.password.verify(password, result.passwordHash);
+  if (!valid) return null;
+  return result.host;
 }
 
 const auth = new Hono();
@@ -41,10 +61,23 @@ auth.post('/login', async (c) => {
     return c.json({ error: 'Email and password are required' }, 400);
   }
 
-  const host = await authenticateHost(db, email, password);
+  // Rate limiting
+  const ip = c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() ?? 'unknown';
+  if (isRateLimited(`ip:${ip}`, MAX_ATTEMPTS_PER_IP)) {
+    return c.json({ error: 'Too many login attempts. Try again later.' }, 429);
+  }
+  if (isRateLimited(`email:${email}`, MAX_ATTEMPTS_PER_EMAIL)) {
+    return c.json({ error: 'Too many login attempts. Try again later.' }, 429);
+  }
+
+  const host = await verifyCredentials(db, email, password);
   if (!host) {
     return c.json({ error: 'Invalid email or password' }, 401);
   }
+
+  // Reset rate limit on successful login
+  resetRateLimit(`email:${email}`);
+  resetRateLimit(`ip:${ip}`);
 
   // Create session
   const rawToken = generateSecureToken();
@@ -62,7 +95,7 @@ auth.post('/login', async (c) => {
     sameSite: 'Lax',
     path: '/',
     maxAge: ADMIN_SESSION_TTL_DAYS * 24 * 60 * 60,
-    secure: c.req.url.startsWith('https'),
+    secure: c.req.url.startsWith('https') || c.req.header('X-Forwarded-Proto') === 'https',
   });
 
   return c.json({ host: { id: host.id, email: host.email, displayName: host.displayName } });
@@ -99,8 +132,7 @@ auth.post('/logout', async (c) => {
 // GET /auth/me — validate session, return host info
 auth.get('/me', async (c) => {
   const db = getDb();
-  const token =
-    c.req.header('Authorization')?.match(/^Bearer\s+(.+)$/i)?.[1] ?? getCookie(c, SESSION_COOKIE);
+  const token = extractToken(c);
 
   if (!token) {
     return c.json({ error: 'Not authenticated' }, 401);
@@ -138,12 +170,18 @@ auth.get('/me', async (c) => {
 
 // GET /auth/tv-login — serve the TV login approval page
 auth.get('/tv-login', async (c) => {
-  // Serve the static HTML page (Bun reads the file)
   const file = Bun.file('./admin/tv-login.html');
   if (!(await file.exists())) {
     return c.text('TV login page not found', 404);
   }
-  return new Response(file, { headers: { 'Content-Type': 'text/html' } });
+  return new Response(file, {
+    headers: {
+      'Content-Type': 'text/html',
+      'X-Frame-Options': 'DENY',
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+    },
+  });
 });
 
 // POST /auth/tv-login — device-flow approval: validates credentials, pushes AUTH_SUCCESS to TV WS
@@ -161,7 +199,16 @@ auth.post('/tv-login', async (c) => {
     return c.json({ error: 'Code, email, and password are required' }, 400);
   }
 
-  const host = await authenticateHost(db, email, password);
+  // Rate limiting (same as admin login)
+  const ip = c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() ?? 'unknown';
+  if (isRateLimited(`ip:${ip}`, MAX_ATTEMPTS_PER_IP)) {
+    return c.json({ error: 'Too many login attempts. Try again later.' }, 429);
+  }
+  if (isRateLimited(`email:${email}`, MAX_ATTEMPTS_PER_EMAIL)) {
+    return c.json({ error: 'Too many login attempts. Try again later.' }, 429);
+  }
+
+  const host = await verifyCredentials(db, email, password);
   if (!host) {
     return c.json({ error: 'Invalid email or password' }, 401);
   }
@@ -171,6 +218,10 @@ auth.post('/tv-login', async (c) => {
   if (!pending) {
     return c.json({ error: 'Invalid or expired code' }, 400);
   }
+
+  // Reset rate limit on successful login
+  resetRateLimit(`email:${email}`);
+  resetRateLimit(`ip:${ip}`);
 
   // Create a TV session token (365-day TTL)
   const rawToken = generateSecureToken();
@@ -225,5 +276,4 @@ auth.post('/tv-login', async (c) => {
   return c.json({ message: 'TV approved', host: { displayName: host.displayName } });
 });
 
-export { refreshTenancyFlag };
 export default auth;

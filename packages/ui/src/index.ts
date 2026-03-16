@@ -23,5 +23,5 @@ export {
 export { ScreenBackground, type ScreenBackgroundProps } from './components/ScreenBackground';
 export { Timer, type TimerProps } from './components/Timer';
 export { colors, gradients, playerColors } from './theme/colors';
-export { borderRadius, shadows, spacing } from './theme/spacing';
+export { borderRadius, shadows, spacing, tvSafeArea } from './theme/spacing';
 export { typography } from './theme/typography';

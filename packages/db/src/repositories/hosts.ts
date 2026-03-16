@@ -32,6 +32,15 @@ export async function findByEmail(db: DbAdapter, email: string): Promise<Host | 
   return row ? rowToHost(row) : null;
 }
 
+export async function findByEmailWithHash(
+  db: DbAdapter,
+  email: string,
+): Promise<{ host: Host; passwordHash: string } | null> {
+  const row = await db.get<HostRow>('SELECT * FROM hosts WHERE email = ?', [email]);
+  if (!row) return null;
+  return { host: rowToHost(row), passwordHash: row.password_hash };
+}
+
 export async function findById(db: DbAdapter, id: string): Promise<Host | null> {
   const row = await db.get<HostRow>('SELECT * FROM hosts WHERE id = ?', [id]);
   return row ? rowToHost(row) : null;

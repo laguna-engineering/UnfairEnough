@@ -216,9 +216,9 @@ export async function getQuestionSets(
 export async function getQuestionSet(
   db: DbAdapter,
   setId: string,
+  hostId?: string | null,
 ): Promise<QuestionSetWithMeta | null> {
-  const row = await db.get<QuestionSetRow>(
-    `SELECT qs.*,
+  let sql = `SELECT qs.*,
        CASE WHEN qs.is_meta = 1
          THEN COALESCE((
            SELECT COUNT(*) FROM questions q
@@ -229,17 +229,33 @@ export async function getQuestionSet(
          ELSE qs.question_count
        END AS question_count
      FROM question_sets qs
-     WHERE qs.id = ? AND qs.deleted_at IS NULL`,
-    [setId],
-  );
+     WHERE qs.id = ? AND qs.deleted_at IS NULL`;
+  const params: SqlValue[] = [setId];
+  if (hostId !== undefined && hostId !== null) {
+    sql += ' AND qs.host_id = ?';
+    params.push(hostId);
+  } else if (hostId === null) {
+    sql += ' AND qs.host_id IS NULL';
+  }
+  const row = await db.get<QuestionSetRow>(sql, params);
   return row ? rowToQuestionSetWithMeta(row) : null;
 }
 
-export async function softDeleteQuestionSet(db: DbAdapter, setId: string): Promise<boolean> {
-  const result = await db.run(
-    "UPDATE question_sets SET deleted_at = datetime('now') WHERE id = ? AND deleted_at IS NULL",
-    [setId],
-  );
+export async function softDeleteQuestionSet(
+  db: DbAdapter,
+  setId: string,
+  hostId?: string | null,
+): Promise<boolean> {
+  let sql =
+    "UPDATE question_sets SET deleted_at = datetime('now') WHERE id = ? AND deleted_at IS NULL";
+  const params: SqlValue[] = [setId];
+  if (hostId !== undefined && hostId !== null) {
+    sql += ' AND host_id = ?';
+    params.push(hostId);
+  } else if (hostId === null) {
+    sql += ' AND host_id IS NULL';
+  }
+  const result = await db.run(sql, params);
   return result.changes > 0;
 }
 
@@ -384,6 +400,85 @@ export async function getQuestionsByMetaSet(
 
   const rows = await db.all<QuestionRow>(sql, params);
   return rows.map(rowToQuestionWithMeta);
+}
+
+// ── Question stats ──────────────────────────────────────────
+
+export interface QuestionStats {
+  id: string;
+  text: string;
+  category: string | null;
+  tags: string[];
+  difficulty: number;
+  language: string;
+  timesAsked: number;
+  lastAskedAt: string | null;
+  setName: string | null;
+  totalAnswers: number;
+  correctCount: number;
+  pctCorrect: number | null;
+}
+
+interface QuestionStatsRow {
+  id: string;
+  text: string;
+  category: string | null;
+  tags: string | null;
+  difficulty: number;
+  language: string;
+  times_asked: number;
+  last_asked_at: string | null;
+  set_name: string | null;
+  total_answers: number;
+  correct_count: number;
+}
+
+export async function getQuestionStats(
+  db: DbAdapter,
+  hostId: string | null,
+): Promise<QuestionStats[]> {
+  let sql = `
+    SELECT q.id, q.text, q.category, q.tags, q.difficulty, q.language,
+           q.times_asked, q.last_asked_at,
+           qs.name AS set_name,
+           COUNT(rr.id) AS total_answers,
+           SUM(CASE WHEN rr.is_correct = 1 THEN 1 ELSE 0 END) AS correct_count
+    FROM questions q
+    LEFT JOIN round_results rr ON rr.question_id = q.id
+    LEFT JOIN question_sets qs ON qs.id = q.set_id AND qs.deleted_at IS NULL
+    WHERE (q.set_id IS NULL OR q.set_id NOT IN (
+      SELECT id FROM question_sets WHERE deleted_at IS NOT NULL
+    ))`;
+  const params: SqlValue[] = [];
+
+  if (hostId !== null) {
+    sql += ' AND (qs.host_id = ? OR q.set_id IS NULL)';
+    params.push(hostId);
+  } else {
+    sql += ' AND (qs.host_id IS NULL OR q.set_id IS NULL)';
+  }
+
+  sql += ' GROUP BY q.id ORDER BY q.times_asked DESC';
+
+  const rows = await db.all<QuestionStatsRow>(sql, params);
+  return rows.map((r) => {
+    const totalAnswers = Number(r.total_answers);
+    const correctCount = Number(r.correct_count);
+    return {
+      id: r.id,
+      text: r.text,
+      category: r.category,
+      tags: r.tags ? JSON.parse(r.tags) : [],
+      difficulty: r.difficulty,
+      language: r.language,
+      timesAsked: r.times_asked,
+      lastAskedAt: r.last_asked_at,
+      setName: r.set_name,
+      totalAnswers,
+      correctCount,
+      pctCorrect: totalAnswers > 0 ? Math.round((correctCount / totalAnswers) * 100) : null,
+    };
+  });
 }
 
 export async function getMetaSetQuestionCount(db: DbAdapter, metaSetId: string): Promise<number> {

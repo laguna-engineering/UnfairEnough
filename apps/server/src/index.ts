@@ -65,6 +65,12 @@ const awaitingAuthHosts = new Set<ServerWebSocket<WSData>>();
 // Track host WSs that are pending session-token validation (async)
 const pendingTokenValidation = new Set<ServerWebSocket<WSData>>();
 
+// Server base URL for QR codes. Use SERVER_BASE_URL env var if behind a proxy.
+const serverBaseUrl = process.env.SERVER_BASE_URL ?? `http://${localIp ?? 'localhost'}:${port}`;
+
+// Idle timeout for host WS connections that haven't sent any message
+const HOST_IDLE_TIMEOUT_MS = 30_000;
+
 /** Create a room for an authenticated host and send ROOM_CREATED */
 function createRoomForHost(
   hostWs: ServerWebSocket<WSData>,
@@ -146,13 +152,13 @@ app.get(
     const sessionToken = c.req.query('token');
 
     const proto = c.req.url.startsWith('https') ? 'https' : 'http';
-    const serverBaseUrl = `${proto}://${c.req.header('host') || 'localhost'}`;
+    const wsBaseUrl = `${proto}://${c.req.header('host') || 'localhost'}`;
 
     const wsData: WSData = {
       roomCode: '',
       role: role ?? 'player',
       playerId: '',
-      serverBaseUrl,
+      serverBaseUrl: wsBaseUrl,
     };
 
     return {
@@ -192,6 +198,17 @@ app.get(
             // a) Host sends REQUEST_AUTH → device flow → approved → room created
             // b) Host sends any other message (legacy mode) → room created immediately
             awaitingAuthHosts.add(raw);
+            // Close idle host connections that never send a message
+            const idleTimer = setTimeout(() => {
+              if (!(raw.data as WSData).roomCode) {
+                try {
+                  raw.close();
+                } catch {
+                  /* already closed */
+                }
+              }
+            }, HOST_IDLE_TIMEOUT_MS);
+            (raw.data as any)._idleTimer = idleTimer;
           }
         } else if (role === 'player' && roomCode === 'AUTO') {
           // Returning user: room will be resolved when IDENTIFY arrives with sessionToken.
@@ -232,18 +249,32 @@ app.get(
         if (data.role === 'host') {
           // If host has no room yet (awaiting auth or legacy)
           if (!data.roomCode) {
+            // Clear idle timer — host sent a message
+            if ((data as any)._idleTimer) {
+              clearTimeout((data as any)._idleTimer);
+              (data as any)._idleTimer = null;
+            }
+
             try {
               const msg = JSON.parse(event.data as string);
               if (msg.type === 'REQUEST_AUTH') {
                 // Device flow: create pending login, send challenge
                 const pending = createPendingLogin(raw);
-                const serverUrl = `${c.req.url.startsWith('https') ? 'https' : 'http'}://${c.req.header('host')}`;
+                if (!pending) {
+                  raw.send(
+                    JSON.stringify({
+                      type: 'AUTH_FAILED',
+                      payload: { reason: 'Too many pending logins. Try again later.' },
+                    }),
+                  );
+                  return;
+                }
                 raw.send(
                   JSON.stringify({
                     type: 'AUTH_CHALLENGE',
                     payload: {
                       userCode: pending.userCode,
-                      verificationUrl: `${serverUrl}/auth/tv-login?code=${pending.userCode}`,
+                      verificationUrl: `${serverBaseUrl}/auth/tv-login?code=${pending.userCode}`,
                       expiresIn: pending.expiresIn,
                     },
                   }),
@@ -290,9 +321,12 @@ app.get(
         const raw = ws.raw!;
         const data = raw.data as WSData;
 
-        // Clean up pending login / token validation if host disconnects before auth
+        // Clean up pending login / token validation / idle timer if host disconnects before auth
         awaitingAuthHosts.delete(raw);
         pendingTokenValidation.delete(raw);
+        if ((data as any)._idleTimer) {
+          clearTimeout((data as any)._idleTimer);
+        }
         removePendingLoginByWs(raw);
 
         const room = getRoom(data.roomCode);
@@ -332,6 +366,12 @@ app.use('/media/*', serveStatic({ root: '../../questions/' }));
 
 // ── Admin dashboard ──────────────────────────────────────────
 app.get('/admin', (c) => c.redirect('/admin/'));
+app.use('/admin/*', async (c, next) => {
+  await next();
+  c.header('X-Frame-Options', 'DENY');
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+});
 app.use('/admin/*', serveStatic({ root: './' }));
 
 // ── TV host web build ────────────────────────────────────────
