@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import { networkInterfaces } from 'node:os';
-import { sessionsRepo } from '@unfairenough/db';
+import { invitationTokensRepo, sessionsRepo } from '@unfairenough/db';
 import type { ServerWebSocket } from 'bun';
 import { Hono } from 'hono';
 import { serveStatic, upgradeWebSocket, websocket } from 'hono/bun';
@@ -145,10 +145,14 @@ app.get(
     const roomCode = c.req.query('roomCode')?.toUpperCase();
     const sessionToken = c.req.query('token');
 
+    const proto = c.req.url.startsWith('https') ? 'https' : 'http';
+    const serverBaseUrl = `${proto}://${c.req.header('host') || 'localhost'}`;
+
     const wsData: WSData = {
       roomCode: '',
       role: role ?? 'player',
       playerId: '',
+      serverBaseUrl,
     };
 
     return {
@@ -400,6 +404,18 @@ if (mobileDevPort) {
 // ── Initialize database and start server ──────────────────────
 const db = await initDatabase();
 setDbAdapter(db);
+
+// Clean up expired invitation tokens periodically (every hour)
+setInterval(
+  async () => {
+    try {
+      await invitationTokensRepo.cleanup(db);
+    } catch {
+      /* ignore cleanup errors */
+    }
+  },
+  60 * 60 * 1000,
+);
 
 export default {
   port,

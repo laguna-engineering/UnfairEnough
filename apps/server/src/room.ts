@@ -2,6 +2,7 @@ import type { DbAdapter, QuestionWithMeta } from '@unfairenough/db';
 import {
   eventsRepo,
   gamesRepo,
+  invitationTokensRepo,
   playersRepo,
   playerTagScoresRepo,
   questionsRepo,
@@ -38,7 +39,7 @@ import {
   ELO_BASELINE,
   resolvePlayerDifficulty,
 } from '../../../packages/game-logic/src/utils/tagScoring';
-import { generateSecureToken, hashToken } from './auth/tokens';
+import { generateSecureToken, hashToken, sqliteDateFromNow } from './auth/tokens';
 import type { HostMessage, RoomPlayer, WSData } from './types';
 
 const COLORS = [
@@ -64,6 +65,7 @@ const COUNTDOWN_SECONDS = 3;
 const REVEAL_DELAY_MS = 2000;
 const RESULTS_DELAY_MS = 5000;
 const MEDIA_LOAD_TIMEOUT_MS = 10_000;
+const GUEST_SESSION_TTL_DAYS = 90;
 
 type GamePhase =
   | 'LOBBY'
@@ -959,14 +961,46 @@ export class GameRoom {
   private async handleIdentify(
     ws: ServerWebSocket<WSData>,
     deviceId: string,
-    _sessionToken?: string,
+    sessionToken?: string,
     invitationToken?: string,
   ): Promise<void> {
     let payload: IdentityPayload = { profile: null };
+    let effectiveHostId = this.hostId;
+
     try {
-      const existing = await playersRepo.findByDeviceId(this.db, deviceId, this.hostId);
+      // If an invitation token is provided, validate it and link the device to the host
+      if (invitationToken && !sessionToken) {
+        const invite = await invitationTokensRepo.validate(this.db, hashToken(invitationToken));
+        if (invite) {
+          effectiveHostId = invite.hostId;
+          // Revoke any existing guest sessions for this device+host to prevent accumulation
+          await sessionsRepo.revokeGuestByDevice(this.db, deviceId, invite.hostId);
+          // Create a guest session (90-day TTL)
+          const rawToken = generateSecureToken();
+          const tokenHash = hashToken(rawToken);
+          const expiresAt = sqliteDateFromNow(GUEST_SESSION_TTL_DAYS);
+          await sessionsRepo.create(this.db, tokenHash, invite.hostId, 'guest', {
+            deviceId,
+            expiresAt,
+          });
+          // Include guest session token and server URL in the response
+          payload.guestSessionToken = rawToken;
+          payload.serverUrl = (ws.data as WSData).serverBaseUrl || '';
+        }
+      }
+
+      // If a session token is provided (returning user), validate it and use its hostId
+      if (sessionToken) {
+        const session = await sessionsRepo.validate(this.db, hashToken(sessionToken));
+        if (session) {
+          effectiveHostId = session.hostId;
+        }
+      }
+
+      const existing = await playersRepo.findByDeviceId(this.db, deviceId, effectiveHostId);
       if (existing) {
         payload = {
+          ...payload,
           profile: {
             displayName: existing.displayName,
             totalGames: existing.totalGames,
@@ -975,7 +1009,7 @@ export class GameRoom {
         };
       } else {
         // No bound profile — include available admin-created profiles
-        const available = await playersRepo.listAvailableProfiles(this.db, this.hostId);
+        const available = await playersRepo.listAvailableProfiles(this.db, effectiveHostId);
         if (available.length > 0) {
           payload.availableProfiles = available.map((p) => ({
             id: p.id,
@@ -1532,6 +1566,34 @@ export class GameRoom {
   }
 
   cleanup(): void {
+    // Notify all connected clients before closing
+    const closeMsg = JSON.stringify({
+      type: 'ERROR',
+      payload: { code: 'ROOM_CLOSED', message: 'Room has been closed' },
+    });
+
+    // Notify host
+    if (this.hostWs) {
+      try {
+        this.hostWs.send(closeMsg);
+        this.hostWs.close();
+      } catch {
+        /* WS may already be closed */
+      }
+    }
+
+    // Notify all players
+    for (const player of this.players.values()) {
+      if (player.ws) {
+        try {
+          player.ws.send(closeMsg);
+          player.ws.close();
+        } catch {
+          /* WS may already be closed */
+        }
+      }
+    }
+
     this.clearAllTimers();
     for (const player of this.players.values()) {
       if (player.disconnectTimer) {
