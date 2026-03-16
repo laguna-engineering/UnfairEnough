@@ -40,3 +40,8 @@ export function generateUserCode(): string {
   }
   return `${code.slice(0, 4).join('')}-${code.slice(4).join('')}`;
 }
+
+/** Generate a SQLite-compatible datetime string N days from now. */
+export function sqliteDateFromNow(days: number): string {
+  return new Date(Date.now() + days * 86_400_000).toISOString().replace('T', ' ').replace('Z', '');
+}

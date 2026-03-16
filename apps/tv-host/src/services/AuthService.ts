@@ -47,3 +47,7 @@ export async function clearAuthState(): Promise<void> {
     console.error('Failed to clear auth state:', err);
   }
 }
+
+export function getCachedAuthState(): TvAuthState | null {
+  return cached;
+}

@@ -1,6 +1,7 @@
 import type { AnswerKey, ClientMessage } from './messages';
 
 const MAX_NAME_LENGTH = 20;
+const MAX_TOKEN_LENGTH = 256;
 const VALID_ANSWERS: AnswerKey[] = ['A', 'B', 'C', 'D'];
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -81,8 +82,14 @@ export function parseClientMessage(data: unknown): ClientMessage {
       if (typeof p.deviceId !== 'string' || !isValidUUID(p.deviceId)) {
         throw new Error('Valid deviceId is required');
       }
-      const sessionToken = typeof p.sessionToken === 'string' ? p.sessionToken : undefined;
-      const invitationToken = typeof p.invitationToken === 'string' ? p.invitationToken : undefined;
+      const sessionToken =
+        typeof p.sessionToken === 'string' && p.sessionToken.length <= MAX_TOKEN_LENGTH
+          ? p.sessionToken
+          : undefined;
+      const invitationToken =
+        typeof p.invitationToken === 'string' && p.invitationToken.length <= MAX_TOKEN_LENGTH
+          ? p.invitationToken
+          : undefined;
       return {
         type: 'IDENTIFY',
         payload: { deviceId: p.deviceId, sessionToken, invitationToken },

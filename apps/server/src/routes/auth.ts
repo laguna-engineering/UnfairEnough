@@ -1,15 +1,15 @@
-import { hostsRepo, sessionsRepo } from '@unfairenough/db';
+import { hostsRepo, invitationTokensRepo, playersRepo, sessionsRepo } from '@unfairenough/db';
 import { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { extractToken, SESSION_COOKIE } from '../auth/middleware';
 import { approvePendingLogin, removePendingLogin } from '../auth/pendingLogins';
-import { generateSecureToken, hashToken } from '../auth/tokens';
+import { generateSecureToken, hashToken, sqliteDateFromNow } from '../auth/tokens';
 import { getDb } from '../db';
-import { createRoom } from '../roomManager';
+import { createRoom, destroyRoom, findRoomByHostId } from '../roomManager';
 import type { WSData } from '../types';
 
 const ADMIN_SESSION_TTL_DAYS = 7;
-const TV_SESSION_TTL_DAYS = 90;
+const TV_SESSION_TTL_DAYS = 365;
 
 // ── Login rate limiting ─────────────────────────────────────
 const MAX_ATTEMPTS_PER_EMAIL = 5;
@@ -82,10 +82,7 @@ auth.post('/login', async (c) => {
   // Create session
   const rawToken = generateSecureToken();
   const tokenHash = hashToken(rawToken);
-  const expiresAt = new Date(Date.now() + ADMIN_SESSION_TTL_DAYS * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .replace('T', ' ')
-    .replace('Z', '');
+  const expiresAt = sqliteDateFromNow(ADMIN_SESSION_TTL_DAYS);
 
   await sessionsRepo.create(db, tokenHash, host.id, 'host_admin', {
     deviceInfo: c.req.header('User-Agent') ?? undefined,
@@ -104,13 +101,30 @@ auth.post('/login', async (c) => {
   return c.json({ host: { id: host.id, email: host.email, displayName: host.displayName } });
 });
 
-// POST /auth/logout — revoke session, clear cookie
+// POST /auth/logout — revoke session, clear cookie. Works for admin cookies and Bearer tokens (guest sessions).
 auth.post('/logout', async (c) => {
   const db = getDb();
-  const token = getCookie(c, SESSION_COOKIE);
+  // Check Bearer token first (mobile guest sessions), then cookie (admin sessions)
+  const bearerToken = c.req.header('Authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
+  const cookieToken = getCookie(c, SESSION_COOKIE);
+  const token = bearerToken ?? cookieToken;
+
   if (token) {
-    await sessionsRepo.revoke(db, hashToken(token));
-    deleteCookie(c, SESSION_COOKIE, { path: '/' });
+    // If it's a guest session, unbind the device from the player profile
+    const tokenHash = hashToken(token);
+    const session = await sessionsRepo.validate(db, tokenHash);
+    if (session?.type === 'guest' && session.deviceId) {
+      const player = await playersRepo.findByDeviceId(db, session.deviceId, session.hostId);
+      if (player) {
+        await playersRepo.unbindDevice(db, player.id);
+      }
+    }
+
+    await sessionsRepo.revoke(db, tokenHash);
+
+    if (cookieToken) {
+      deleteCookie(c, SESSION_COOKIE, { path: '/' });
+    }
   }
   return c.json({ message: 'Logged out' });
 });
@@ -134,10 +148,24 @@ auth.get('/me', async (c) => {
     return c.json({ error: 'Host account not found' }, 401);
   }
 
-  return c.json({
+  const result: Record<string, unknown> = {
     host: { id: host.id, email: host.email, displayName: host.displayName },
     sessionType: session.type,
-  });
+  };
+
+  // For guest sessions, also return the linked player info
+  if (session.type === 'guest' && session.deviceId) {
+    const player = await playersRepo.findByDeviceId(db, session.deviceId, session.hostId);
+    if (player) {
+      result.player = {
+        displayName: player.displayName,
+        avatarColor: player.avatarColor,
+        avatarEmoji: player.avatarEmoji,
+      };
+    }
+  }
+
+  return c.json(result);
 });
 
 // GET /auth/tv-login — serve the TV login approval page
@@ -195,18 +223,21 @@ auth.post('/tv-login', async (c) => {
   resetRateLimit(`email:${email}`);
   resetRateLimit(`ip:${ip}`);
 
-  // Create a TV session token
+  // Create a TV session token (365-day TTL)
   const rawToken = generateSecureToken();
   const tokenHash = hashToken(rawToken);
-  const expiresAt = new Date(Date.now() + TV_SESSION_TTL_DAYS * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .replace('T', ' ')
-    .replace('Z', '');
+  const expiresAt = sqliteDateFromNow(TV_SESSION_TTL_DAYS);
 
   await sessionsRepo.create(db, tokenHash, host.id, 'host_tv', {
     deviceInfo: 'TV Host',
     expiresAt,
   });
+
+  // Enforce one TV per host — destroy existing room if any
+  const existingRoom = findRoomByHostId(host.id);
+  if (existingRoom) {
+    destroyRoom(existingRoom.roomCode);
+  }
 
   // Push AUTH_SUCCESS to the TV via WebSocket and create a room
   try {
@@ -221,16 +252,18 @@ auth.post('/tv-login', async (c) => {
       }),
     );
 
-    // Create room for the authenticated host
-    const room = createRoom(host.id);
+    // Generate invitation token for the game QR, create room, and store in DB
+    const inviteToken = generateSecureToken(16);
+    const room = createRoom(host.id, inviteToken);
     const wsData = pending.hostWs.data as WSData;
     wsData.roomCode = room.roomCode;
     room.setHost(pending.hostWs);
+    await invitationTokensRepo.create(db, hashToken(inviteToken), host.id, room.roomCode);
 
     pending.hostWs.send(
       JSON.stringify({
         type: 'ROOM_CREATED',
-        payload: { roomCode: room.roomCode },
+        payload: { roomCode: room.roomCode, invitationToken: inviteToken },
       }),
     );
   } catch {

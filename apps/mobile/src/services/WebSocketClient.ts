@@ -47,19 +47,23 @@ class WebSocketClient {
   private pingInterval: ReturnType<typeof setInterval> | null = null;
   private playerId: string | null = null;
   private pendingDeviceId: string | null = null;
+  private pendingSessionToken: string | null = null;
+  private pendingInvitationToken: string | null = null;
   private connectionState: ConnectionState = 'disconnected';
 
   setCallbacks(callbacks: Callbacks): void {
     this.callbacks = { ...this.callbacks, ...callbacks };
   }
 
-  connect(url: string, deviceId?: string): void {
+  connect(url: string, deviceId?: string, sessionToken?: string, invitationToken?: string): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       return;
     }
 
     this.url = url;
     this.pendingDeviceId = deviceId ?? null;
+    this.pendingSessionToken = sessionToken ?? null;
+    this.pendingInvitationToken = invitationToken ?? null;
     this.setConnectionState('connecting');
 
     try {
@@ -75,8 +79,17 @@ class WebSocketClient {
           this.send({ type: 'RECONNECT', payload: { playerId: this.playerId } });
         } else if (this.pendingDeviceId) {
           // New connection — identify the device to check for an existing profile
-          this.send({ type: 'IDENTIFY', payload: { deviceId: this.pendingDeviceId } });
+          this.send({
+            type: 'IDENTIFY',
+            payload: {
+              deviceId: this.pendingDeviceId,
+              sessionToken: this.pendingSessionToken ?? undefined,
+              invitationToken: this.pendingInvitationToken ?? undefined,
+            },
+          });
           this.pendingDeviceId = null;
+          this.pendingSessionToken = null;
+          this.pendingInvitationToken = null;
         }
       };
 
@@ -184,8 +197,8 @@ class WebSocketClient {
     }
   }
 
-  identify(deviceId: string): void {
-    this.send({ type: 'IDENTIFY', payload: { deviceId } });
+  identify(deviceId: string, sessionToken?: string, invitationToken?: string): void {
+    this.send({ type: 'IDENTIFY', payload: { deviceId, sessionToken, invitationToken } });
   }
 
   join(name: string, roomCode?: string, deviceId?: string, profileId?: string): void {

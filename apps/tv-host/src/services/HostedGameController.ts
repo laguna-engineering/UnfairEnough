@@ -48,12 +48,15 @@ export class HostedGameController implements IGameController {
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
   private authMode = false;
+  invitationToken: string | null = null;
   private onRoomCreated?: (roomCode: string) => void;
   private onConnectionStateChange?: (state: ConnectionState) => void;
   private onAuthChallenge?: (challenge: AuthChallenge) => void;
   private onAuthSuccess?: (sessionToken: string, hostId: string, displayName: string) => void;
   private onAuthFailed?: (reason: string) => void;
   private onAuthExpired?: () => void;
+  private onSessionInvalid?: () => void;
+  private sessionToken?: string;
 
   constructor(
     serverUrl: string,
@@ -65,6 +68,10 @@ export class HostedGameController implements IGameController {
       onAuthSuccess?: (sessionToken: string, hostId: string, displayName: string) => void;
       onAuthFailed?: (reason: string) => void;
       onAuthExpired?: () => void;
+      /** Called when a stored session token is rejected by the server */
+      onSessionInvalid?: () => void;
+      /** Pre-authenticated session token to send via WS query param */
+      sessionToken?: string;
     },
   ) {
     this.serverUrl = serverUrl;
@@ -74,6 +81,8 @@ export class HostedGameController implements IGameController {
     this.onAuthSuccess = callbacks?.onAuthSuccess;
     this.onAuthFailed = callbacks?.onAuthFailed;
     this.onAuthExpired = callbacks?.onAuthExpired;
+    this.onSessionInvalid = callbacks?.onSessionInvalid;
+    this.sessionToken = callbacks?.sessionToken;
     this.authMode = !!callbacks?.onAuthChallenge;
   }
 
@@ -158,7 +167,10 @@ export class HostedGameController implements IGameController {
 
     // Normalize: strip protocol, ensure ws://
     const host = this.serverUrl.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '');
-    const url = `ws://${host}/ws?role=host`;
+    let url = `ws://${host}/ws?role=host`;
+    if (this.sessionToken) {
+      url += `&token=${encodeURIComponent(this.sessionToken)}`;
+    }
 
     try {
       this.ws = new WebSocket(url);
@@ -204,7 +216,8 @@ export class HostedGameController implements IGameController {
 
     switch (message.type) {
       case 'ROOM_CREATED': {
-        const { roomCode } = message.payload;
+        const { roomCode, invitationToken } = message.payload;
+        this.invitationToken = invitationToken ?? null;
         this.store.dispatch(setServerReady({ port: 0, localIp: this.serverUrl, roomCode }));
         this.onRoomCreated?.(roomCode);
         break;
@@ -332,6 +345,12 @@ export class HostedGameController implements IGameController {
 
       case 'ERROR':
         console.error('Server error:', message.payload.code, message.payload.message);
+        if (
+          message.payload.code === 'SESSION_INVALID' ||
+          message.payload.code === 'SESSION_EXPIRED'
+        ) {
+          this.onSessionInvalid?.();
+        }
         break;
 
       case 'PONG':

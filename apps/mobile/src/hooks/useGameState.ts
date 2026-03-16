@@ -11,10 +11,13 @@ import type {
   WelcomePayload,
 } from '@unfairenough/ws-protocol';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { GuestSession } from '../services/authStorage';
+import { clearGuestSession, getGuestSession, saveGuestSession } from '../services/authStorage';
 import { getDeviceId } from '../services/deviceId';
 import { wsClient } from '../services/WebSocketClient';
 
 export type MobileGamePhase =
+  | 'RETURNING'
   | 'SCAN'
   | 'IDENTIFYING'
   | 'WELCOME_BACK'
@@ -30,6 +33,8 @@ export type MobileGamePhase =
 
 export function useGameState() {
   const [phase, setPhase] = useState<MobileGamePhase>('SCAN');
+  const [storedSession, setStoredSession] = useState<GuestSession | null>(null);
+  const [returningError, setReturningError] = useState<string | null>(null);
   const [connectionState, setConnectionState] = useState<
     'disconnected' | 'connecting' | 'connected'
   >('disconnected');
@@ -55,6 +60,22 @@ export function useGameState() {
     wsClient.setCallbacks({
       onConnectionStateChange: setConnectionState,
       onIdentity: (data) => {
+        // If server provided a guest session token, store it for future reconnection
+        if (data.guestSessionToken && data.serverUrl) {
+          try {
+            new URL(data.serverUrl); // Validate it's a proper URL before storing
+            const profile = data.profile;
+            saveGuestSession({
+              sessionToken: data.guestSessionToken,
+              serverUrl: data.serverUrl,
+              playerName: profile?.displayName ?? '',
+              playerColor: '#888',
+            });
+          } catch {
+            // Invalid URL — skip storing the session
+          }
+        }
+
         if (data.profile) {
           setIdentifiedProfile(data.profile);
           setAvailableProfiles([]);
@@ -118,10 +139,31 @@ export function useGameState() {
     };
   }, []);
 
-  const connect = useCallback((url: string) => {
+  const connect = useCallback((url: string, invitationToken?: string) => {
     const deviceId = getDeviceId() ?? undefined;
-    wsClient.connect(url, deviceId);
+    wsClient.connect(url, deviceId, undefined, invitationToken);
     setPhase('IDENTIFYING');
+  }, []);
+
+  /** Connect using a stored guest session (returning user flow) */
+  const connectFromSession = useCallback((session: GuestSession) => {
+    setReturningError(null);
+    const isSecure = session.serverUrl.startsWith('https') || session.serverUrl.startsWith('wss');
+    const wsProtocol = isSecure ? 'wss:' : 'ws:';
+    const host = session.serverUrl.replace(/^(https?|wss?):\/\//, '');
+    const wsUrl = `${wsProtocol}//${host}/ws?role=player&roomCode=AUTO`;
+    const deviceId = getDeviceId() ?? undefined;
+    wsClient.connect(wsUrl, deviceId, session.sessionToken);
+    setPhase('IDENTIFYING');
+  }, []);
+
+  /** Disconnect from the linked host account */
+  const disconnectFromHost = useCallback(async () => {
+    wsClient.disconnect();
+    await clearGuestSession();
+    setStoredSession(null);
+    setReturningError(null);
+    setPhase('SCAN');
   }, []);
 
   const join = useCallback((name: string, roomCode?: string, deviceId?: string) => {
@@ -181,6 +223,15 @@ export function useGameState() {
     changeLanguage(lang);
   }, []);
 
+  /** Check for stored session on mount. Call after initDeviceId. */
+  const checkStoredSession = useCallback(async () => {
+    const session = await getGuestSession();
+    if (session) {
+      setStoredSession(session);
+      setPhase('RETURNING');
+    }
+  }, []);
+
   return {
     phase,
     connectionState,
@@ -196,7 +247,12 @@ export function useGameState() {
     gameResult,
     mediaPreview,
     error,
+    storedSession,
+    returningError,
     connect,
+    connectFromSession,
+    disconnectFromHost,
+    checkStoredSession,
     join,
     confirmIdentity,
     claimProfile,

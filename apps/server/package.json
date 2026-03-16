@@ -6,7 +6,8 @@
     "dev": "bun --hot src/index.ts",
     "start": "bun src/index.ts",
     "typecheck": "tsc --noEmit",
-    "create-account": "bun src/scripts/create-account.ts"
+    "create-account": "bun src/scripts/create-account.ts",
+    "migrate-data": "bun src/scripts/migrate-data.ts"
   },
   "dependencies": {
     "hono": "^4.7.0",
