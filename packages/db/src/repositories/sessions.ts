@@ -35,15 +35,18 @@ export async function create(
     ],
   );
   const row = await db.get<SessionRow>('SELECT * FROM sessions WHERE token_hash = ?', [tokenHash]);
-  return rowToSession(row!);
+  if (!row) throw new Error('BUG: session row missing after insert');
+  return rowToSession(row);
 }
+
+const LAST_SEEN_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 export async function validate(
   db: DbAdapter,
   tokenHash: string,
 ): Promise<{ hostId: string; type: SessionType; deviceId: string | null } | null> {
   const row = await db.get<SessionRow>(
-    `SELECT * FROM sessions
+    `SELECT host_id, type, last_seen_at FROM sessions
      WHERE token_hash = ?
        AND revoked = 0
        AND (expires_at IS NULL OR expires_at > datetime('now'))`,
@@ -51,10 +54,13 @@ export async function validate(
   );
   if (!row) return null;
 
-  // Update last_seen_at
-  await db.run("UPDATE sessions SET last_seen_at = datetime('now') WHERE token_hash = ?", [
-    tokenHash,
-  ]);
+  // Only update last_seen_at if stale by more than 5 minutes
+  const lastSeen = new Date(`${row.last_seen_at}Z`).getTime();
+  if (Date.now() - lastSeen > LAST_SEEN_INTERVAL_MS) {
+    await db.run("UPDATE sessions SET last_seen_at = datetime('now') WHERE token_hash = ?", [
+      tokenHash,
+    ]);
+  }
 
   return { hostId: row.host_id, type: row.type, deviceId: row.device_id ?? null };
 }

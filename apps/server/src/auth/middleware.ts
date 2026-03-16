@@ -11,18 +11,23 @@ export type AuthVariables = {
   hostId: string | null;
 };
 
-let tenancyEnabled: boolean | null = null;
+let tenancyEnabled = false;
+let tenancyCheckedAt = 0;
+const TENANCY_CACHE_TTL_MS = 60_000;
 
-/** Check if any host accounts exist (cached). */
+/**
+ * Check if any host accounts exist.
+ * Once true, stays true permanently (creating the first account is irreversible
+ * in normal operation). Re-checks from DB every 60s while false, so the server
+ * picks up new accounts created via CLI without a restart.
+ */
 export async function isTenancyEnabled(db: DbAdapter): Promise<boolean> {
-  if (tenancyEnabled !== null) return tenancyEnabled;
+  if (tenancyEnabled) return true;
+  const now = Date.now();
+  if (now - tenancyCheckedAt < TENANCY_CACHE_TTL_MS) return false;
   tenancyEnabled = await hostsRepo.exists(db);
+  tenancyCheckedAt = now;
   return tenancyEnabled;
-}
-
-/** Refresh the tenancy flag (call after creating an account via CLI). */
-export function refreshTenancyFlag(): void {
-  tenancyEnabled = null;
 }
 
 /**
@@ -41,6 +46,16 @@ export function extractToken(c: Context): string | null {
   return cookie && cookie.length <= 128 ? cookie : null;
 }
 
+/**
+ * Force re-check of tenancy state on next request.
+ * Called by routes/auth.ts after account creation so the server
+ * picks up the new account immediately instead of waiting for the TTL.
+ */
+export function refreshTenancyFlag(): void {
+  tenancyEnabled = false;
+  tenancyCheckedAt = 0;
+}
+
 type GetDb = () => DbAdapter;
 
 /**
@@ -48,19 +63,9 @@ type GetDb = () => DbAdapter;
  * Call once at startup and reuse the returned middleware.
  */
 export function createAuthMiddleware(getDb: GetDb) {
-  /** For routes that REQUIRE authentication (always, regardless of tenancy mode). */
-  const requireHostAuth = createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
-    const token = extractToken(c);
-    if (!token) return c.json({ error: 'Unauthorized' }, 401);
-    const session = await sessionsRepo.validate(getDb(), hashToken(token));
-    if (!session) return c.json({ error: 'Invalid session' }, 401);
-    c.set('hostId', session.hostId);
-    await next();
-  });
-
   /**
-   * For routes that scope by host when tenancy is enabled,
-   * or allow unscoped access when no accounts exist.
+   * Scopes requests by host when tenancy is enabled,
+   * or allows unscoped access when no accounts exist.
    *
    * CRITICAL: Never silently degrades from scoped to unscoped on invalid tokens.
    * If a token is present but invalid → 401.
@@ -81,5 +86,5 @@ export function createAuthMiddleware(getDb: GetDb) {
     await next();
   });
 
-  return { requireHostAuth, scopedAuth };
+  return { scopedAuth };
 }

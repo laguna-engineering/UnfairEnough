@@ -64,7 +64,7 @@ afterAll(() => {
 
 describe('player profile matching on JOIN', () => {
   it('creates a new profile when deviceId is provided and unknown', async () => {
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const ws = createMockWs();
 
     await room.addPlayer(ws, 'Alice', 'device-new-123');
@@ -87,7 +87,7 @@ describe('player profile matching on JOIN', () => {
     await playersRepo.incrementGames(db, 'existing-p', 300);
     await playersRepo.incrementWins(db, 'existing-p');
 
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const ws = createMockWs();
 
     await room.addPlayer(ws, 'Alice', 'device-existing');
@@ -103,7 +103,7 @@ describe('player profile matching on JOIN', () => {
   it('updates display name when returning player uses a different name', async () => {
     await playersRepo.createPlayer(db, 'rename-p', 'OldName', '#FF6B9D', null, 'device-rename');
 
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const ws = createMockWs();
 
     await room.addPlayer(ws, 'NewName', 'device-rename');
@@ -118,7 +118,7 @@ describe('player profile matching on JOIN', () => {
   });
 
   it('joins without profile when no deviceId is provided', async () => {
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const ws = createMockWs();
 
     await room.addPlayer(ws, 'Anonymous');
@@ -129,7 +129,7 @@ describe('player profile matching on JOIN', () => {
   });
 
   it('rejects players when room is full', async () => {
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
 
     // Fill room with 12 players
     for (let i = 0; i < 12; i++) {

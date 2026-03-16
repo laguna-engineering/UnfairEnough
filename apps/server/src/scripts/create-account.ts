@@ -67,7 +67,8 @@ async function main(): Promise<void> {
   console.log(`\n✅ Account created successfully!`);
   console.log(`   Email: ${host.email}`);
   console.log(`   Name:  ${host.displayName}`);
-  console.log(`   ID:    ${host.id}\n`);
+  console.log(`   ID:    ${host.id}`);
+  console.log(`\n⚠️  The running server will pick up the new account within 60 seconds.\n`);
 }
 
 main().catch((err) => {

@@ -47,7 +47,7 @@ describe('GameRoom language support', () => {
   let room: GameRoom;
 
   beforeEach(() => {
-    room = new GameRoom('TEST', createMockDb());
+    room = new GameRoom('TEST', createMockDb(), null);
   });
 
   it('includes default language (en) in WELCOME payload', () => {

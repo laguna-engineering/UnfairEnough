@@ -1,5 +1,6 @@
-import type { DbAdapter, SqlValue } from '../adapter';
+import type { DbAdapter } from '../adapter';
 import type { PlayerTagScore, PlayerTagScoreRow } from '../schema';
+import { hostScope } from '../utils';
 
 function rowToTagScore(row: PlayerTagScoreRow): PlayerTagScore {
   return {
@@ -63,7 +64,7 @@ export async function upsertTagScore(
   await db.run(
     `INSERT INTO player_tag_scores (id, player_id, tag, score, total_correct, total_incorrect, host_id, last_updated)
      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-     ON CONFLICT(player_id, tag) DO UPDATE SET
+     ON CONFLICT(player_id, tag, host_id) DO UPDATE SET
        score = score + ?,
        total_correct = total_correct + ?,
        total_incorrect = total_incorrect + ?,
@@ -102,7 +103,7 @@ export async function setTagScore(
   await db.run(
     `INSERT INTO player_tag_scores (id, player_id, tag, score, total_correct, total_incorrect, host_id, last_updated)
      VALUES (?, ?, ?, ?, 0, 0, ?, datetime('now'))
-     ON CONFLICT(player_id, tag) DO UPDATE SET
+     ON CONFLICT(player_id, tag, host_id) DO UPDATE SET
        score = ?,
        last_updated = datetime('now')`,
     [id, playerId, tag, score, hostId, score],
@@ -126,12 +127,11 @@ export async function getScoresByTag(
   tag: string,
   hostId: string | null,
 ): Promise<PlayerTagScore[]> {
-  const sql =
-    hostId !== null
-      ? 'SELECT * FROM player_tag_scores WHERE tag = ? AND host_id = ? ORDER BY score DESC'
-      : 'SELECT * FROM player_tag_scores WHERE tag = ? AND host_id IS NULL ORDER BY score DESC';
-  const params: SqlValue[] = hostId !== null ? [tag, hostId] : [tag];
-  const rows = await db.all<PlayerTagScoreRow>(sql, params);
+  const { clause, params: scopeParams } = hostScope(hostId);
+  const rows = await db.all<PlayerTagScoreRow>(
+    `SELECT * FROM player_tag_scores WHERE tag = ? AND ${clause} ORDER BY score DESC`,
+    [tag, ...scopeParams],
+  );
   return rows.map(rowToTagScore);
 }
 
@@ -139,15 +139,12 @@ export async function getAllTags(
   db: DbAdapter,
   hostId: string | null,
 ): Promise<Array<{ tag: string; playerCount: number }>> {
-  const sql =
-    hostId !== null
-      ? `SELECT tag, COUNT(DISTINCT player_id) as player_count
-       FROM player_tag_scores WHERE host_id = ?
-       GROUP BY tag ORDER BY player_count DESC`
-      : `SELECT tag, COUNT(DISTINCT player_id) as player_count
-       FROM player_tag_scores WHERE host_id IS NULL
-       GROUP BY tag ORDER BY player_count DESC`;
-  const params: SqlValue[] = hostId !== null ? [hostId] : [];
-  const rows = await db.all<{ tag: string; player_count: number }>(sql, params);
+  const { clause, params } = hostScope(hostId);
+  const rows = await db.all<{ tag: string; player_count: number }>(
+    `SELECT tag, COUNT(DISTINCT player_id) as player_count
+     FROM player_tag_scores WHERE ${clause}
+     GROUP BY tag ORDER BY player_count DESC`,
+    params,
+  );
   return rows.map((r) => ({ tag: r.tag, playerCount: r.player_count }));
 }

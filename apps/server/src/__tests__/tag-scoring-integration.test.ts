@@ -109,7 +109,7 @@ afterAll(() => {
 
 /** Start a configured game and wait for the first question to appear. */
 async function setupConfiguredGame(opts: { deviceIds?: (string | undefined)[] } = {}) {
-  const room = new GameRoom('TEST', db);
+  const room = new GameRoom('TEST', db, null);
   const hostWs = createMockWs({ data: { role: 'host' } });
   room.setHost(hostWs);
 
@@ -246,7 +246,7 @@ describe('tag scoring integration — persistence', () => {
       null,
     );
 
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
 
@@ -302,7 +302,7 @@ describe('tag scoring integration — persistence', () => {
 describe('tag scoring integration — loading', () => {
   it('pre-seeded tag scores affect difficulty multiplier in ROUND_END', async () => {
     // First: create a player profile by joining a room
-    const setupRoom = new GameRoom('SETUP', db);
+    const setupRoom = new GameRoom('SETUP', db, null);
     const setupHost = createMockWs({ data: { role: 'host' } });
     setupRoom.setHost(setupHost);
     const setupPlayer = createMockWs();
@@ -317,7 +317,7 @@ describe('tag scoring integration — loading', () => {
     await playerTagScoresRepo.setTagScore(db, profile!.id, 'zelda', 1900, null);
 
     // Now start a real game — tag scores should be loaded
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
     const playerWs = createMockWs();
@@ -383,7 +383,7 @@ describe('tag scoring integration — games_played decay', () => {
       null,
     );
 
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
     const playerWs = createMockWs();

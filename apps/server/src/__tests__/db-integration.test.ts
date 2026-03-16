@@ -28,9 +28,9 @@ afterAll(() => {
 // ── Migrations ──────────────────────────────────────────────────
 
 describe('migrations', () => {
-  it('sets user_version to 1 after migration', async () => {
+  it('sets user_version to latest after migration', async () => {
     const row = await db.get<{ user_version: number }>('PRAGMA user_version');
-    expect(row?.user_version).toBe(1);
+    expect(row?.user_version).toBe(15);
   });
 
   it('creates all expected tables', async () => {
@@ -47,7 +47,7 @@ describe('migrations', () => {
 
   it('is idempotent (running twice does not error)', async () => {
     const version = await runMigrations(db);
-    expect(version).toBe(1);
+    expect(version).toBe(15);
   });
 });
 

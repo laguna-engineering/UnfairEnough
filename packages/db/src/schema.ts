@@ -210,6 +210,13 @@ export interface PlayerTagScore {
   lastUpdated: string;
 }
 
+export interface InvitationTokenRow {
+  token_hash: string;
+  host_id: string;
+  room_code: string;
+  expires_at: string | null;
+}
+
 // ── Auth types ────────────────────────────────────────────────
 
 export type SessionType = 'host_tv' | 'host_admin' | 'guest';
@@ -251,12 +258,4 @@ export interface Session {
   expiresAt: string | null;
   lastSeenAt: string;
   revoked: boolean;
-}
-
-export interface InvitationTokenRow {
-  token_hash: string;
-  host_id: string;
-  room_code: string;
-  created_at: string;
-  expires_at: string | null;
 }
