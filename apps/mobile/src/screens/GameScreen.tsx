@@ -33,7 +33,6 @@ export const GameScreen: React.FC = () => {
     error,
     storedSession,
     returningError,
-    returningConnecting,
     connect,
     connectFromSession,
     disconnectFromHost,
@@ -74,7 +73,6 @@ export const GameScreen: React.FC = () => {
       return (
         <ReturningUserScreen
           session={storedSession}
-          isConnecting={returningConnecting}
           error={returningError}
           onPlay={() => connectFromSession(storedSession)}
           onDisconnect={disconnectFromHost}

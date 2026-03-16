@@ -35,7 +35,6 @@ export function useGameState() {
   const [phase, setPhase] = useState<MobileGamePhase>('SCAN');
   const [storedSession, setStoredSession] = useState<GuestSession | null>(null);
   const [returningError, setReturningError] = useState<string | null>(null);
-  const [returningConnecting, setReturningConnecting] = useState(false);
   const [connectionState, setConnectionState] = useState<
     'disconnected' | 'connecting' | 'connected'
   >('disconnected');
@@ -63,13 +62,18 @@ export function useGameState() {
       onIdentity: (data) => {
         // If server provided a guest session token, store it for future reconnection
         if (data.guestSessionToken && data.serverUrl) {
-          const profile = data.profile;
-          saveGuestSession({
-            sessionToken: data.guestSessionToken,
-            serverUrl: data.serverUrl,
-            playerName: profile?.displayName ?? '',
-            playerColor: '#888',
-          });
+          try {
+            new URL(data.serverUrl); // Validate it's a proper URL before storing
+            const profile = data.profile;
+            saveGuestSession({
+              sessionToken: data.guestSessionToken,
+              serverUrl: data.serverUrl,
+              playerName: profile?.displayName ?? '',
+              playerColor: '#888',
+            });
+          } catch {
+            // Invalid URL — skip storing the session
+          }
         }
 
         if (data.profile) {
@@ -143,16 +147,14 @@ export function useGameState() {
 
   /** Connect using a stored guest session (returning user flow) */
   const connectFromSession = useCallback((session: GuestSession) => {
-    setReturningConnecting(true);
     setReturningError(null);
+    const isSecure = session.serverUrl.startsWith('https') || session.serverUrl.startsWith('wss');
+    const wsProtocol = isSecure ? 'wss:' : 'ws:';
+    const host = session.serverUrl.replace(/^(https?|wss?):\/\//, '');
+    const wsUrl = `${wsProtocol}//${host}/ws?role=player&roomCode=AUTO`;
     const deviceId = getDeviceId() ?? undefined;
-    const host = session.serverUrl.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '');
-    // We don't know the roomCode yet — connect to the server and identify with session token
-    // The server will recognize the session and provide identity
-    const wsUrl = `ws://${host}/ws?role=player&roomCode=AUTO`;
     wsClient.connect(wsUrl, deviceId, session.sessionToken);
     setPhase('IDENTIFYING');
-    setReturningConnecting(false);
   }, []);
 
   /** Disconnect from the linked host account */
@@ -247,7 +249,6 @@ export function useGameState() {
     error,
     storedSession,
     returningError,
-    returningConnecting,
     connect,
     connectFromSession,
     disconnectFromHost,

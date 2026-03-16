@@ -29,6 +29,8 @@ const configServerUrl: string = Constants.expoConfig?.extra?.serverUrl || '';
 
 SplashScreen.preventAutoHideAsync();
 
+const MAX_AUTH_RETRIES = 3;
+
 const VALID_PREVIEW_PHASES: GamePhase[] = [
   'LOBBY',
   'COUNTDOWN',
@@ -87,6 +89,8 @@ export default function App() {
   const [authLoginState, setAuthLoginState] = useState<
     'connecting' | 'waiting' | 'expired' | 'approved' | 'failed'
   >('connecting');
+  const authRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const authRetryCountRef = useRef(0);
   const previewControllerRef = useRef<IGameController | null>(
     webPreviewPhase
       ? new (require('./src/preview/PreviewGameController').PreviewGameController)(webPreviewPhase)
@@ -123,17 +127,29 @@ export default function App() {
         hostedControllerRef.current?.cleanup();
         hostedControllerRef.current = new HostedGameController(auth.serverUrl, {
           onRoomCreated: () => setScreen('hosted_game'),
+          sessionToken: auth.sessionToken,
+          onSessionInvalid: () => {
+            // Session expired or revoked — clear stored auth and go to login
+            hostedControllerRef.current?.cleanup();
+            hostedControllerRef.current = null;
+            clearAuthState();
+            setScreen('mode_select');
+          },
         });
         hostedControllerRef.current.initialize();
       }
     });
   }, []);
 
-  const handleSelectAccount = useCallback(() => {
+  const handleSelectAccount = useCallback((isRetry = false) => {
     if (!configServerUrl) {
       // No server URL configured — fall back to connect screen
       setScreen('connect');
       return;
+    }
+
+    if (!isRetry) {
+      authRetryCountRef.current = 0;
     }
 
     setHostedServerUrl(configServerUrl);
@@ -158,11 +174,17 @@ export default function App() {
       },
       onAuthFailed: () => setAuthLoginState('failed'),
       onAuthExpired: () => {
+        authRetryCountRef.current += 1;
+        if (authRetryCountRef.current >= MAX_AUTH_RETRIES) {
+          setAuthLoginState('failed');
+          return;
+        }
         setAuthLoginState('expired');
         // Auto-reconnect to get a new code
-        setTimeout(() => {
+        authRetryTimeoutRef.current = setTimeout(() => {
+          authRetryTimeoutRef.current = null;
           hostedControllerRef.current?.cleanup();
-          handleSelectAccount();
+          handleSelectAccount(true);
         }, 1500);
       },
     });
@@ -197,6 +219,11 @@ export default function App() {
   }, []);
 
   const handleBack = useCallback(() => {
+    if (authRetryTimeoutRef.current) {
+      clearTimeout(authRetryTimeoutRef.current);
+      authRetryTimeoutRef.current = null;
+    }
+    authRetryCountRef.current = 0;
     hostedControllerRef.current?.cleanup();
     hostedControllerRef.current = null;
     clearAuthState();

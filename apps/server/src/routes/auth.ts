@@ -185,7 +185,7 @@ auth.post('/tv-login', async (c) => {
   // Enforce one TV per host — destroy existing room if any
   const existingRoom = findRoomByHostId(host.id);
   if (existingRoom) {
-    destroyRoom(existingRoom);
+    destroyRoom(existingRoom.roomCode);
   }
 
   // Push AUTH_SUCCESS to the TV via WebSocket and create a room
@@ -201,14 +201,12 @@ auth.post('/tv-login', async (c) => {
       }),
     );
 
-    // Create room for the authenticated host
-    const room = createRoom(host.id);
+    // Generate invitation token for the game QR, create room, and store in DB
+    const inviteToken = generateSecureToken(16);
+    const room = createRoom(host.id, inviteToken);
     const wsData = pending.hostWs.data as WSData;
     wsData.roomCode = room.roomCode;
     room.setHost(pending.hostWs);
-
-    // Generate invitation token for the game QR and store in DB
-    const inviteToken = generateSecureToken(16);
     await invitationTokensRepo.create(db, hashToken(inviteToken), host.id, room.roomCode);
 
     pending.hostWs.send(

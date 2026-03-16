@@ -10,7 +10,7 @@ export function setDbAdapter(db: DbAdapter): void {
   dbAdapter = db;
 }
 
-export function createRoom(hostId: string | null = null): GameRoom {
+export function createRoom(hostId: string | null = null, invitationToken?: string): GameRoom {
   if (!dbAdapter) throw new Error('DB adapter not set. Call setDbAdapter() first.');
 
   let code: string;
@@ -18,13 +18,21 @@ export function createRoom(hostId: string | null = null): GameRoom {
     code = generateRoomCode();
   } while (rooms.has(code));
 
-  const room = new GameRoom(code, dbAdapter, hostId);
+  const room = new GameRoom(code, dbAdapter, hostId, invitationToken);
   rooms.set(code, room);
   return room;
 }
 
 export function getRoom(code: string): GameRoom | undefined {
   return rooms.get(code);
+}
+
+/** Find the active room hosted by the given hostId. Returns the first match. */
+export function findRoomByHostId(hostId: string): GameRoom | undefined {
+  for (const room of rooms.values()) {
+    if (room.hostId === hostId) return room;
+  }
+  return undefined;
 }
 
 export function destroyRoom(code: string): void {
@@ -34,12 +42,4 @@ export function destroyRoom(code: string): void {
     invitationTokensRepo.removeByRoom(dbAdapter, code);
     rooms.delete(code);
   }
-}
-
-/** Check if a host already has an active room. Returns the room code if so. */
-export function findRoomByHostId(hostId: string): string | null {
-  for (const [code, room] of rooms) {
-    if (room.hostId === hostId) return code;
-  }
-  return null;
 }

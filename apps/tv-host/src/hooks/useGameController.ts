@@ -64,9 +64,7 @@ export function useGameController() {
   } else if (mode === 'hosted' && serverUrl && roomCode) {
     const host = serverUrl.replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '');
     // Include invitation token in QR URL if available (for guest linking)
-    const inviteParam = (controller as any).invitationToken
-      ? `&invite=${(controller as any).invitationToken}`
-      : '';
+    const inviteParam = controller.invitationToken ? `&invite=${controller.invitationToken}` : '';
     if (mobileBaseUrl) {
       qrUrl = `${mobileBaseUrl}/?roomCode=${roomCode}&server=${encodeURIComponent(host)}${inviteParam}`;
     } else {
