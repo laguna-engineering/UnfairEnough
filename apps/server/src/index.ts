@@ -14,6 +14,7 @@ import { createRoom, destroyRoom, findRoomByHostId, getRoom, setDbAdapter } from
 import authRoutes from './routes/auth';
 import eventsRoutes from './routes/events';
 import gamesRoutes from './routes/games';
+import mediaUploadRoutes from './routes/mediaUpload';
 import metaSetsRoutes from './routes/metaSets';
 import playersRoutes from './routes/players';
 import questionSetsRoutes from './routes/questionSets';
@@ -50,6 +51,7 @@ app.get('/api/health', (c) => {
 
 // ── REST API routes (scoped auth when tenancy enabled) ────────
 app.route('/api/question-sets', questionSetsRoutes);
+app.route('/api/media', mediaUploadRoutes);
 app.route('/api/meta-sets', metaSetsRoutes);
 app.route('/api/players', playersRoutes);
 app.route('/api/games', gamesRoutes);
