@@ -14,14 +14,12 @@ import { initDatabase } from '../db';
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 12;
 
+const lines = console[Symbol.asyncIterator]();
+
 async function prompt(question: string): Promise<string> {
   process.stdout.write(question);
-  let input = '';
-  for await (const line of console) {
-    input = line;
-    break;
-  }
-  return input.trim();
+  const { value } = await lines.next();
+  return (value as string).trim();
 }
 
 async function main(): Promise<void> {
