@@ -33,6 +33,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   icon: './assets/icon.png',
   userInterfaceStyle: 'dark',
   newArchEnabled: true,
+  splash: {
+    image: './assets/splash-icon.png',
+    resizeMode: 'cover',
+    backgroundColor: '#db4980',
+  },
   plugins: [
     [
       'expo-camera',
