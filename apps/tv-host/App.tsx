@@ -203,19 +203,45 @@ export default function App() {
   const handleConnected = useCallback((serverUrl: string, mobileBaseUrl: string | null) => {
     setHostedServerUrl(serverUrl);
     setHostedMobileBaseUrl(mobileBaseUrl);
+    setAuthChallenge(null);
+    setAuthLoginState('connecting');
+    authRetryCountRef.current = 0;
 
     // Clean up previous hosted controller if any
     hostedControllerRef.current?.cleanup();
 
     hostedControllerRef.current = new HostedGameController(serverUrl, {
-      onRoomCreated: () => {
-        setScreen('hosted_game');
+      onRoomCreated: () => setScreen('hosted_game'),
+      onAuthChallenge: (challenge) => {
+        setAuthChallenge(challenge);
+        setAuthLoginState('waiting');
+      },
+      onAuthSuccess: (sessionToken, hostId, displayName) => {
+        setAuthLoginState('approved');
+        saveAuthState({
+          sessionToken,
+          serverUrl,
+          hostDisplayName: displayName,
+          hostId,
+        });
+      },
+      onAuthFailed: () => setAuthLoginState('failed'),
+      onAuthExpired: () => {
+        authRetryCountRef.current += 1;
+        if (authRetryCountRef.current >= MAX_AUTH_RETRIES) {
+          setAuthLoginState('failed');
+          return;
+        }
+        setAuthLoginState('expired');
+        authRetryTimeoutRef.current = setTimeout(() => {
+          authRetryTimeoutRef.current = null;
+          hostedControllerRef.current?.cleanup();
+          handleConnected(serverUrl, mobileBaseUrl);
+        }, 1500);
       },
     });
-
-    // Start connecting immediately — initialize is called when GameScreen mounts,
-    // but we trigger it here to get the ROOM_CREATED callback before mount
     hostedControllerRef.current.initialize();
+    setScreen('account_login');
   }, []);
 
   const handleBack = useCallback(() => {

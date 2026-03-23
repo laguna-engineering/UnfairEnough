@@ -266,8 +266,8 @@ auth.post('/tv-login', async (c) => {
         payload: { roomCode: room.roomCode, invitationToken: inviteToken },
       }),
     );
-  } catch {
-    // TV WS may have disconnected
+  } catch (err) {
+    console.error('TV login room creation failed:', err);
   }
 
   // Clean up the pending login

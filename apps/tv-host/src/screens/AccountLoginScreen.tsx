@@ -6,7 +6,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import type { AuthChallenge } from '../services/HostedGameController';
 
-const QR_SIZE = 280;
+const QR_SIZE = 160;
 
 type LoginState = 'connecting' | 'waiting' | 'expired' | 'approved' | 'failed';
 

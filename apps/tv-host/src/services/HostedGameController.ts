@@ -165,17 +165,20 @@ export class HostedGameController implements IGameController {
 
     this.setConnectionState('connecting');
 
-    // Normalize: strip protocol, ensure ws://
+    // Normalize: use wss:// for https, ws:// otherwise
+    const isSecure = /^https:\/\/|^wss:\/\//.test(this.serverUrl);
     const host = this.serverUrl.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '');
-    let url = `ws://${host}/ws?role=host`;
+    let url = `${isSecure ? 'wss' : 'ws'}://${host}/ws?role=host`;
     if (this.sessionToken) {
       url += `&token=${encodeURIComponent(this.sessionToken)}`;
     }
 
+    console.log('[HostedGameController] connecting to:', url);
     try {
       this.ws = new WebSocket(url);
 
       this.ws.onopen = () => {
+        console.log('[HostedGameController] WS open');
         this.reconnectAttempt = 0;
         this.setConnectionState('connected');
         this.startPingInterval();
@@ -189,14 +192,15 @@ export class HostedGameController implements IGameController {
         this.handleMessage(event.data);
       };
 
-      this.ws.onclose = () => {
+      this.ws.onclose = (event) => {
+        console.log('[HostedGameController] WS closed, code:', event.code, 'reason:', event.reason);
         this.setConnectionState('disconnected');
         this.stopPingInterval();
         this.scheduleReconnect();
       };
 
       this.ws.onerror = (error) => {
-        console.error('HostedGameController WS error:', error);
+        console.error('[HostedGameController] WS error:', error);
       };
     } catch (error) {
       console.error('Failed to create WebSocket:', error);
@@ -206,6 +210,7 @@ export class HostedGameController implements IGameController {
   }
 
   private handleMessage(data: string): void {
+    console.log('[HostedGameController] received:', data.slice(0, 200));
     let message: ServerMessage;
     try {
       message = JSON.parse(data) as ServerMessage;
