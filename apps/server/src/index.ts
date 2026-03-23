@@ -33,6 +33,14 @@ const localIp = Object.values(networkInterfaces())
 // ── CORS (allow local dev origins) ──────────────────────────────
 app.use('/api/*', cors());
 
+// ── Health check (public — before auth middleware) ──────────────
+app.get('/api/health', (c) => {
+  const mobilePort = mobileDevPort ? Number(mobileDevPort) : port;
+  const mobilePath = mobileDevPort ? '' : '/mobile';
+  const mobileBaseUrl = localIp ? `http://${localIp}:${mobilePort}${mobilePath}` : null;
+  return c.json({ status: 'ok', lanIp: localIp ?? null, port, mobileBaseUrl });
+});
+
 // ── Auth middleware (scoped when tenancy enabled) ───────────────
 // Uses getDb() lazily — DB is initialized before any requests arrive
 const { scopedAuth } = createAuthMiddleware(getDb);
@@ -40,14 +48,6 @@ app.use('/api/*', scopedAuth);
 
 // ── Auth routes (no middleware — public) ──────────────────────
 app.route('/auth', authRoutes);
-
-// ── Health check ───────────────────────────────────────────────
-app.get('/api/health', (c) => {
-  const mobilePort = mobileDevPort ? Number(mobileDevPort) : port;
-  const mobilePath = mobileDevPort ? '' : '/mobile';
-  const mobileBaseUrl = localIp ? `http://${localIp}:${mobilePort}${mobilePath}` : null;
-  return c.json({ status: 'ok', lanIp: localIp ?? null, port, mobileBaseUrl });
-});
 
 // ── REST API routes (scoped auth when tenancy enabled) ────────
 app.route('/api/question-sets', questionSetsRoutes);
