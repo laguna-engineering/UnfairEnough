@@ -32,7 +32,7 @@
   "lobby": {
     "title": "Unfair Enough!",
     "scanToJoin": "Scansiona per unirti",
-    "scanQrToJoin": "Scansiona il codice QR con il telefono per unirti",
+    "scanQrToJoin": "Scansiona il codice QR con l'app Unfair Enough o il browser per unirti al gioco!",
     "orEnterCode": "Oppure inserisci il codice: {{code}}",
     "waitingForPlayers": "In attesa di giocatori...",
     "playersJoined": "{{count}} giocatori pronti",
@@ -106,13 +106,13 @@
     "account": "Ho un Account",
     "accountDescription": "Accedi al tuo server",
     "local": "Partita Locale",
-    "localDescription": "Gioca direttamente da questa TV — nessun server necessario",
+    "localDescription": "Gioca direttamente da questa TV.\nNessun server necessario",
     "hosted": "Ho un Server Locale",
     "hostedDescription": "Connettiti a un server sulla tua rete locale"
   },
   "accountLogin": {
     "title": "Scansiona per Accedere",
-    "instruction": "Scansiona questo codice QR con il tuo telefono e accedi",
+    "instruction": "Scansiona questo codice QR con il telefono, poi apri il link nel browser per collegare questa TV al tuo account.",
     "waitingForApproval": "In attesa di approvazione...",
     "codeExpired": "Codice scaduto. Ne sto richiedendo uno nuovo...",
     "cancel": "Annulla",

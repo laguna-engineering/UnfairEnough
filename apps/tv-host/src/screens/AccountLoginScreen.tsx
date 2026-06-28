@@ -74,6 +74,11 @@ export const AccountLoginScreen: React.FC<Props> = ({ challenge, loginState, onC
       {challenge?.userCode ? <Text style={styles.codeText}>{challenge.userCode}</Text> : null}
 
       <Text style={styles.instruction}>{t('accountLogin.instruction')}</Text>
+      {challenge?.verificationUrl ? (
+        <Text style={styles.urlText} selectable>
+          {challenge.verificationUrl}
+        </Text>
+      ) : null}
       <Text style={styles.statusText}>{statusText}</Text>
 
       <Pressable
@@ -129,6 +134,13 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: spacing.md,
     textAlign: 'center',
+  },
+  urlText: {
+    ...typography.bodySmall,
+    color: colors.primary,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+    maxWidth: 600,
   },
   statusText: {
     ...typography.bodySmall,

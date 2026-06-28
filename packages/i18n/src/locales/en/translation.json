@@ -32,7 +32,7 @@
   "lobby": {
     "title": "Unfair Enough!",
     "scanToJoin": "Scan to Join",
-    "scanQrToJoin": "Scan the QR code with your phone to join",
+    "scanQrToJoin": "Scan the QR code with the Unfair Enough app or your browser to join the game!",
     "orEnterCode": "Or enter code: {{code}}",
     "waitingForPlayers": "Waiting for players...",
     "playersJoined": "{{count}} players ready",
@@ -106,13 +106,13 @@
     "account": "I Have an Account",
     "accountDescription": "Log in to your hosted server",
     "local": "Local Game",
-    "localDescription": "Run the game directly from this TV — no server needed",
+    "localDescription": "Run the game directly from this TV.\nNo server needed",
     "hosted": "I Have a Local Server",
     "hostedDescription": "Connect to a server on your local network"
   },
   "accountLogin": {
     "title": "Scan to Log In",
-    "instruction": "Scan this QR code with your phone and log in",
+    "instruction": "Scan this QR code with your phone, then open the link in a browser to sign this TV in to your account.",
     "waitingForApproval": "Waiting for approval...",
     "codeExpired": "Code expired. Requesting a new one...",
     "cancel": "Cancel",

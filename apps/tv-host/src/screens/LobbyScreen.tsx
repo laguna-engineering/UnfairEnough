@@ -428,7 +428,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                 </View>
               )}
               {players.length === 0 && (
-                <Text style={styles.waitingText}>{t('lobby.scanQrToJoin')}</Text>
+                <Text style={styles.waitingText}>{t('lobby.scanToJoin')}</Text>
               )}
             </View>
           </Card>
@@ -712,6 +712,8 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
             )}
           </Card>
 
+          {qrUrl ? <Text style={styles.qrCaption}>{t('lobby.scanQrToJoin')}</Text> : null}
+
           {/* Start Button */}
           <View style={styles.startButtonContainer}>
             <Button
@@ -830,6 +832,13 @@ const styles = StyleSheet.create({
   loadingText: {
     ...typography.h3,
     color: colors.textSecondary,
+  },
+  qrCaption: {
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.md,
+    textAlign: 'center',
+    maxWidth: 280,
   },
   playersSection: {
     flex: 0.65,

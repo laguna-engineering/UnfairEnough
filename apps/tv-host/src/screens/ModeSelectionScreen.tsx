@@ -94,13 +94,14 @@ const styles = StyleSheet.create({
   card: {
     padding: spacing.xl,
     alignItems: 'center',
-    minHeight: 200,
-    justifyContent: 'center',
+    minHeight: 220,
+    justifyContent: 'flex-start',
   },
   cardTitle: {
     ...typography.h2,
     color: colors.textPrimary,
     marginBottom: spacing.md,
+    textAlign: 'center',
   },
   cardDescription: {
     ...typography.body,
