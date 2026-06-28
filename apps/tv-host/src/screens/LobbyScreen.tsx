@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { findNodeHandle, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useGameController } from '../hooks/useGameController';
+import { getCachedAuthState } from '../services/AuthService';
 import { getDb } from '../services/database';
 import { ImportQuestionsModal } from './ImportQuestionsModal';
 
@@ -178,9 +179,17 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
         setTotalQuestions(count);
       } else if (mode === 'hosted' && serverUrl) {
         // Fetch sets from server API
+        const isSecure = /^https:\/\/|^wss:\/\//.test(serverUrl);
         const host = serverUrl.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '');
+        const proto = isSecure ? 'https' : 'http';
+        const auth = getCachedAuthState();
+        const headers: Record<string, string> = {};
+        if (auth?.sessionToken) {
+          headers.Authorization = `Bearer ${auth.sessionToken}`;
+        }
         const res = await fetch(
-          `http://${host}/api/question-sets?language=${encodeURIComponent(currentLanguage)}`,
+          `${proto}://${host}/api/question-sets?language=${encodeURIComponent(currentLanguage)}`,
+          { headers },
         );
         if (res.ok) {
           const data = await res.json();
