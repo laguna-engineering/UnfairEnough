@@ -52,6 +52,9 @@ class WebSocketClient {
   private pendingDeviceId: string | null = null;
   private pendingSessionToken: string | null = null;
   private pendingInvitationToken: string | null = null;
+  private lastDeviceId: string | null = null;
+  private lastSessionToken: string | null = null;
+  private lastInvitationToken: string | null = null;
   private connectionState: ConnectionState = 'disconnected';
   private connectionId = 0;
 
@@ -93,6 +96,9 @@ class WebSocketClient {
     this.pendingDeviceId = null;
     this.pendingSessionToken = null;
     this.pendingInvitationToken = null;
+    this.lastDeviceId = null;
+    this.lastSessionToken = null;
+    this.lastInvitationToken = null;
     this.reconnectAttempt = 0;
     if (clearPlayerId) this.playerId = null;
 
@@ -125,12 +131,15 @@ class WebSocketClient {
 
     if (isExplicitHandshake) {
       this.playerId = null;
+      this.lastDeviceId = deviceId ?? null;
+      this.lastSessionToken = sessionToken ?? null;
+      this.lastInvitationToken = invitationToken ?? null;
     }
 
     this.url = url;
-    this.pendingDeviceId = deviceId ?? null;
-    this.pendingSessionToken = sessionToken ?? null;
-    this.pendingInvitationToken = invitationToken ?? null;
+    this.pendingDeviceId = deviceId ?? this.lastDeviceId;
+    this.pendingSessionToken = sessionToken ?? this.lastSessionToken;
+    this.pendingInvitationToken = invitationToken ?? this.lastInvitationToken;
     debugLog('[ws-client] connect', {
       url,
       hasDeviceId: !!deviceId,

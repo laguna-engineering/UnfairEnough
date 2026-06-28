@@ -57,6 +57,7 @@ export function useGameState() {
   const [availableProfiles, setAvailableProfiles] = useState<ProfileSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const languageOverridden = useRef(false);
+  const connectAttemptRef = useRef(0);
 
   const getOrInitDeviceId = useCallback(async (): Promise<string | null> => {
     const cachedDeviceId = getDeviceId();
@@ -176,6 +177,7 @@ export function useGameState() {
           err.code === 'INVALID_PARAMS' ||
           err.code === 'SESSION_INVALID'
         ) {
+          connectAttemptRef.current += 1;
           setPhase('SCAN');
           if (Platform.OS === 'web') {
             alert(err.message);
@@ -194,10 +196,13 @@ export function useGameState() {
 
   const connect = useCallback(
     (url: string, invitationToken?: string) => {
+      const attemptId = ++connectAttemptRef.current;
       setError(null);
       setPhase('IDENTIFYING');
       void (async () => {
         const deviceId = await getOrInitDeviceId();
+        if (connectAttemptRef.current !== attemptId) return;
+
         debugLog('[game-state] connect requested', {
           url,
           hasDeviceId: !!deviceId,
@@ -219,6 +224,7 @@ export function useGameState() {
   /** Connect using a stored guest session (returning user flow) */
   const connectFromSession = useCallback(
     (session: GuestSession) => {
+      const attemptId = ++connectAttemptRef.current;
       setReturningError(null);
       setError(null);
       setPhase('IDENTIFYING');
@@ -229,6 +235,8 @@ export function useGameState() {
         const host = session.serverUrl.replace(/^(https?|wss?):\/\//, '');
         const wsUrl = `${wsProtocol}//${host}/ws?role=player&roomCode=AUTO`;
         const deviceId = await getOrInitDeviceId();
+        if (connectAttemptRef.current !== attemptId) return;
+
         debugLog('[game-state] connect from session requested', {
           wsUrl,
           hasDeviceId: !!deviceId,
@@ -251,6 +259,7 @@ export function useGameState() {
 
   /** Disconnect from the linked host account */
   const disconnectFromHost = useCallback(async () => {
+    connectAttemptRef.current += 1;
     wsClient.disconnect();
     await clearGuestSession();
     setStoredSession(null);
@@ -260,6 +269,7 @@ export function useGameState() {
 
   /** Dismiss the pre-game connection flow without forgetting the linked host account. */
   const cancelToScan = useCallback(() => {
+    connectAttemptRef.current += 1;
     wsClient.disconnect();
     setError(null);
     setReturningError(null);
