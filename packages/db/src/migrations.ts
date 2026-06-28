@@ -280,6 +280,24 @@ CREATE INDEX idx_player_tag_scores_tag ON player_tag_scores(tag);
 CREATE INDEX idx_player_tag_scores_host ON player_tag_scores(host_id);
 `;
 
+/**
+ * V16: TV device-flow invitation tokens. Used to build the player-join QR and
+ * to link returning guests to a host's active room. The invitationTokens repo
+ * and routes/auth.ts reference this table, but no prior migration created it —
+ * so device-flow room creation (and room teardown) threw "no such table".
+ */
+const MIGRATION_V16 = `
+CREATE TABLE IF NOT EXISTS invitation_tokens (
+  token_hash TEXT PRIMARY KEY,
+  host_id TEXT NOT NULL REFERENCES hosts(id),
+  room_code TEXT NOT NULL,
+  expires_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_invitation_tokens_room ON invitation_tokens(room_code);
+CREATE INDEX IF NOT EXISTS idx_invitation_tokens_host ON invitation_tokens(host_id);
+`;
+
 interface Migration {
   version: number;
   sql: string;
@@ -303,6 +321,7 @@ const migrations: Migration[] = [
   { version: 13, sql: MIGRATION_V13 },
   { version: 14, sql: MIGRATION_V14 },
   { version: 15, sql: MIGRATION_V15_FK_OFF, needsFkOff: true },
+  { version: 16, sql: MIGRATION_V16 },
 ];
 
 /**
