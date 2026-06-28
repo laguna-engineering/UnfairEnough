@@ -11,9 +11,10 @@ import type {
   WelcomePayload,
 } from '@unfairenough/ws-protocol';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 import type { GuestSession } from '../services/authStorage';
 import { clearGuestSession, getGuestSession, saveGuestSession } from '../services/authStorage';
-import { getDeviceId } from '../services/deviceId';
+import { getDeviceId, initDeviceId } from '../services/deviceId';
 import { wsClient } from '../services/WebSocketClient';
 
 export type MobileGamePhase =
@@ -56,10 +57,30 @@ export function useGameState() {
   const [error, setError] = useState<string | null>(null);
   const languageOverridden = useRef(false);
 
+  const getOrInitDeviceId = useCallback(async (): Promise<string | null> => {
+    const cachedDeviceId = getDeviceId();
+    if (cachedDeviceId) return cachedDeviceId;
+
+    console.warn('[game-state] device id was not initialized before connect; initializing now');
+    try {
+      return await initDeviceId();
+    } catch (err) {
+      console.error('[game-state] device id initialization failed', err);
+      return null;
+    }
+  }, []);
+
   useEffect(() => {
     wsClient.setCallbacks({
       onConnectionStateChange: setConnectionState,
       onIdentity: (data) => {
+        console.log('[game-state] identity received', {
+          hasProfile: !!data.profile,
+          availableProfiles: data.availableProfiles?.length ?? 0,
+          hasGuestSessionToken: !!data.guestSessionToken,
+          hasServerUrl: !!data.serverUrl,
+        });
+
         // If server provided a guest session token, store it for future reconnection
         if (data.guestSessionToken && data.serverUrl) {
           try {
@@ -91,6 +112,11 @@ export function useGameState() {
         }
       },
       onWelcome: (data) => {
+        console.log('[game-state] welcome received', {
+          roomCode: data.roomCode,
+          playerId: data.playerId,
+          hasProfile: !!data.profile,
+        });
         setPlayerInfo(data);
         setPhase('WAITING');
         setError(null);
@@ -130,7 +156,23 @@ export function useGameState() {
         setGameResult(result);
       },
       onError: (err) => {
+        console.error('[game-state] ws error received', err);
         setError(err.message);
+        // Fatal connection errors strand the IDENTIFYING spinner — drop back to
+        // the scan screen and surface the reason so the user can retry.
+        if (
+          err.code === 'ROOM_NOT_FOUND' ||
+          err.code === 'INVALID_PARAMS' ||
+          err.code === 'SESSION_INVALID'
+        ) {
+          setPhase('SCAN');
+          if (Platform.OS === 'web') {
+            alert(err.message);
+          } else {
+            const { Alert } = require('react-native');
+            Alert.alert(err.message);
+          }
+        }
       },
     });
 
@@ -139,23 +181,62 @@ export function useGameState() {
     };
   }, []);
 
-  const connect = useCallback((url: string, invitationToken?: string) => {
-    const deviceId = getDeviceId() ?? undefined;
-    wsClient.connect(url, deviceId, undefined, invitationToken);
-    setPhase('IDENTIFYING');
-  }, []);
+  const connect = useCallback(
+    (url: string, invitationToken?: string) => {
+      setError(null);
+      setPhase('IDENTIFYING');
+      void (async () => {
+        const deviceId = await getOrInitDeviceId();
+        console.log('[game-state] connect requested', {
+          url,
+          hasDeviceId: !!deviceId,
+          hasInvitationToken: !!invitationToken,
+        });
+
+        if (!deviceId) {
+          setError('Unable to initialize this device. Please restart the app and try again.');
+          setPhase('SCAN');
+          return;
+        }
+
+        wsClient.connect(url, deviceId, undefined, invitationToken);
+      })();
+    },
+    [getOrInitDeviceId],
+  );
 
   /** Connect using a stored guest session (returning user flow) */
-  const connectFromSession = useCallback((session: GuestSession) => {
-    setReturningError(null);
-    const isSecure = session.serverUrl.startsWith('https') || session.serverUrl.startsWith('wss');
-    const wsProtocol = isSecure ? 'wss:' : 'ws:';
-    const host = session.serverUrl.replace(/^(https?|wss?):\/\//, '');
-    const wsUrl = `${wsProtocol}//${host}/ws?role=player&roomCode=AUTO`;
-    const deviceId = getDeviceId() ?? undefined;
-    wsClient.connect(wsUrl, deviceId, session.sessionToken);
-    setPhase('IDENTIFYING');
-  }, []);
+  const connectFromSession = useCallback(
+    (session: GuestSession) => {
+      setReturningError(null);
+      setError(null);
+      setPhase('IDENTIFYING');
+      void (async () => {
+        const isSecure =
+          session.serverUrl.startsWith('https') || session.serverUrl.startsWith('wss');
+        const wsProtocol = isSecure ? 'wss:' : 'ws:';
+        const host = session.serverUrl.replace(/^(https?|wss?):\/\//, '');
+        const wsUrl = `${wsProtocol}//${host}/ws?role=player&roomCode=AUTO`;
+        const deviceId = await getOrInitDeviceId();
+        console.log('[game-state] connect from session requested', {
+          wsUrl,
+          hasDeviceId: !!deviceId,
+          hasSessionToken: !!session.sessionToken,
+        });
+
+        if (!deviceId) {
+          const message = 'Unable to initialize this device. Please restart the app and try again.';
+          setError(message);
+          setReturningError(message);
+          setPhase('RETURNING');
+          return;
+        }
+
+        wsClient.connect(wsUrl, deviceId, session.sessionToken);
+      })();
+    },
+    [getOrInitDeviceId],
+  );
 
   /** Disconnect from the linked host account */
   const disconnectFromHost = useCallback(async () => {

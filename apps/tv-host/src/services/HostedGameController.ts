@@ -47,6 +47,7 @@ export class HostedGameController implements IGameController {
   private reconnectAttempt = 0;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
+  private destroyed = false;
   private authMode = false;
   invitationToken: string | null = null;
   private onRoomCreated?: (roomCode: string) => void;
@@ -144,12 +145,22 @@ export class HostedGameController implements IGameController {
   }
 
   cleanup(): void {
+    // Mark destroyed first so the onclose handler (and any in-flight reconnect)
+    // won't resurrect this controller after we close the socket below.
+    this.destroyed = true;
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
     }
     this.stopPingInterval();
-    this.ws?.close();
+    if (this.ws) {
+      // Detach handlers so close() can't trigger scheduleReconnect().
+      this.ws.onopen = null;
+      this.ws.onmessage = null;
+      this.ws.onclose = null;
+      this.ws.onerror = null;
+      this.ws.close();
+    }
     this.ws = null;
     this.setConnectionState('disconnected');
   }
@@ -157,6 +168,7 @@ export class HostedGameController implements IGameController {
   // ── Private ────────────────────────────────────────────────────
 
   private connect(): void {
+    if (this.destroyed) return;
     if (
       this.ws &&
       (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)
@@ -384,7 +396,7 @@ export class HostedGameController implements IGameController {
   }
 
   private scheduleReconnect(): void {
-    if (this.reconnectTimeout || !this.serverUrl) return;
+    if (this.destroyed || this.reconnectTimeout || !this.serverUrl) return;
 
     const delay = RECONNECT_DELAYS[Math.min(this.reconnectAttempt, RECONNECT_DELAYS.length - 1)];
     this.reconnectAttempt++;

@@ -141,6 +141,15 @@ export default function App() {
     });
   }, []);
 
+  // Tear down the hosted controller when App unmounts (e.g. a Fast Refresh
+  // remount) so its socket can't keep reconnecting and spawning duplicate rooms.
+  useEffect(() => {
+    return () => {
+      hostedControllerRef.current?.cleanup();
+      hostedControllerRef.current = null;
+    };
+  }, []);
+
   const handleSelectAccount = useCallback((isRetry = false) => {
     if (!configServerUrl) {
       // No server URL configured — fall back to connect screen

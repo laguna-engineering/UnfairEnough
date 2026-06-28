@@ -15,8 +15,8 @@
   "scan": {
     "joinGameOnTv": "Join the game on TV",
     "enterRoomCode": "Enter room code:",
-    "enterTvIp": "Enter TV address (shown on TV):",
-    "ipPlaceholder": "192.168.x.x:port",
+    "enterTvIp": "Enter the server address (shown on the TV):",
+    "ipPlaceholder": "address shown on the TV",
     "invalidQrCode": "Invalid QR Code",
     "invalidQrMessage": "Please scan the QR code shown on the TV.",
     "invalidCode": "Invalid Code",
@@ -33,6 +33,7 @@
     "title": "Unfair Enough!",
     "scanToJoin": "Scan to Join",
     "scanQrToJoin": "Scan the QR code with the Unfair Enough app or your browser to join the game!",
+    "orVisitUrl": "Or go to {{url}} and enter code:",
     "orEnterCode": "Or enter code: {{code}}",
     "waitingForPlayers": "Waiting for players...",
     "playersJoined": "{{count}} players ready",

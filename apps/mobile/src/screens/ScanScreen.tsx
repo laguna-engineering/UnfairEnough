@@ -148,6 +148,13 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
       }
       return;
     }
+    // The web client is served by the game server itself, so connect via this
+    // origin — no need to ask for an address the page already knows.
+    if (Platform.OS === 'web') {
+      const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      onConnect(`${proto}://${window.location.host}/ws?role=player&roomCode=${code}`);
+      return;
+    }
     setShowIpInput(true);
   };
 
@@ -155,7 +162,15 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
     const input = manualIp.trim() || 'localhost:3000';
     const code = manualCode.toUpperCase().trim();
     addRecentServer(input).then(() => setRecentServers(getRecentServers()));
-    onConnect(`ws://${input}/ws?role=player&roomCode=${code}`);
+    // Respect an explicit scheme; otherwise use ws for a local IP:port and wss
+    // for a hosted domain, so the same field works for both connection modes.
+    const host = input.replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '');
+    const scheme = /^wss?:\/\//.test(input)
+      ? (input.match(/^(wss?):/)?.[1] ?? 'ws')
+      : /:\d+$/.test(host)
+        ? 'ws'
+        : 'wss';
+    onConnect(`${scheme}://${host}/ws?role=player&roomCode=${code}`);
   };
 
   const handleSelectRecent = (address: string) => {

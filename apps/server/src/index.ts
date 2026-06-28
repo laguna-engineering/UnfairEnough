@@ -75,6 +75,20 @@ const serverBaseUrl = process.env.SERVER_BASE_URL ?? `http://${localIp ?? 'local
 // Idle timeout for host WS connections that haven't sent any message
 const HOST_IDLE_TIMEOUT_MS = 30_000;
 
+function summarizeWsMessage(data: string | Buffer): {
+  type: string;
+  bytes: number;
+  parseError?: true;
+} {
+  const text = data.toString();
+  try {
+    const parsed = JSON.parse(text) as { type?: unknown };
+    return { type: typeof parsed.type === 'string' ? parsed.type : 'UNKNOWN', bytes: text.length };
+  } catch {
+    return { type: 'INVALID_JSON', bytes: text.length, parseError: true };
+  }
+}
+
 /** Create a room for an authenticated host and send ROOM_CREATED */
 function createRoomForHost(
   hostWs: ServerWebSocket<WSData>,
@@ -82,6 +96,7 @@ function createRoomForHost(
   invitationToken?: string,
 ): void {
   const room = createRoom(hostId);
+  console.log('[ws] room created for host', { roomCode: room.roomCode, hostId });
   const data = hostWs.data as WSData;
   data.roomCode = room.roomCode;
   room.setHost(hostWs);
@@ -168,6 +183,7 @@ app.get(
     return {
       onOpen(_event, ws) {
         const raw = ws.raw!;
+        console.log('[ws] open', { role, roomCode });
 
         if (role === 'host') {
           raw.data = { ...raw.data, roomCode: '', role: 'host' };
@@ -220,6 +236,7 @@ app.get(
           raw.data = { ...raw.data, roomCode: '', role: 'player' };
         } else if (role === 'player' && roomCode) {
           const room = getRoom(roomCode);
+          console.log('[ws] player open', { roomCode, found: !!room });
           if (!room) {
             raw.send(
               JSON.stringify({
@@ -249,6 +266,16 @@ app.get(
       onMessage(event, ws) {
         const raw = ws.raw!;
         const data = raw.data as WSData;
+        const rawMessage = event.data as string | Buffer;
+        const messageSummary = summarizeWsMessage(rawMessage);
+        if (messageSummary.type !== 'PING') {
+          console.log('[ws] message', {
+            role: data.role,
+            roomCode: data.roomCode,
+            playerId: data.playerId || undefined,
+            ...messageSummary,
+          });
+        }
 
         if (data.role === 'host') {
           // If host has no room yet (awaiting auth or legacy)
@@ -260,7 +287,7 @@ app.get(
             }
 
             try {
-              const msg = JSON.parse(event.data as string);
+              const msg = JSON.parse(rawMessage.toString());
               if (msg.type === 'REQUEST_AUTH') {
                 // Device flow: create pending login, send challenge
                 const pending = createPendingLogin(raw);
@@ -305,25 +332,31 @@ app.get(
 
           const room = getRoom(data.roomCode);
           if (room) {
-            room.handleHostMessage(raw, event.data as string);
+            room.handleHostMessage(raw, rawMessage);
           }
         } else {
           // Player with no room yet (roomCode=AUTO): resolve room from session token
           if (!data.roomCode) {
-            void resolveAutoRoom(raw, event.data as string);
+            void resolveAutoRoom(raw, rawMessage.toString());
             return;
           }
 
           const room = getRoom(data.roomCode);
           if (room) {
-            room.handlePlayerMessage(raw, event.data as string);
+            room.handlePlayerMessage(raw, rawMessage);
           }
         }
       },
 
-      onClose(_event, ws) {
+      onClose(event, ws) {
         const raw = ws.raw!;
         const data = raw.data as WSData;
+        console.log('[ws] close', {
+          role: data.role,
+          roomCode: data.roomCode,
+          code: (event as { code?: number })?.code,
+          reason: (event as { reason?: string })?.reason,
+        });
 
         // Clean up pending login / token validation / idle timer if host disconnects before auth
         awaitingAuthHosts.delete(raw);
@@ -343,6 +376,7 @@ app.get(
         }
 
         if (room.isEmpty) {
+          console.log('[ws] destroying empty room', data.roomCode);
           destroyRoom(data.roomCode);
         }
       },

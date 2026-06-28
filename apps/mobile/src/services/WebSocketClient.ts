@@ -37,6 +37,8 @@ interface Callbacks {
 
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000];
 const PING_INTERVAL = 30000;
+// Errors that won't resolve by retrying — stop reconnecting so the UI can recover.
+const FATAL_ERROR_CODES = new Set(['ROOM_NOT_FOUND', 'INVALID_PARAMS', 'SESSION_INVALID']);
 
 class WebSocketClient {
   private ws: WebSocket | null = null;
@@ -57,6 +59,10 @@ class WebSocketClient {
 
   connect(url: string, deviceId?: string, sessionToken?: string, invitationToken?: string): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
+      console.warn('[ws-client] connect ignored; socket already open', {
+        currentUrl: this.url,
+        requestedUrl: url,
+      });
       return;
     }
 
@@ -64,12 +70,26 @@ class WebSocketClient {
     this.pendingDeviceId = deviceId ?? null;
     this.pendingSessionToken = sessionToken ?? null;
     this.pendingInvitationToken = invitationToken ?? null;
+    console.log('[ws-client] connect', {
+      url,
+      hasDeviceId: !!deviceId,
+      hasSessionToken: !!sessionToken,
+      hasInvitationToken: !!invitationToken,
+      hasExistingPlayerId: !!this.playerId,
+    });
     this.setConnectionState('connecting');
 
     try {
       this.ws = new WebSocket(url);
 
       this.ws.onopen = () => {
+        console.log('[ws-client] open', {
+          url: this.url,
+          hasPlayerId: !!this.playerId,
+          hasPendingDeviceId: !!this.pendingDeviceId,
+          hasSessionToken: !!this.pendingSessionToken,
+          hasInvitationToken: !!this.pendingInvitationToken,
+        });
         this.reconnectAttempt = 0;
         this.setConnectionState('connected');
         this.startPingInterval();
@@ -90,6 +110,8 @@ class WebSocketClient {
           this.pendingDeviceId = null;
           this.pendingSessionToken = null;
           this.pendingInvitationToken = null;
+        } else {
+          console.warn('[ws-client] open without playerId or deviceId; no handshake sent');
         }
       };
 
@@ -97,14 +119,19 @@ class WebSocketClient {
         this.handleMessage(event.data);
       };
 
-      this.ws.onclose = () => {
+      this.ws.onclose = (event) => {
+        console.log('[ws-client] close', {
+          code: (event as { code?: number })?.code,
+          reason: (event as { reason?: string })?.reason,
+          url: this.url,
+        });
         this.setConnectionState('disconnected');
         this.stopPingInterval();
         this.scheduleReconnect();
       };
 
       this.ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        console.error('[ws-client] error:', error);
       };
     } catch (error) {
       console.error('Failed to create WebSocket:', error);
@@ -116,6 +143,7 @@ class WebSocketClient {
   private handleMessage(data: string): void {
     try {
       const message = JSON.parse(data) as ServerMessage;
+      console.log('[ws-client] msg', message.type);
 
       switch (message.type) {
         case 'IDENTITY':
@@ -179,6 +207,11 @@ class WebSocketClient {
           if (message.payload.code === 'SESSION_EXPIRED') {
             this.playerId = null;
           }
+          // Fatal errors won't fix themselves on retry — stop the reconnect loop
+          // so the UI can surface the error instead of spinning forever.
+          if (FATAL_ERROR_CODES.has(message.payload.code)) {
+            this.stopReconnecting();
+          }
           this.callbacks.onError?.(message.payload);
           break;
 
@@ -187,14 +220,54 @@ class WebSocketClient {
           break;
       }
     } catch (error) {
-      console.error('Failed to parse message:', error);
+      console.error('[ws-client] failed to parse message', { error, data });
+    }
+  }
+
+  private describeClientMessage(message: ClientMessage): Record<string, unknown> {
+    switch (message.type) {
+      case 'IDENTIFY':
+        return {
+          type: message.type,
+          hasDeviceId: !!message.payload.deviceId,
+          hasSessionToken: !!message.payload.sessionToken,
+          hasInvitationToken: !!message.payload.invitationToken,
+        };
+      case 'JOIN':
+        return {
+          type: message.type,
+          nameLength: message.payload.name.length,
+          hasRoomCode: !!message.payload.roomCode,
+          hasDeviceId: !!message.payload.deviceId,
+          hasProfileId: !!message.payload.profileId,
+        };
+      case 'RECONNECT':
+        return { type: message.type, playerId: message.payload.playerId };
+      case 'ANSWER':
+        return {
+          type: message.type,
+          questionId: message.payload.questionId,
+          answer: message.payload.answer,
+        };
+      case 'UNBIND':
+        return { type: message.type, hasDeviceId: !!message.payload.deviceId };
+      case 'LEAVE':
+      case 'PING':
+        return { type: message.type };
     }
   }
 
   private send(message: ClientMessage): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
+      console.log('[ws-client] send', this.describeClientMessage(message));
       this.ws.send(JSON.stringify(message));
+      return;
     }
+
+    console.warn('[ws-client] drop send; socket is not open', {
+      message: this.describeClientMessage(message),
+      readyState: this.ws?.readyState ?? null,
+    });
   }
 
   identify(deviceId: string, sessionToken?: string, invitationToken?: string): void {
@@ -227,10 +300,22 @@ class WebSocketClient {
     }
   }
 
+  /** Cancel any pending reconnect and stop retrying the current URL. */
+  private stopReconnecting(): void {
+    console.log('[ws-client] stopReconnecting (fatal error)');
+    this.url = null;
+    this.reconnectAttempt = 0;
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+  }
+
   private scheduleReconnect(): void {
     if (this.reconnectTimeout || !this.url) return;
 
     const delay = RECONNECT_DELAYS[Math.min(this.reconnectAttempt, RECONNECT_DELAYS.length - 1)];
+    console.log('[ws-client] scheduleReconnect attempt', this.reconnectAttempt, 'in', delay, 'ms');
     this.reconnectAttempt++;
 
     this.reconnectTimeout = setTimeout(() => {

@@ -172,6 +172,15 @@ export class GameRoom {
     deviceId?: string,
     claimProfileId?: string,
   ): Promise<string | null> {
+    console.log('[room] addPlayer request', {
+      roomCode: this.roomCode,
+      nameLength: name.length,
+      hasDeviceId: !!deviceId,
+      hasClaimProfileId: !!claimProfileId,
+      phase: this.phase,
+      playerCount: this.players.size,
+    });
+
     if (this.players.size >= MAX_PLAYERS) {
       this.sendTo(ws, {
         type: 'ERROR',
@@ -308,6 +317,13 @@ export class GameRoom {
       payload: { playerId, name: playerName, color, emoji: playerEmoji },
     });
 
+    console.log('[room] player joined', {
+      roomCode: this.roomCode,
+      playerId,
+      hasProfileId: !!profileId,
+      playerCount: this.players.size,
+    });
+
     this.logEvent('PLAYER_JOINED', playerId, { name: playerName, profileId });
 
     return playerId;
@@ -366,16 +382,62 @@ export class GameRoom {
 
   // ── Message handling ─────────────────────────────────────────
 
+  private describeClientMessage(message: ClientMessage): Record<string, unknown> {
+    switch (message.type) {
+      case 'IDENTIFY':
+        return {
+          type: message.type,
+          hasDeviceId: !!message.payload.deviceId,
+          hasSessionToken: !!message.payload.sessionToken,
+          hasInvitationToken: !!message.payload.invitationToken,
+        };
+      case 'JOIN':
+        return {
+          type: message.type,
+          nameLength: message.payload.name.length,
+          hasDeviceId: !!message.payload.deviceId,
+          hasProfileId: !!message.payload.profileId,
+          hasRoomCode: !!message.payload.roomCode,
+        };
+      case 'RECONNECT':
+        return { type: message.type, playerId: message.payload.playerId };
+      case 'ANSWER':
+        return {
+          type: message.type,
+          questionId: message.payload.questionId,
+          answer: message.payload.answer,
+        };
+      case 'UNBIND':
+        return { type: message.type, hasDeviceId: !!message.payload.deviceId };
+      case 'LEAVE':
+      case 'PING':
+        return { type: message.type };
+    }
+  }
+
   handlePlayerMessage(ws: ServerWebSocket<WSData>, raw: string | Buffer): void {
     let message: ClientMessage;
     try {
       message = parseClientMessage(raw.toString());
-    } catch {
+    } catch (err) {
+      console.warn('[room] invalid player message', {
+        roomCode: this.roomCode,
+        playerId: ws.data.playerId || undefined,
+        error: err instanceof Error ? err.message : String(err),
+      });
       this.sendTo(ws, {
         type: 'ERROR',
         payload: { code: 'INVALID_MESSAGE', message: 'Invalid message format' },
       });
       return;
+    }
+
+    if (message.type !== 'PING') {
+      console.log('[room] player message', {
+        roomCode: this.roomCode,
+        playerId: ws.data.playerId || undefined,
+        ...this.describeClientMessage(message),
+      });
     }
 
     switch (message.type) {
@@ -449,7 +511,7 @@ export class GameRoom {
     }
   }
 
-  handleHostMessage(_ws: ServerWebSocket<WSData>, raw: string | Buffer): void {
+  handleHostMessage(ws: ServerWebSocket<WSData>, raw: string | Buffer): void {
     let message: HostMessage;
     try {
       message = JSON.parse(raw.toString());
@@ -458,6 +520,11 @@ export class GameRoom {
     }
 
     switch (message.type) {
+      case 'PING':
+        // Keep-alive: a roomed host pings every 30s; answer so the round-trip
+        // stays bidirectional (the pre-room path in index.ts does the same).
+        this.sendTo(ws, { type: 'PONG' });
+        break;
       case 'START_GAME':
         this.startGame();
         break;
@@ -967,6 +1034,14 @@ export class GameRoom {
     sessionToken?: string,
     invitationToken?: string,
   ): Promise<void> {
+    console.log('[room] identify start', {
+      roomCode: this.roomCode,
+      hasDeviceId: !!deviceId,
+      hasSessionToken: !!sessionToken,
+      hasInvitationToken: !!invitationToken,
+      hostId: this.hostId,
+    });
+
     let payload: IdentityPayload = { profile: null };
     let effectiveHostId = this.hostId;
 
@@ -1061,6 +1136,14 @@ export class GameRoom {
         console.warn(`Invalid invitation token for room ${this.roomCode} from device ${deviceId}`);
       }
     }
+
+    console.log('[room] identify result', {
+      roomCode: this.roomCode,
+      hasProfile: !!payload.profile,
+      availableProfiles: payload.availableProfiles?.length ?? 0,
+      hasGuestSessionToken: !!payload.guestSessionToken,
+      hasServerUrl: !!payload.serverUrl,
+    });
 
     this.sendTo(ws, { type: 'IDENTITY', payload });
   }
@@ -1513,6 +1596,15 @@ export class GameRoom {
   // ── Messaging ────────────────────────────────────────────────
 
   private sendTo(ws: ServerWebSocket<WSData>, message: ServerMessage): void {
+    if (message.type === 'IDENTITY' || message.type === 'WELCOME' || message.type === 'ERROR') {
+      console.log('[room] send', {
+        role: ws.data.role,
+        roomCode: this.roomCode,
+        playerId: ws.data.playerId || undefined,
+        type: message.type,
+        code: message.type === 'ERROR' ? message.payload.code : undefined,
+      });
+    }
     ws.send(JSON.stringify(message));
   }
 

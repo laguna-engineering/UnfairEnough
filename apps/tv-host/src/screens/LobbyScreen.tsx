@@ -21,7 +21,7 @@ import { getCachedAuthState } from '../services/AuthService';
 import { getDb } from '../services/database';
 import { ImportQuestionsModal } from './ImportQuestionsModal';
 
-const QR_SIZE = 200;
+const QR_SIZE = 150;
 
 const LANGUAGES: { code: SupportedLanguage; label: string }[] = [
   { code: 'en', label: 'EN' },
@@ -148,8 +148,17 @@ type GameModeType = 'casual' | 'configured' | 'custom';
 
 export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
   const { t, i18n } = useTranslation();
-  const { state, startGame, configureGame, setLanguage, qrUrl, gameConfig, mode, serverUrl } =
-    useGameController();
+  const {
+    state,
+    startGame,
+    configureGame,
+    setLanguage,
+    qrUrl,
+    gameConfig,
+    mode,
+    serverUrl,
+    roomCode,
+  } = useGameController();
   const [selectedMode, setSelectedMode] = useState<GameModeType>(gameConfig.gameType ?? 'casual');
   const [showImportModal, setShowImportModal] = useState(false);
   const [questionSets, setQuestionSets] = useState<QuestionSetWithMeta[]>(MOCK_QUESTION_SETS);
@@ -168,6 +177,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
   const [adaptiveEnabled, setAdaptiveEnabled] = useState(gameConfig.adaptiveMode ?? true);
 
   const currentLanguage = i18n.language;
+  const serverHost = serverUrl?.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '') ?? '';
 
   const loadQuestionSets = useCallback(async () => {
     try {
@@ -324,34 +334,35 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
 
   // TV focus refs
   const casualRef = useRef<View>(null);
-  const configuredRef = useRef<View>(null);
   const customRef = useRef<View>(null);
   const startRef = useRef<View>(null);
   const enRef = useRef<View>(null);
   const [focusTags, setFocusTags] = useState<{
-    configured?: number;
     custom?: number;
     start?: number;
     en?: number;
   }>({});
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setFocusTags({
-        configured: findNodeHandle(configuredRef.current) ?? undefined,
-        custom: findNodeHandle(customRef.current) ?? undefined,
-        start: findNodeHandle(startRef.current) ?? undefined,
-        en: findNodeHandle(enRef.current) ?? undefined,
-      });
-    }, 100);
-    return () => clearTimeout(timer);
-  }, []);
 
   const players = playersSelectors.selectAll(state.players);
   const playerCount = players.length;
   const canStart =
     playerCount >= state.game.config.minPlayers &&
     (selectedMode !== 'custom' || selectedSetIds.length > 0);
+
+  // Capture focus-target node handles after layout. Keyed on canStart because the
+  // Start button swaps native nodes between its disabled and enabled (gradient)
+  // renders — re-running keeps the `start` handle fresh once players join.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: canStart is an intentional re-run trigger
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setFocusTags({
+        custom: findNodeHandle(customRef.current) ?? undefined,
+        start: findNodeHandle(startRef.current) ?? undefined,
+        en: findNodeHandle(enRef.current) ?? undefined,
+      });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [canStart]);
 
   return (
     <ScreenBackground style={styles.container}>
@@ -380,6 +391,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                 ref={lang.code === 'en' ? enRef : undefined}
                 onPress={() => handleLanguageChange(lang.code)}
                 nextFocusDown={focusTags.start}
+                nextFocusLeft={lang.code === 'en' ? focusTags.start : undefined}
                 style={(state) => [
                   styles.languageButton,
                   i18n.language === lang.code && styles.languageButtonActive,
@@ -406,11 +418,33 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
         {/* Players Section */}
         <View style={styles.playersSection}>
           <Card style={styles.playersCard}>
-            <Text style={styles.playersTitle}>
-              {playerCount === 0
-                ? t('lobby.waitingForPlayers')
-                : t('lobby.playersJoined', { count: playerCount })}
-            </Text>
+            <View style={styles.playersHeaderRow}>
+              <Text style={styles.playersTitle}>
+                {playerCount === 0
+                  ? t('lobby.waitingForPlayers')
+                  : t('lobby.playersJoined', { count: playerCount })}
+              </Text>
+
+              <View style={styles.startButtonContainer}>
+                <Button
+                  ref={startRef}
+                  title={t('lobby.startGame')}
+                  onPress={startGame}
+                  disabled={!canStart}
+                  size="medium"
+                  style={styles.startButton}
+                  nextFocusRight={focusTags.en}
+                />
+                {!canStart && playerCount > 0 && selectedMode !== 'custom' && (
+                  <Text style={styles.hintText}>
+                    {t('lobby.needMorePlayers', { min: state.game.config.minPlayers })}
+                  </Text>
+                )}
+                {selectedMode === 'custom' && selectedSetIds.length === 0 && (
+                  <Text style={styles.hintText}>{t('gameConfig.selectSets')}</Text>
+                )}
+              </View>
+            </View>
 
             <View style={styles.playersList}>
               {players.slice(0, playerCount > 7 ? 6 : 7).map((player) => (
@@ -446,6 +480,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                 ref={casualRef}
                 hasTVPreferredFocus={selectedMode === 'casual'}
                 onPress={() => handleModeChange('casual')}
+                nextFocusUp={focusTags.start}
                 style={(state) => [
                   styles.gameModeButton,
                   selectedMode === 'casual' && styles.gameModeButtonActive,
@@ -463,9 +498,9 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                 </Text>
               </Pressable>
               <Pressable
-                ref={configuredRef}
                 hasTVPreferredFocus={selectedMode === 'configured'}
                 onPress={() => handleModeChange('configured')}
+                nextFocusUp={focusTags.start}
                 nextFocusRight={focusTags.custom}
                 style={(state) => [
                   styles.gameModeButton,
@@ -487,7 +522,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                 ref={customRef}
                 hasTVPreferredFocus={selectedMode === 'custom'}
                 onPress={() => handleModeChange('custom')}
-                nextFocusRight={focusTags.start}
+                nextFocusUp={focusTags.start}
                 style={(state) => [
                   styles.gameModeButton,
                   selectedMode === 'custom' && styles.gameModeButtonActive,
@@ -714,27 +749,12 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
 
           {qrUrl ? <Text style={styles.qrCaption}>{t('lobby.scanQrToJoin')}</Text> : null}
 
-          {/* Start Button */}
-          <View style={styles.startButtonContainer}>
-            <Button
-              ref={startRef}
-              title={t('lobby.startGame')}
-              onPress={startGame}
-              disabled={!canStart}
-              size="large"
-              style={styles.startButton}
-              nextFocusLeft={focusTags.custom ?? focusTags.configured}
-              nextFocusUp={focusTags.en}
-            />
-            {!canStart && playerCount > 0 && selectedMode !== 'custom' && (
-              <Text style={styles.hintText}>
-                {t('lobby.needMorePlayers', { min: state.game.config.minPlayers })}
-              </Text>
-            )}
-            {selectedMode === 'custom' && selectedSetIds.length === 0 && (
-              <Text style={styles.hintText}>{t('gameConfig.selectSets')}</Text>
-            )}
-          </View>
+          {mode === 'hosted' && roomCode ? (
+            <View style={styles.manualJoin}>
+              <Text style={styles.qrCaption}>{t('lobby.orVisitUrl', { url: serverHost })}</Text>
+              <Text style={styles.manualJoinCode}>{roomCode}</Text>
+            </View>
+          ) : null}
         </View>
       </View>
 
@@ -752,7 +772,8 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: tvSafeArea.horizontal,
-    paddingVertical: tvSafeArea.vertical,
+    paddingTop: spacing.xl,
+    paddingBottom: tvSafeArea.vertical,
   },
   header: {
     flexDirection: 'row',
@@ -815,7 +836,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   qrCard: {
-    padding: spacing.lg,
+    padding: spacing.md,
     alignItems: 'center',
   },
   qrContainer: {
@@ -836,9 +857,20 @@ const styles = StyleSheet.create({
   qrCaption: {
     ...typography.body,
     color: colors.textSecondary,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
     textAlign: 'center',
     maxWidth: 280,
+  },
+  manualJoin: {
+    marginTop: spacing.sm,
+    alignItems: 'center',
+  },
+  manualJoinCode: {
+    ...typography.h2,
+    color: colors.primary,
+    fontWeight: '700',
+    letterSpacing: 4,
+    marginTop: spacing.xs,
   },
   playersSection: {
     flex: 0.65,
@@ -848,10 +880,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     minHeight: 120,
   },
+  playersHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.lg,
+    marginBottom: spacing.sm,
+  },
   playersTitle: {
     ...typography.h2,
     color: colors.textPrimary,
-    marginBottom: spacing.sm,
   },
   playersList: {
     flexDirection: 'row',
@@ -1045,11 +1083,10 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   startButtonContainer: {
-    alignItems: 'center',
-    marginTop: spacing.lg,
+    alignItems: 'flex-end',
   },
   startButton: {
-    minWidth: 260,
+    minWidth: 160,
   },
   hintText: {
     ...typography.bodySmall,

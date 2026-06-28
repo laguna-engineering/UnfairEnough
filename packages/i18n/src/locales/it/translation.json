@@ -15,8 +15,8 @@
   "scan": {
     "joinGameOnTv": "Unisciti alla partita in TV",
     "enterRoomCode": "Inserisci codice stanza:",
-    "enterTvIp": "Inserisci l'indirizzo della TV (mostrato sulla TV):",
-    "ipPlaceholder": "192.168.x.x:porta",
+    "enterTvIp": "Inserisci l'indirizzo del server (mostrato sulla TV):",
+    "ipPlaceholder": "indirizzo mostrato sulla TV",
     "invalidQrCode": "Codice QR non valido",
     "invalidQrMessage": "Scansiona il codice QR mostrato sulla TV.",
     "invalidCode": "Codice non valido",
@@ -33,6 +33,7 @@
     "title": "Unfair Enough!",
     "scanToJoin": "Scansiona per unirti",
     "scanQrToJoin": "Scansiona il codice QR con l'app Unfair Enough o il browser per unirti al gioco!",
+    "orVisitUrl": "Oppure vai su {{url}} e inserisci il codice:",
     "orEnterCode": "Oppure inserisci il codice: {{code}}",
     "waitingForPlayers": "In attesa di giocatori...",
     "playersJoined": "{{count}} giocatori pronti",

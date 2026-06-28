@@ -13,15 +13,26 @@ let cachedDeviceId: string | null = null;
 function generateUUID(): string {
   // crypto.randomUUID() requires a secure context (HTTPS) on web.
   // Fall back to crypto.getRandomValues() which works over plain HTTP.
-  if (typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
+  const webCrypto = globalThis.crypto;
+  if (typeof webCrypto?.randomUUID === 'function') {
+    return webCrypto.randomUUID();
   }
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
-  bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 1
-  const hex = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  if (typeof webCrypto?.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16);
+    webCrypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+    bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 1
+    const hex = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
+  // React Native may not provide global crypto in all runtimes. This ID is
+  // persisted and used for profile matching, not security-sensitive auth.
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const r = Math.floor(Math.random() * 16);
+    const v = char === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 async function getFromStorage(): Promise<string | null> {
@@ -54,23 +65,30 @@ async function saveToStorage(value: string): Promise<void> {
  * The result is cached in memory for synchronous access via getDeviceId().
  */
 export async function initDeviceId(): Promise<string> {
-  if (cachedDeviceId) return cachedDeviceId;
+  if (cachedDeviceId) {
+    console.log('[device-id] using cached device id');
+    return cachedDeviceId;
+  }
 
   try {
     const stored = await getFromStorage();
     if (stored) {
       cachedDeviceId = stored;
+      console.log('[device-id] loaded stored device id');
       return stored;
     }
-  } catch {
-    // Storage read failed — generate a new ID
+  } catch (error) {
+    console.warn('[device-id] storage read failed, generating new id', error);
   }
 
   const newId = generateUUID();
   cachedDeviceId = newId;
+  console.log('[device-id] generated new device id');
 
   // Persist in the background — don't block on this
-  saveToStorage(newId).catch(() => {});
+  saveToStorage(newId).catch((error) => {
+    console.warn('[device-id] storage write failed', error);
+  });
 
   return newId;
 }

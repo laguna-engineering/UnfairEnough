@@ -171,7 +171,8 @@ export type HostMessage =
   | { type: 'SET_LANGUAGE'; payload: { language: string } }
   | { type: 'CONFIGURE_GAME'; payload: ConfigureGamePayload }
   | { type: 'MEDIA_LOADED'; payload?: { success: boolean; questionId?: string } }
-  | { type: 'REQUEST_AUTH' };
+  | { type: 'REQUEST_AUTH' }
+  | { type: 'PING' };
 
 export interface ConfigureGamePayload {
   gameType: 'casual' | 'configured' | 'custom';
