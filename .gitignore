@@ -47,5 +47,8 @@ apps/server/music/*
 .claude/.lint-cache.json
 CLAUDE.local.md
 
+# Built web bundles — produced and uploaded separately by the unfairenough-deploy skill
+apps/server/public*/
+
 *.parquet
 *.log
