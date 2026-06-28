@@ -37,7 +37,9 @@ app.use('/api/*', cors());
 app.get('/api/health', (c) => {
   const mobilePort = mobileDevPort ? Number(mobileDevPort) : port;
   const mobilePath = mobileDevPort ? '' : '/mobile';
-  const mobileBaseUrl = localIp ? `http://${localIp}:${mobilePort}${mobilePath}` : null;
+  // Prefer the public base URL (SERVER_BASE_URL, set when behind a proxy) over the LAN IP.
+  const base = process.env.SERVER_BASE_URL ?? (localIp ? `http://${localIp}:${mobilePort}` : null);
+  const mobileBaseUrl = base ? `${base}${mobilePath}` : null;
   return c.json({ status: 'ok', lanIp: localIp ?? null, port, mobileBaseUrl });
 });
 
