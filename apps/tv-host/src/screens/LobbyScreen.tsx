@@ -337,10 +337,12 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
   const customRef = useRef<View>(null);
   const startRef = useRef<View>(null);
   const enRef = useRef<View>(null);
+  const muteRef = useRef<View>(null);
   const [focusTags, setFocusTags] = useState<{
     custom?: number;
     start?: number;
     en?: number;
+    mute?: number;
   }>({});
 
   const players = playersSelectors.selectAll(state.players);
@@ -359,6 +361,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
         custom: findNodeHandle(customRef.current) ?? undefined,
         start: findNodeHandle(startRef.current) ?? undefined,
         en: findNodeHandle(enRef.current) ?? undefined,
+        mute: findNodeHandle(muteRef.current) ?? undefined,
       });
     }, 100);
     return () => clearTimeout(timer);
@@ -372,7 +375,10 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
         <View style={styles.headerControls}>
           {bgMusic?.hasTracks && (
             <Pressable
+              ref={muteRef}
               onPress={bgMusic.toggleMute}
+              nextFocusLeft={focusTags.start}
+              nextFocusRight={focusTags.en}
               style={(state) => [
                 styles.muteButton,
                 (state as any).focused && styles.focused,
@@ -391,7 +397,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                 ref={lang.code === 'en' ? enRef : undefined}
                 onPress={() => handleLanguageChange(lang.code)}
                 nextFocusDown={focusTags.start}
-                nextFocusLeft={lang.code === 'en' ? focusTags.start : undefined}
+                nextFocusLeft={lang.code === 'en' ? (focusTags.mute ?? focusTags.start) : undefined}
                 style={(state) => [
                   styles.languageButton,
                   i18n.language === lang.code && styles.languageButtonActive,
@@ -433,7 +439,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                   disabled={!canStart}
                   size="medium"
                   style={styles.startButton}
-                  nextFocusRight={focusTags.en}
+                  nextFocusRight={focusTags.mute ?? focusTags.en}
                 />
                 {!canStart && playerCount > 0 && selectedMode !== 'custom' && (
                   <Text style={styles.hintText}>
