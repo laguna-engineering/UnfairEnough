@@ -1,4 +1,3 @@
-import { readdir } from 'node:fs/promises';
 import { networkInterfaces } from 'node:os';
 import { invitationTokensRepo, sessionsRepo } from '@unfairenough/db';
 import { debugLog, setDebugEnabled } from '@unfairenough/shared';
@@ -387,21 +386,6 @@ app.get(
     };
   }),
 );
-
-// ── Background music ─────────────────────────────────────────
-const musicDir = './music';
-
-app.get('/api/music', async (c) => {
-  try {
-    const entries = await readdir(musicDir);
-    const tracks = entries.filter((f) => f.toLowerCase().endsWith('.mp3')).sort();
-    return c.json({ tracks });
-  } catch {
-    return c.json({ tracks: [] });
-  }
-});
-
-app.use('/music/*', serveStatic({ root: './' }));
 
 // ── Question media (images) ─────────────────────────────────
 app.use('/media/*', serveStatic({ root: '../../questions/' }));

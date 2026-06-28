@@ -1,85 +1,50 @@
 import { type AudioPlayer, createAudioPlayer } from 'expo-audio';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useGameMode } from '../context/GameModeContext';
 
 const VOLUME = 0.25;
-const MAX_CONSECUTIVE_ERRORS = 3;
+
+// Background music is bundled with the app, so it plays in every mode
+// (local + hosted) with no server, network, or auth dependency.
+const TRACKS = [
+  require('../../assets/music/01-playground.mp3'),
+  require('../../assets/music/02-green-field.mp3'),
+  require('../../assets/music/03-fun-time.mp3'),
+  require('../../assets/music/04-solve-puzzle.mp3'),
+  require('../../assets/music/05-the-shepherd.mp3'),
+  require('../../assets/music/06-dancing-robot.mp3'),
+  require('../../assets/music/07-riding-horse.mp3'),
+];
 
 export function useBgMusic() {
-  const { mode, serverUrl } = useGameMode();
   const [isMuted, setIsMuted] = useState(false);
-  const [hasTracks, setHasTracks] = useState(false);
-
   const playerRef = useRef<AudioPlayer | null>(null);
-  const tracksRef = useRef<string[]>([]);
   const trackIndexRef = useRef(0);
-  const errorsRef = useRef(0);
-  const httpBaseRef = useRef<string | null>(null);
 
-  // Derive HTTP base URL from WebSocket URL
-  const host = serverUrl?.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '') ?? null;
-  httpBaseRef.current = host ? `http://${host}` : null;
-
-  const playTrack = useCallback((index: number) => {
-    const tracks = tracksRef.current;
-    const httpBase = httpBaseRef.current;
-    if (tracks.length === 0 || !httpBase || errorsRef.current >= MAX_CONSECUTIVE_ERRORS) return;
-
-    trackIndexRef.current = index;
-    const url = `${httpBase}/music/${encodeURIComponent(tracks[index])}`;
-
-    const player = playerRef.current;
-    if (!player) return;
-
-    player.replace({ uri: url });
-    player.play();
-  }, []);
-
-  // Fetch tracks and set up player on mount (hosted mode only)
+  // Create the player once and loop through the bundled tracks.
   useEffect(() => {
-    if (mode !== 'hosted' || !httpBaseRef.current) return;
+    if (TRACKS.length === 0) return;
 
-    const httpBase = httpBaseRef.current;
-    let cancelled = false;
-
-    const player = createAudioPlayer(null);
+    const player = createAudioPlayer(TRACKS[0]);
     player.volume = VOLUME;
     playerRef.current = player;
 
     player.addListener('playbackStatusUpdate', (status) => {
       if (status.didJustFinish) {
-        errorsRef.current = 0;
-        const next = (trackIndexRef.current + 1) % tracksRef.current.length;
-        playTrack(next);
+        trackIndexRef.current = (trackIndexRef.current + 1) % TRACKS.length;
+        player.replace(TRACKS[trackIndexRef.current]);
+        player.play();
       }
     });
 
-    fetch(`${httpBase}/api/music`)
-      .then((r) => r.json())
-      .then((data: { tracks?: string[] }) => {
-        if (cancelled) return;
-        const tracks = data.tracks ?? [];
-        tracksRef.current = tracks;
-        setHasTracks(tracks.length > 0);
-        if (tracks.length > 0) {
-          trackIndexRef.current = 0;
-          const url = `${httpBase}/music/${encodeURIComponent(tracks[0])}`;
-          player.replace({ uri: url });
-          player.play();
-        }
-      })
-      .catch(() => {
-        // No music available — that's fine
-      });
+    player.play();
 
     return () => {
-      cancelled = true;
       player.remove();
       playerRef.current = null;
     };
-  }, [mode, playTrack]);
+  }, []);
 
-  // Sync mute state to player
+  // Sync mute state to the player.
   useEffect(() => {
     if (playerRef.current) {
       playerRef.current.muted = isMuted;
@@ -88,5 +53,5 @@ export function useBgMusic() {
 
   const toggleMute = useCallback(() => setIsMuted((m) => !m), []);
 
-  return { isMuted, toggleMute, hasTracks };
+  return { isMuted, toggleMute, hasTracks: TRACKS.length > 0 };
 }
