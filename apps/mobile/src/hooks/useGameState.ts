@@ -1,5 +1,6 @@
 import type { SupportedLanguage } from '@unfairenough/i18n';
 import { changeLanguage } from '@unfairenough/i18n';
+import { debugLog } from '@unfairenough/shared';
 import type {
   AnswerKey,
   GameResult,
@@ -61,11 +62,11 @@ export function useGameState() {
     const cachedDeviceId = getDeviceId();
     if (cachedDeviceId) return cachedDeviceId;
 
-    console.warn('[game-state] device id was not initialized before connect; initializing now');
+    debugLog('[game-state] device id was not initialized before connect; initializing now');
     try {
       return await initDeviceId();
     } catch (err) {
-      console.error('[game-state] device id initialization failed', err);
+      debugLog('[game-state] device id initialization failed', err);
       return null;
     }
   }, []);
@@ -74,7 +75,7 @@ export function useGameState() {
     wsClient.setCallbacks({
       onConnectionStateChange: setConnectionState,
       onIdentity: (data) => {
-        console.log('[game-state] identity received', {
+        debugLog('[game-state] identity received', {
           hasProfile: !!data.profile,
           availableProfiles: data.availableProfiles?.length ?? 0,
           hasGuestSessionToken: !!data.guestSessionToken,
@@ -112,7 +113,7 @@ export function useGameState() {
         }
       },
       onWelcome: (data) => {
-        console.log('[game-state] welcome received', {
+        debugLog('[game-state] welcome received', {
           roomCode: data.roomCode,
           playerId: data.playerId,
           hasProfile: !!data.profile,
@@ -156,7 +157,7 @@ export function useGameState() {
         setGameResult(result);
       },
       onError: (err) => {
-        console.error('[game-state] ws error received', err);
+        debugLog('[game-state] ws error received', err);
         setError(err.message);
         // Fatal connection errors strand the IDENTIFYING spinner — drop back to
         // the scan screen and surface the reason so the user can retry.
@@ -187,7 +188,7 @@ export function useGameState() {
       setPhase('IDENTIFYING');
       void (async () => {
         const deviceId = await getOrInitDeviceId();
-        console.log('[game-state] connect requested', {
+        debugLog('[game-state] connect requested', {
           url,
           hasDeviceId: !!deviceId,
           hasInvitationToken: !!invitationToken,
@@ -218,7 +219,7 @@ export function useGameState() {
         const host = session.serverUrl.replace(/^(https?|wss?):\/\//, '');
         const wsUrl = `${wsProtocol}//${host}/ws?role=player&roomCode=AUTO`;
         const deviceId = await getOrInitDeviceId();
-        console.log('[game-state] connect from session requested', {
+        debugLog('[game-state] connect from session requested', {
           wsUrl,
           hasDeviceId: !!deviceId,
           hasSessionToken: !!session.sessionToken,
@@ -244,6 +245,16 @@ export function useGameState() {
     await clearGuestSession();
     setStoredSession(null);
     setReturningError(null);
+    setPhase('SCAN');
+  }, []);
+
+  /** Dismiss the pre-game connection flow without forgetting the linked host account. */
+  const cancelToScan = useCallback(() => {
+    wsClient.disconnect();
+    setError(null);
+    setReturningError(null);
+    setIdentifiedProfile(null);
+    setAvailableProfiles([]);
     setPhase('SCAN');
   }, []);
 
@@ -333,6 +344,7 @@ export function useGameState() {
     connect,
     connectFromSession,
     disconnectFromHost,
+    cancelToScan,
     checkStoredSession,
     join,
     confirmIdentity,

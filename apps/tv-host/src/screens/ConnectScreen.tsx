@@ -1,4 +1,5 @@
 import { useTranslation } from '@unfairenough/i18n';
+import { debugLog } from '@unfairenough/shared';
 import {
   Button,
   borderRadius,
@@ -48,33 +49,33 @@ export const ConnectScreen: React.FC<Props> = ({ onConnected, onBack }) => {
     const proto = isSecure ? 'https' : 'http';
     const healthUrl = `${proto}://${host}/api/health`;
 
-    console.log('[ConnectScreen] healthUrl:', healthUrl, 'isSecure:', isSecure);
+    debugLog('[ConnectScreen] healthUrl:', healthUrl, 'isSecure:', isSecure);
     fetch(healthUrl)
       .then(async (res) => {
-        console.log('[ConnectScreen] health response status:', res.status);
+        debugLog('[ConnectScreen] health response status:', res.status);
         if (res.ok) {
           setStatus('connected');
           addRecentServer(`${proto}://${host}`).then(() => setRecentServers(getRecentServers()));
 
           // Use the server's LAN IP when on the same network, otherwise keep the original host
           const data = await res.json().catch(() => ({}));
-          console.log('[ConnectScreen] health data:', JSON.stringify(data));
+          debugLog('[ConnectScreen] health data:', JSON.stringify(data));
           const isLanConnection = /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(host);
           const effectiveHost =
             isLanConnection && data.lanIp && data.port
               ? `${data.lanIp}:${data.port}`
               : `${proto}://${host}`;
 
-          console.log('[ConnectScreen] calling onConnected with:', effectiveHost);
+          debugLog('[ConnectScreen] calling onConnected with:', effectiveHost);
           // Short delay so user sees "Connected!" before transition
           setTimeout(() => onConnected(effectiveHost, data.mobileBaseUrl ?? null), 500);
         } else {
-          console.log('[ConnectScreen] health check failed:', res.status);
+          debugLog('[ConnectScreen] health check failed:', res.status);
           setStatus('failed');
         }
       })
       .catch((err) => {
-        console.log('[ConnectScreen] health check error:', err);
+        debugLog('[ConnectScreen] health check error:', err);
         setStatus('failed');
       });
   }, [serverUrl, onConnected]);

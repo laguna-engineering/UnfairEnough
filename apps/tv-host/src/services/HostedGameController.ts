@@ -25,6 +25,7 @@ import {
   updateConfig,
   updateScore,
 } from '@unfairenough/game-logic';
+import { debugLog } from '@unfairenough/shared';
 import type { ServerMessage } from '@unfairenough/ws-protocol';
 import type { IGameController } from './IGameController';
 
@@ -185,12 +186,12 @@ export class HostedGameController implements IGameController {
       url += `&token=${encodeURIComponent(this.sessionToken)}`;
     }
 
-    console.log('[HostedGameController] connecting to:', url);
+    debugLog('[HostedGameController] connecting to:', url);
     try {
       this.ws = new WebSocket(url);
 
       this.ws.onopen = () => {
-        console.log('[HostedGameController] WS open');
+        debugLog('[HostedGameController] WS open');
         this.reconnectAttempt = 0;
         this.setConnectionState('connected');
         this.startPingInterval();
@@ -205,14 +206,14 @@ export class HostedGameController implements IGameController {
       };
 
       this.ws.onclose = (event) => {
-        console.log('[HostedGameController] WS closed, code:', event.code, 'reason:', event.reason);
+        debugLog('[HostedGameController] WS closed, code:', event.code, 'reason:', event.reason);
         this.setConnectionState('disconnected');
         this.stopPingInterval();
         this.scheduleReconnect();
       };
 
       this.ws.onerror = (error) => {
-        console.error('[HostedGameController] WS error:', error);
+        debugLog('[HostedGameController] WS error:', error);
       };
     } catch (error) {
       console.error('Failed to create WebSocket:', error);
@@ -222,7 +223,7 @@ export class HostedGameController implements IGameController {
   }
 
   private handleMessage(data: string): void {
-    console.log('[HostedGameController] received:', data.slice(0, 200));
+    debugLog('[HostedGameController] received:', data.slice(0, 200));
     let message: ServerMessage;
     try {
       message = JSON.parse(data) as ServerMessage;

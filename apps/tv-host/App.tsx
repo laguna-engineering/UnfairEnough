@@ -5,6 +5,7 @@ import { Sniglet_400Regular } from '@expo-google-fonts/sniglet/400Regular';
 import { useFonts } from '@expo-google-fonts/sniglet/useFonts';
 import type { GamePhase } from '@unfairenough/game-logic';
 import { changeLanguage, type SupportedLanguage } from '@unfairenough/i18n';
+import { setDebugEnabled } from '@unfairenough/shared';
 import Constants from 'expo-constants';
 import { StatusBar } from 'expo-status-bar';
 import type React from 'react';
@@ -26,6 +27,9 @@ const defaultLang = Constants.expoConfig?.extra?.defaultLang;
 if (defaultLang) changeLanguage(defaultLang as SupportedLanguage);
 
 const configServerUrl: string = Constants.expoConfig?.extra?.serverUrl || '';
+
+// Debug logging: on in dev, or in any build with EXPO_PUBLIC_UE_DEBUG=1.
+setDebugEnabled(__DEV__ || process.env.EXPO_PUBLIC_UE_DEBUG === '1');
 
 SplashScreen.preventAutoHideAsync();
 

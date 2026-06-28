@@ -1,5 +1,7 @@
 // Shared utilities and types
 
+export { debugLog, isDebugEnabled, setDebugEnabled } from './debug';
+
 export const APP_NAME = 'Unfair Enough!';
 export const DEFAULT_QUESTION_TIME_LIMIT = 15;
 export const MAX_PLAYERS = 12;

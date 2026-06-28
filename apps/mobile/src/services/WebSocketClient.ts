@@ -3,6 +3,7 @@
  * Handles connection to the TV host WebSocket server
  */
 
+import { debugLog } from '@unfairenough/shared';
 import type {
   AnswerKey,
   ClientMessage,
@@ -59,7 +60,7 @@ class WebSocketClient {
 
   connect(url: string, deviceId?: string, sessionToken?: string, invitationToken?: string): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      console.warn('[ws-client] connect ignored; socket already open', {
+      debugLog('[ws-client] connect ignored; socket already open', {
         currentUrl: this.url,
         requestedUrl: url,
       });
@@ -70,7 +71,7 @@ class WebSocketClient {
     this.pendingDeviceId = deviceId ?? null;
     this.pendingSessionToken = sessionToken ?? null;
     this.pendingInvitationToken = invitationToken ?? null;
-    console.log('[ws-client] connect', {
+    debugLog('[ws-client] connect', {
       url,
       hasDeviceId: !!deviceId,
       hasSessionToken: !!sessionToken,
@@ -83,7 +84,7 @@ class WebSocketClient {
       this.ws = new WebSocket(url);
 
       this.ws.onopen = () => {
-        console.log('[ws-client] open', {
+        debugLog('[ws-client] open', {
           url: this.url,
           hasPlayerId: !!this.playerId,
           hasPendingDeviceId: !!this.pendingDeviceId,
@@ -111,7 +112,7 @@ class WebSocketClient {
           this.pendingSessionToken = null;
           this.pendingInvitationToken = null;
         } else {
-          console.warn('[ws-client] open without playerId or deviceId; no handshake sent');
+          debugLog('[ws-client] open without playerId or deviceId; no handshake sent');
         }
       };
 
@@ -120,7 +121,7 @@ class WebSocketClient {
       };
 
       this.ws.onclose = (event) => {
-        console.log('[ws-client] close', {
+        debugLog('[ws-client] close', {
           code: (event as { code?: number })?.code,
           reason: (event as { reason?: string })?.reason,
           url: this.url,
@@ -131,7 +132,7 @@ class WebSocketClient {
       };
 
       this.ws.onerror = (error) => {
-        console.error('[ws-client] error:', error);
+        debugLog('[ws-client] error:', error);
       };
     } catch (error) {
       console.error('Failed to create WebSocket:', error);
@@ -143,7 +144,7 @@ class WebSocketClient {
   private handleMessage(data: string): void {
     try {
       const message = JSON.parse(data) as ServerMessage;
-      console.log('[ws-client] msg', message.type);
+      debugLog('[ws-client] msg', message.type);
 
       switch (message.type) {
         case 'IDENTITY':
@@ -220,7 +221,7 @@ class WebSocketClient {
           break;
       }
     } catch (error) {
-      console.error('[ws-client] failed to parse message', { error, data });
+      debugLog('[ws-client] failed to parse message', { error, data });
     }
   }
 
@@ -259,12 +260,12 @@ class WebSocketClient {
 
   private send(message: ClientMessage): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      console.log('[ws-client] send', this.describeClientMessage(message));
+      debugLog('[ws-client] send', this.describeClientMessage(message));
       this.ws.send(JSON.stringify(message));
       return;
     }
 
-    console.warn('[ws-client] drop send; socket is not open', {
+    debugLog('[ws-client] drop send; socket is not open', {
       message: this.describeClientMessage(message),
       readyState: this.ws?.readyState ?? null,
     });
@@ -302,7 +303,7 @@ class WebSocketClient {
 
   /** Cancel any pending reconnect and stop retrying the current URL. */
   private stopReconnecting(): void {
-    console.log('[ws-client] stopReconnecting (fatal error)');
+    debugLog('[ws-client] stopReconnecting (fatal error)');
     this.url = null;
     this.reconnectAttempt = 0;
     if (this.reconnectTimeout) {
@@ -315,7 +316,7 @@ class WebSocketClient {
     if (this.reconnectTimeout || !this.url) return;
 
     const delay = RECONNECT_DELAYS[Math.min(this.reconnectAttempt, RECONNECT_DELAYS.length - 1)];
-    console.log('[ws-client] scheduleReconnect attempt', this.reconnectAttempt, 'in', delay, 'ms');
+    debugLog('[ws-client] scheduleReconnect attempt', this.reconnectAttempt, 'in', delay, 'ms');
     this.reconnectAttempt++;
 
     this.reconnectTimeout = setTimeout(() => {
@@ -347,6 +348,11 @@ class WebSocketClient {
     this.stopPingInterval();
     // Send LEAVE so the server skips the grace period
     this.send({ type: 'LEAVE' });
+    this.url = null;
+    this.pendingDeviceId = null;
+    this.pendingSessionToken = null;
+    this.pendingInvitationToken = null;
+    this.reconnectAttempt = 0;
     this.playerId = null;
     this.ws?.close();
     this.ws = null;

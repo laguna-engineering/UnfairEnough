@@ -1,4 +1,5 @@
 import { type DbAdapter, invitationTokensRepo } from '@unfairenough/db';
+import { debugLog } from '@unfairenough/shared';
 import { generateRoomCode } from '@unfairenough/ws-protocol';
 import { GameRoom } from './room';
 
@@ -20,7 +21,7 @@ export function createRoom(hostId: string | null = null, invitationToken?: strin
 
   const room = new GameRoom(code, dbAdapter, hostId, invitationToken);
   rooms.set(code, room);
-  console.log('[room] create', code, '— total rooms:', rooms.size);
+  debugLog('[room] create', code, '— total rooms:', rooms.size);
   return room;
 }
 
@@ -39,7 +40,7 @@ export function findRoomByHostId(hostId: string): GameRoom | undefined {
 export function destroyRoom(code: string): void {
   const room = rooms.get(code);
   if (room) {
-    console.log('[room] destroy', code, '— remaining:', rooms.size - 1);
+    debugLog('[room] destroy', code, '— remaining:', rooms.size - 1);
     room.cleanup();
     invitationTokensRepo.removeByRoom(dbAdapter, code);
     rooms.delete(code);

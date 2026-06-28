@@ -4,6 +4,7 @@
  * Uses AsyncStorage on native and localStorage on web.
  */
 
+import { debugLog } from '@unfairenough/shared';
 import { Platform } from 'react-native';
 
 const STORAGE_KEY = 'unfairenough_device_id';
@@ -66,7 +67,7 @@ async function saveToStorage(value: string): Promise<void> {
  */
 export async function initDeviceId(): Promise<string> {
   if (cachedDeviceId) {
-    console.log('[device-id] using cached device id');
+    debugLog('[device-id] using cached device id');
     return cachedDeviceId;
   }
 
@@ -74,20 +75,20 @@ export async function initDeviceId(): Promise<string> {
     const stored = await getFromStorage();
     if (stored) {
       cachedDeviceId = stored;
-      console.log('[device-id] loaded stored device id');
+      debugLog('[device-id] loaded stored device id');
       return stored;
     }
   } catch (error) {
-    console.warn('[device-id] storage read failed, generating new id', error);
+    debugLog('[device-id] storage read failed, generating new id', error);
   }
 
   const newId = generateUUID();
   cachedDeviceId = newId;
-  console.log('[device-id] generated new device id');
+  debugLog('[device-id] generated new device id');
 
   // Persist in the background — don't block on this
   saveToStorage(newId).catch((error) => {
-    console.warn('[device-id] storage write failed', error);
+    debugLog('[device-id] storage write failed', error);
   });
 
   return newId;

@@ -8,6 +8,7 @@ import {
   questionsRepo,
   sessionsRepo,
 } from '@unfairenough/db';
+import { debugLog } from '@unfairenough/shared';
 import type {
   AnswerKey,
   ClientMessage,
@@ -172,7 +173,7 @@ export class GameRoom {
     deviceId?: string,
     claimProfileId?: string,
   ): Promise<string | null> {
-    console.log('[room] addPlayer request', {
+    debugLog('[room] addPlayer request', {
       roomCode: this.roomCode,
       nameLength: name.length,
       hasDeviceId: !!deviceId,
@@ -317,7 +318,7 @@ export class GameRoom {
       payload: { playerId, name: playerName, color, emoji: playerEmoji },
     });
 
-    console.log('[room] player joined', {
+    debugLog('[room] player joined', {
       roomCode: this.roomCode,
       playerId,
       hasProfileId: !!profileId,
@@ -420,7 +421,7 @@ export class GameRoom {
     try {
       message = parseClientMessage(raw.toString());
     } catch (err) {
-      console.warn('[room] invalid player message', {
+      debugLog('[room] invalid player message', {
         roomCode: this.roomCode,
         playerId: ws.data.playerId || undefined,
         error: err instanceof Error ? err.message : String(err),
@@ -433,7 +434,7 @@ export class GameRoom {
     }
 
     if (message.type !== 'PING') {
-      console.log('[room] player message', {
+      debugLog('[room] player message', {
         roomCode: this.roomCode,
         playerId: ws.data.playerId || undefined,
         ...this.describeClientMessage(message),
@@ -1034,7 +1035,7 @@ export class GameRoom {
     sessionToken?: string,
     invitationToken?: string,
   ): Promise<void> {
-    console.log('[room] identify start', {
+    debugLog('[room] identify start', {
       roomCode: this.roomCode,
       hasDeviceId: !!deviceId,
       hasSessionToken: !!sessionToken,
@@ -1137,7 +1138,7 @@ export class GameRoom {
       }
     }
 
-    console.log('[room] identify result', {
+    debugLog('[room] identify result', {
       roomCode: this.roomCode,
       hasProfile: !!payload.profile,
       availableProfiles: payload.availableProfiles?.length ?? 0,
@@ -1597,7 +1598,7 @@ export class GameRoom {
 
   private sendTo(ws: ServerWebSocket<WSData>, message: ServerMessage): void {
     if (message.type === 'IDENTITY' || message.type === 'WELCOME' || message.type === 'ERROR') {
-      console.log('[room] send', {
+      debugLog('[room] send', {
         role: ws.data.role,
         roomCode: this.roomCode,
         playerId: ws.data.playerId || undefined,

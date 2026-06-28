@@ -1,6 +1,7 @@
 import { readdir } from 'node:fs/promises';
 import { networkInterfaces } from 'node:os';
 import { invitationTokensRepo, sessionsRepo } from '@unfairenough/db';
+import { debugLog, setDebugEnabled } from '@unfairenough/shared';
 import type { ServerWebSocket } from 'bun';
 import { Hono } from 'hono';
 import { serveStatic, upgradeWebSocket, websocket } from 'hono/bun';
@@ -21,6 +22,9 @@ import questionSetsRoutes from './routes/questionSets';
 import questionsRoutes from './routes/questions';
 import tagsRoutes from './routes/tags';
 import type { WSData } from './types';
+
+// Debug logging: on in dev (non-production), or anywhere with UE_DEBUG=1.
+setDebugEnabled(process.env.UE_DEBUG === '1' || process.env.NODE_ENV !== 'production');
 
 const app = new Hono();
 
@@ -96,7 +100,7 @@ function createRoomForHost(
   invitationToken?: string,
 ): void {
   const room = createRoom(hostId);
-  console.log('[ws] room created for host', { roomCode: room.roomCode, hostId });
+  debugLog('[ws] room created for host', { roomCode: room.roomCode, hostId });
   const data = hostWs.data as WSData;
   data.roomCode = room.roomCode;
   room.setHost(hostWs);
@@ -183,7 +187,7 @@ app.get(
     return {
       onOpen(_event, ws) {
         const raw = ws.raw!;
-        console.log('[ws] open', { role, roomCode });
+        debugLog('[ws] open', { role, roomCode });
 
         if (role === 'host') {
           raw.data = { ...raw.data, roomCode: '', role: 'host' };
@@ -236,7 +240,7 @@ app.get(
           raw.data = { ...raw.data, roomCode: '', role: 'player' };
         } else if (role === 'player' && roomCode) {
           const room = getRoom(roomCode);
-          console.log('[ws] player open', { roomCode, found: !!room });
+          debugLog('[ws] player open', { roomCode, found: !!room });
           if (!room) {
             raw.send(
               JSON.stringify({
@@ -269,7 +273,7 @@ app.get(
         const rawMessage = event.data as string | Buffer;
         const messageSummary = summarizeWsMessage(rawMessage);
         if (messageSummary.type !== 'PING') {
-          console.log('[ws] message', {
+          debugLog('[ws] message', {
             role: data.role,
             roomCode: data.roomCode,
             playerId: data.playerId || undefined,
@@ -351,7 +355,7 @@ app.get(
       onClose(event, ws) {
         const raw = ws.raw!;
         const data = raw.data as WSData;
-        console.log('[ws] close', {
+        debugLog('[ws] close', {
           role: data.role,
           roomCode: data.roomCode,
           code: (event as { code?: number })?.code,
@@ -376,7 +380,7 @@ app.get(
         }
 
         if (room.isEmpty) {
-          console.log('[ws] destroying empty room', data.roomCode);
+          debugLog('[ws] destroying empty room', data.roomCode);
           destroyRoom(data.roomCode);
         }
       },
