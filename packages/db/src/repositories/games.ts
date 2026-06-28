@@ -1,5 +1,6 @@
-import type { DbAdapter } from '../adapter';
+import type { DbAdapter, SqlValue } from '../adapter';
 import type { GameRow, GameSession, GameType, RoundResultEntry, RoundResultRow } from '../schema';
+import { hostScope } from '../utils';
 
 function rowToGameSession(row: GameRow): GameSession {
   return {
@@ -42,12 +43,13 @@ export async function createGame(
   gameType: GameType,
   playerCount: number,
   questionCount: number,
+  hostId: string | null,
   questionSetId?: string,
   questionSetIds?: string[],
 ): Promise<GameSession> {
   await db.run(
-    `INSERT INTO games (id, room_code, game_type, player_count, question_count, question_set_id, question_set_ids)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO games (id, room_code, game_type, player_count, question_count, question_set_id, question_set_ids, host_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       roomCode,
@@ -56,6 +58,7 @@ export async function createGame(
       questionCount,
       questionSetId ?? null,
       questionSetIds ? JSON.stringify(questionSetIds) : null,
+      hostId,
     ],
   );
   const row = await db.get<GameRow>('SELECT * FROM games WHERE id = ?', [id]);
@@ -116,15 +119,33 @@ export async function insertRoundResults(
   }
 }
 
-export async function getGame(db: DbAdapter, gameId: string): Promise<GameSession | null> {
-  const row = await db.get<GameRow>('SELECT * FROM games WHERE id = ?', [gameId]);
+export async function getGame(
+  db: DbAdapter,
+  gameId: string,
+  hostId?: string | null,
+): Promise<GameSession | null> {
+  let sql = 'SELECT * FROM games WHERE id = ?';
+  const params: SqlValue[] = [gameId];
+  if (hostId !== undefined && hostId !== null) {
+    sql += ' AND host_id = ?';
+    params.push(hostId);
+  } else if (hostId === null) {
+    sql += ' AND host_id IS NULL';
+  }
+  const row = await db.get<GameRow>(sql, params);
   return row ? rowToGameSession(row) : null;
 }
 
-export async function getRecentGames(db: DbAdapter, limit = 20): Promise<GameSession[]> {
-  const rows = await db.all<GameRow>('SELECT * FROM games ORDER BY started_at DESC LIMIT ?', [
-    limit,
-  ]);
+export async function getRecentGames(
+  db: DbAdapter,
+  hostId: string | null,
+  limit = 20,
+): Promise<GameSession[]> {
+  const { clause, params } = hostScope(hostId);
+  const rows = await db.all<GameRow>(
+    `SELECT * FROM games WHERE ${clause} ORDER BY started_at DESC LIMIT ?`,
+    [...params, limit],
+  );
   return rows.map(rowToGameSession);
 }
 

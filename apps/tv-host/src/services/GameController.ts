@@ -138,7 +138,7 @@ class GameController implements IGameController {
   ): Promise<void> {
     try {
       const db = getDb();
-      const existing = await playersRepo.findByDeviceId(db, deviceId);
+      const existing = await playersRepo.findByDeviceId(db, deviceId, null);
       if (existing) {
         this.playerProfiles.set(playerId, {
           profileId: existing.id,
@@ -153,7 +153,14 @@ class GameController implements IGameController {
       } else {
         const profileId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const player = playersSelectors.selectById(this.store.getState().players, playerId);
-        await playersRepo.createPlayer(db, profileId, name, player?.color ?? '#FFFFFF', deviceId);
+        await playersRepo.createPlayer(
+          db,
+          profileId,
+          name,
+          player?.color ?? '#FFFFFF',
+          null,
+          deviceId,
+        );
         this.playerProfiles.set(playerId, { profileId, deviceId, lifetimeScore: 0 });
       }
     } catch (err) {
@@ -239,6 +246,7 @@ class GameController implements IGameController {
         rawPool = await questionsRepo.getRandomQuestions(
           db,
           totalQuestions * 3,
+          null,
           undefined,
           this.language,
         );
@@ -738,6 +746,7 @@ class GameController implements IGameController {
             update.tag,
             update.delta,
             result.isCorrect,
+            null,
             ELO_BASELINE,
           )
           .catch((err) => console.error('Failed to upsert tag score:', err));

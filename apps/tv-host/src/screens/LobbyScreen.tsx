@@ -9,6 +9,7 @@ import {
   PlayerAvatar,
   ScreenBackground,
   spacing,
+  tvSafeArea,
   typography,
 } from '@unfairenough/ui';
 import type React from 'react';
@@ -16,12 +17,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { findNodeHandle, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useGameController } from '../hooks/useGameController';
+import { getCachedAuthState } from '../services/AuthService';
 import { getDb } from '../services/database';
 import { ImportQuestionsModal } from './ImportQuestionsModal';
 
-// TV safe zone padding (5% of 1080p)
-const TV_SAFE_HORIZONTAL = 96;
-const TV_SAFE_VERTICAL = 54;
 const QR_SIZE = 200;
 
 const LANGUAGES: { code: SupportedLanguage; label: string }[] = [
@@ -174,15 +173,23 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
     try {
       if (mode === 'local') {
         const db = getDb();
-        const sets = await questionsRepo.getQuestionSets(db, currentLanguage);
+        const sets = await questionsRepo.getQuestionSets(db, null, currentLanguage);
         setQuestionSets(sets);
         const count = await questionsRepo.getTotalQuestionCount(db, currentLanguage);
         setTotalQuestions(count);
       } else if (mode === 'hosted' && serverUrl) {
         // Fetch sets from server API
+        const isSecure = /^https:\/\/|^wss:\/\//.test(serverUrl);
         const host = serverUrl.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '');
+        const proto = isSecure ? 'https' : 'http';
+        const auth = getCachedAuthState();
+        const headers: Record<string, string> = {};
+        if (auth?.sessionToken) {
+          headers.Authorization = `Bearer ${auth.sessionToken}`;
+        }
         const res = await fetch(
-          `http://${host}/api/question-sets?language=${encodeURIComponent(currentLanguage)}`,
+          `${proto}://${host}/api/question-sets?language=${encodeURIComponent(currentLanguage)}`,
+          { headers },
         );
         if (res.ok) {
           const data = await res.json();
@@ -742,8 +749,8 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: TV_SAFE_HORIZONTAL,
-    paddingVertical: TV_SAFE_VERTICAL,
+    paddingHorizontal: tvSafeArea.horizontal,
+    paddingVertical: tvSafeArea.vertical,
   },
   header: {
     flexDirection: 'row',

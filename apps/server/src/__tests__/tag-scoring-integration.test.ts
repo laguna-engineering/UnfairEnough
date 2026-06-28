@@ -99,6 +99,7 @@ beforeEach(async () => {
       ],
     },
     () => crypto.randomUUID(),
+    null,
   );
 });
 
@@ -108,7 +109,7 @@ afterAll(() => {
 
 /** Start a configured game and wait for the first question to appear. */
 async function setupConfiguredGame(opts: { deviceIds?: (string | undefined)[] } = {}) {
-  const room = new GameRoom('TEST', db);
+  const room = new GameRoom('TEST', db, null);
   const hostWs = createMockWs({ data: { role: 'host' } });
   room.setHost(hostWs);
 
@@ -150,7 +151,7 @@ describe('tag scoring integration — persistence', () => {
     sendAnswer(room, playerWs, questionMsg.payload.id, 'A');
     await wait(3000); // Wait for REVEALING → ROUND_END → tag update
 
-    const profile = await playersRepo.findByDeviceId(db, 'device-alice');
+    const profile = await playersRepo.findByDeviceId(db, 'device-alice', null);
     expect(profile).not.toBeNull();
 
     const tagScores = await playerTagScoresRepo.getPlayerTagScores(db, profile!.id);
@@ -178,7 +179,7 @@ describe('tag scoring integration — persistence', () => {
     sendAnswer(room, playerWs, questionMsg.payload.id, 'B');
     await wait(3000);
 
-    const profile = await playersRepo.findByDeviceId(db, 'device-alice');
+    const profile = await playersRepo.findByDeviceId(db, 'device-alice', null);
     expect(profile).not.toBeNull();
 
     const tagScores = await playerTagScoresRepo.getPlayerTagScores(db, profile!.id);
@@ -206,7 +207,7 @@ describe('tag scoring integration — persistence', () => {
     sendAnswer(room, playerWs, questionMsg.payload.id, 'A'); // correct for q1
     await wait(3000);
 
-    const profile = await playersRepo.findByDeviceId(db, 'device-alice');
+    const profile = await playersRepo.findByDeviceId(db, 'device-alice', null);
     expect(profile).not.toBeNull();
 
     const tagScores = await playerTagScoresRepo.getPlayerTagScores(db, profile!.id);
@@ -242,9 +243,10 @@ describe('tag scoring integration — persistence', () => {
         ],
       },
       () => crypto.randomUUID(),
+      null,
     );
 
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
 
@@ -266,7 +268,7 @@ describe('tag scoring integration — persistence', () => {
     sendAnswer(room, playerWs, questionMsg.payload.id, 'A');
     await wait(3000);
 
-    const profile = await playersRepo.findByDeviceId(db, 'device-untagged');
+    const profile = await playersRepo.findByDeviceId(db, 'device-untagged', null);
     expect(profile).not.toBeNull();
 
     const tagScores = await playerTagScoresRepo.getPlayerTagScores(db, profile!.id);
@@ -285,10 +287,10 @@ describe('tag scoring integration — persistence', () => {
 
     // With no deviceId, no profile exists, so no tag scores should be created
     // Verify by checking all tag scores in the DB — should be empty
-    const allGamingScores = await playerTagScoresRepo.getScoresByTag(db, 'gaming');
+    const allGamingScores = await playerTagScoresRepo.getScoresByTag(db, 'gaming', null);
     expect(allGamingScores).toHaveLength(0);
 
-    const allZeldaScores = await playerTagScoresRepo.getScoresByTag(db, 'zelda');
+    const allZeldaScores = await playerTagScoresRepo.getScoresByTag(db, 'zelda', null);
     expect(allZeldaScores).toHaveLength(0);
 
     room.cleanup();
@@ -300,22 +302,22 @@ describe('tag scoring integration — persistence', () => {
 describe('tag scoring integration — loading', () => {
   it('pre-seeded tag scores affect difficulty multiplier in ROUND_END', async () => {
     // First: create a player profile by joining a room
-    const setupRoom = new GameRoom('SETUP', db);
+    const setupRoom = new GameRoom('SETUP', db, null);
     const setupHost = createMockWs({ data: { role: 'host' } });
     setupRoom.setHost(setupHost);
     const setupPlayer = createMockWs();
     await setupRoom.addPlayer(setupPlayer, 'Alice', 'device-preseeded');
     setupRoom.cleanup();
 
-    const profile = await playersRepo.findByDeviceId(db, 'device-preseeded');
+    const profile = await playersRepo.findByDeviceId(db, 'device-preseeded', null);
     expect(profile).not.toBeNull();
 
     // Pre-seed strong tag scores for this player (very high = easy questions)
-    await playerTagScoresRepo.setTagScore(db, profile!.id, 'gaming', 1900);
-    await playerTagScoresRepo.setTagScore(db, profile!.id, 'zelda', 1900);
+    await playerTagScoresRepo.setTagScore(db, profile!.id, 'gaming', 1900, null);
+    await playerTagScoresRepo.setTagScore(db, profile!.id, 'zelda', 1900, null);
 
     // Now start a real game — tag scores should be loaded
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
     const playerWs = createMockWs();
@@ -378,9 +380,10 @@ describe('tag scoring integration — games_played decay', () => {
         ],
       },
       () => crypto.randomUUID(),
+      null,
     );
 
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
     const playerWs = createMockWs();
@@ -406,7 +409,7 @@ describe('tag scoring integration — games_played decay', () => {
     const gameOver = findMessage(playerWs, 'GAME_OVER');
     expect(gameOver).toBeDefined();
 
-    const profile = await playersRepo.findByDeviceId(db, 'device-decay');
+    const profile = await playersRepo.findByDeviceId(db, 'device-decay', null);
     expect(profile).not.toBeNull();
 
     // Allow a small delay for fire-and-forget DB writes to complete

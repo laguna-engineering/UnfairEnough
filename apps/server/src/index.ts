@@ -1,12 +1,20 @@
 import { readdir } from 'node:fs/promises';
 import { networkInterfaces } from 'node:os';
+import { invitationTokensRepo, sessionsRepo } from '@unfairenough/db';
+import type { ServerWebSocket } from 'bun';
 import { Hono } from 'hono';
 import { serveStatic, upgradeWebSocket, websocket } from 'hono/bun';
 import { cors } from 'hono/cors';
-import { initDatabase } from './db';
-import { createRoom, destroyRoom, getRoom, setDbAdapter } from './roomManager';
+import { createAuthMiddleware } from './auth/middleware';
+import { createPendingLogin, removePendingLoginByWs } from './auth/pendingLogins';
+import { hashToken } from './auth/tokens';
+import { getDb, initDatabase } from './db';
+import { resolveGuestSession } from './room';
+import { createRoom, destroyRoom, findRoomByHostId, getRoom, setDbAdapter } from './roomManager';
+import authRoutes from './routes/auth';
 import eventsRoutes from './routes/events';
 import gamesRoutes from './routes/games';
+import mediaUploadRoutes from './routes/mediaUpload';
 import metaSetsRoutes from './routes/metaSets';
 import playersRoutes from './routes/players';
 import questionSetsRoutes from './routes/questionSets';
@@ -25,7 +33,7 @@ const localIp = Object.values(networkInterfaces())
 // ── CORS (allow local dev origins) ──────────────────────────────
 app.use('/api/*', cors());
 
-// ── Health check ───────────────────────────────────────────────
+// ── Health check (public — before auth middleware) ──────────────
 app.get('/api/health', (c) => {
   const mobilePort = mobileDevPort ? Number(mobileDevPort) : port;
   const mobilePath = mobileDevPort ? '' : '/mobile';
@@ -33,8 +41,17 @@ app.get('/api/health', (c) => {
   return c.json({ status: 'ok', lanIp: localIp ?? null, port, mobileBaseUrl });
 });
 
-// ── REST API routes ───────────────────────────────────────────
+// ── Auth middleware (scoped when tenancy enabled) ───────────────
+// Uses getDb() lazily — DB is initialized before any requests arrive
+const { scopedAuth } = createAuthMiddleware(getDb);
+app.use('/api/*', scopedAuth);
+
+// ── Auth routes (no middleware — public) ──────────────────────
+app.route('/auth', authRoutes);
+
+// ── REST API routes (scoped auth when tenancy enabled) ────────
 app.route('/api/question-sets', questionSetsRoutes);
+app.route('/api/media', mediaUploadRoutes);
 app.route('/api/meta-sets', metaSetsRoutes);
 app.route('/api/players', playersRoutes);
 app.route('/api/games', gamesRoutes);
@@ -43,17 +60,107 @@ app.route('/api/questions', questionsRoutes);
 app.route('/api/events', eventsRoutes);
 
 // ── WebSocket endpoint ─────────────────────────────────────────
+
+// Track host WSs that are awaiting auth (device flow, no room yet)
+const awaitingAuthHosts = new Set<ServerWebSocket<WSData>>();
+
+// Track host WSs that are pending session-token validation (async)
+const pendingTokenValidation = new Set<ServerWebSocket<WSData>>();
+
+// Server base URL for QR codes. Use SERVER_BASE_URL env var if behind a proxy.
+const serverBaseUrl = process.env.SERVER_BASE_URL ?? `http://${localIp ?? 'localhost'}:${port}`;
+
+// Idle timeout for host WS connections that haven't sent any message
+const HOST_IDLE_TIMEOUT_MS = 30_000;
+
+/** Create a room for an authenticated host and send ROOM_CREATED */
+function createRoomForHost(
+  hostWs: ServerWebSocket<WSData>,
+  hostId: string | null,
+  invitationToken?: string,
+): void {
+  const room = createRoom(hostId);
+  const data = hostWs.data as WSData;
+  data.roomCode = room.roomCode;
+  room.setHost(hostWs);
+  const payload: { roomCode: string; invitationToken?: string } = { roomCode: room.roomCode };
+  if (invitationToken) payload.invitationToken = invitationToken;
+  hostWs.send(JSON.stringify({ type: 'ROOM_CREATED', payload }));
+}
+
+/** Resolve room for a player that connected with roomCode=AUTO (returning user). */
+async function resolveAutoRoom(raw: ServerWebSocket<WSData>, rawMessage: string): Promise<void> {
+  const data = raw.data as WSData;
+  try {
+    const msg = JSON.parse(rawMessage);
+    if (msg.type === 'IDENTIFY' && msg.payload?.sessionToken) {
+      // Try in-memory guest session lookup first
+      const guestSession = resolveGuestSession(msg.payload.sessionToken);
+      if (guestSession) {
+        const room = getRoom(guestSession.roomCode);
+        if (room) {
+          data.roomCode = guestSession.roomCode;
+          room.handlePlayerMessage(raw, rawMessage);
+          return;
+        }
+      }
+
+      // Fall back to DB session lookup: find hostId, then find host's active room
+      const db = getDb();
+      const tokenHash = hashToken(msg.payload.sessionToken);
+      const session = await sessionsRepo.validate(db, tokenHash);
+      if (session) {
+        const room = findRoomByHostId(session.hostId);
+        if (room) {
+          data.roomCode = room.roomCode;
+          room.handlePlayerMessage(raw, rawMessage);
+          return;
+        }
+      }
+
+      // No room found for this session
+      raw.send(
+        JSON.stringify({
+          type: 'ERROR',
+          payload: { code: 'ROOM_NOT_FOUND', message: 'No active room found for this session' },
+        }),
+      );
+      raw.close();
+      return;
+    }
+    if (msg.type === 'PING') {
+      raw.send(JSON.stringify({ type: 'PONG' }));
+      return;
+    }
+  } catch {
+    // Parse error
+  }
+
+  // Non-IDENTIFY message with no room — reject
+  raw.send(
+    JSON.stringify({
+      type: 'ERROR',
+      payload: { code: 'NO_ROOM', message: 'Send IDENTIFY with sessionToken to resolve room' },
+    }),
+  );
+  raw.close();
+}
+
 app.get(
   '/ws',
   upgradeWebSocket((c) => {
     const role = c.req.query('role') as 'host' | 'player' | undefined;
     const roomCode = c.req.query('roomCode')?.toUpperCase();
+    const sessionToken = c.req.query('token');
 
-    // Prepare ws data that Bun attaches to the connection
+    const proto = c.req.url.startsWith('https') ? 'https' : 'http';
+    const wsBaseUrl = `${proto}://${c.req.header('host') || 'localhost'}`;
+
     const wsData: WSData = {
       roomCode: '',
       role: role ?? 'player',
       playerId: '',
+      serverBaseUrl: wsBaseUrl,
     };
 
     return {
@@ -61,12 +168,54 @@ app.get(
         const raw = ws.raw!;
 
         if (role === 'host') {
-          // Host creates a new room
-          const room = createRoom();
-          wsData.roomCode = room.roomCode;
-          raw.data = { ...raw.data, roomCode: room.roomCode, role: 'host' };
-          room.setHost(raw);
-          raw.send(JSON.stringify({ type: 'ROOM_CREATED', payload: { roomCode: room.roomCode } }));
+          raw.data = { ...raw.data, roomCode: '', role: 'host' };
+
+          if (sessionToken) {
+            // Pre-authenticated host: validate session token and create room immediately
+            pendingTokenValidation.add(raw);
+            const tokenHash = hashToken(sessionToken);
+            void sessionsRepo.validate(getDb(), tokenHash).then((session) => {
+              pendingTokenValidation.delete(raw);
+              // Check WS is still open (may have disconnected during async validation)
+              if (raw.readyState !== 1) return;
+
+              if (session) {
+                createRoomForHost(raw, session.hostId);
+              } else {
+                raw.send(
+                  JSON.stringify({
+                    type: 'ERROR',
+                    payload: {
+                      code: 'SESSION_INVALID',
+                      message: 'Session token is invalid or expired',
+                    },
+                  }),
+                );
+                raw.close();
+              }
+            });
+          } else {
+            // No session token — wait for device-flow auth or legacy mode
+            // Room is created when:
+            // a) Host sends REQUEST_AUTH → device flow → approved → room created
+            // b) Host sends any other message (legacy mode) → room created immediately
+            awaitingAuthHosts.add(raw);
+            // Close idle host connections that never send a message
+            const idleTimer = setTimeout(() => {
+              if (!(raw.data as WSData).roomCode) {
+                try {
+                  raw.close();
+                } catch {
+                  /* already closed */
+                }
+              }
+            }, HOST_IDLE_TIMEOUT_MS);
+            (raw.data as any)._idleTimer = idleTimer;
+          }
+        } else if (role === 'player' && roomCode === 'AUTO') {
+          // Returning user: room will be resolved when IDENTIFY arrives with sessionToken.
+          // Keep the connection open in a "pending resolution" state (empty roomCode).
+          raw.data = { ...raw.data, roomCode: '', role: 'player' };
         } else if (role === 'player' && roomCode) {
           const room = getRoom(roomCode);
           if (!room) {
@@ -81,7 +230,6 @@ app.get(
           }
           wsData.roomCode = roomCode;
           raw.data = { ...raw.data, roomCode, role: 'player' };
-          // Player sends JOIN message separately (standard protocol)
         } else {
           raw.send(
             JSON.stringify({
@@ -99,30 +247,99 @@ app.get(
       onMessage(event, ws) {
         const raw = ws.raw!;
         const data = raw.data as WSData;
-        const room = getRoom(data.roomCode);
-        if (!room) return;
 
         if (data.role === 'host') {
-          room.handleHostMessage(raw, event.data as string);
+          // If host has no room yet (awaiting auth or legacy)
+          if (!data.roomCode) {
+            // Clear idle timer — host sent a message
+            if ((data as any)._idleTimer) {
+              clearTimeout((data as any)._idleTimer);
+              (data as any)._idleTimer = null;
+            }
+
+            try {
+              const msg = JSON.parse(event.data as string);
+              if (msg.type === 'REQUEST_AUTH') {
+                // Device flow: create pending login, send challenge
+                const pending = createPendingLogin(raw);
+                if (!pending) {
+                  raw.send(
+                    JSON.stringify({
+                      type: 'AUTH_FAILED',
+                      payload: { reason: 'Too many pending logins. Try again later.' },
+                    }),
+                  );
+                  return;
+                }
+                raw.send(
+                  JSON.stringify({
+                    type: 'AUTH_CHALLENGE',
+                    payload: {
+                      userCode: pending.userCode,
+                      verificationUrl: `${serverBaseUrl}/auth/tv-login?code=${pending.userCode}`,
+                      expiresIn: pending.expiresIn,
+                    },
+                  }),
+                );
+                awaitingAuthHosts.delete(raw);
+                return;
+              }
+              if (msg.type === 'PING') {
+                raw.send(JSON.stringify({ type: 'PONG' }));
+                return;
+              }
+            } catch {
+              // Parse error — treat as legacy
+            }
+
+            // If token validation is in progress, ignore non-PING messages
+            if (pendingTokenValidation.has(raw)) return;
+
+            // Legacy mode: first non-auth message → create room immediately
+            awaitingAuthHosts.delete(raw);
+            createRoomForHost(raw, null);
+            // Fall through to handle the message in the room
+          }
+
+          const room = getRoom(data.roomCode);
+          if (room) {
+            room.handleHostMessage(raw, event.data as string);
+          }
         } else {
-          room.handlePlayerMessage(raw, event.data as string);
+          // Player with no room yet (roomCode=AUTO): resolve room from session token
+          if (!data.roomCode) {
+            void resolveAutoRoom(raw, event.data as string);
+            return;
+          }
+
+          const room = getRoom(data.roomCode);
+          if (room) {
+            room.handlePlayerMessage(raw, event.data as string);
+          }
         }
       },
 
       onClose(_event, ws) {
         const raw = ws.raw!;
         const data = raw.data as WSData;
+
+        // Clean up pending login / token validation / idle timer if host disconnects before auth
+        awaitingAuthHosts.delete(raw);
+        pendingTokenValidation.delete(raw);
+        if ((data as any)._idleTimer) {
+          clearTimeout((data as any)._idleTimer);
+        }
+        removePendingLoginByWs(raw);
+
         const room = getRoom(data.roomCode);
         if (!room) return;
 
         if (data.role === 'host') {
           room.removeHost();
         } else if (data.playerId) {
-          // Network drop — start grace period instead of immediate removal
           room.handlePlayerDisconnect(data.playerId);
         }
 
-        // Only destroy room if truly empty (no players at all, not just disconnected)
         if (room.isEmpty) {
           destroyRoom(data.roomCode);
         }
@@ -151,6 +368,12 @@ app.use('/media/*', serveStatic({ root: '../../questions/' }));
 
 // ── Admin dashboard ──────────────────────────────────────────
 app.get('/admin', (c) => c.redirect('/admin/'));
+app.use('/admin/*', async (c, next) => {
+  await next();
+  c.header('X-Frame-Options', 'DENY');
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+});
 app.use('/admin/*', serveStatic({ root: './' }));
 
 // ── TV host web build ────────────────────────────────────────
@@ -223,6 +446,18 @@ if (mobileDevPort) {
 // ── Initialize database and start server ──────────────────────
 const db = await initDatabase();
 setDbAdapter(db);
+
+// Clean up expired invitation tokens periodically (every hour)
+setInterval(
+  async () => {
+    try {
+      await invitationTokensRepo.cleanup(db);
+    } catch {
+      /* ignore cleanup errors */
+    }
+  },
+  60 * 60 * 1000,
+);
 
 export default {
   port,

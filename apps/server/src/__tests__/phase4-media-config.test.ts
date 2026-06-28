@@ -67,6 +67,7 @@ beforeEach(async () => {
       })),
     },
     () => crypto.randomUUID(),
+    null,
   );
 
   // Seed questions WITH media (very short preview for testing)
@@ -101,6 +102,7 @@ beforeEach(async () => {
       ],
     },
     () => crypto.randomUUID(),
+    null,
   );
 });
 
@@ -112,7 +114,7 @@ afterAll(() => {
 
 describe('CONFIGURE_GAME', () => {
   it('acknowledges casual game configuration', async () => {
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
 
@@ -135,7 +137,7 @@ describe('CONFIGURE_GAME', () => {
   });
 
   it('acknowledges configured game with valid set', async () => {
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
 
@@ -158,7 +160,7 @@ describe('CONFIGURE_GAME', () => {
   });
 
   it('returns error for non-existent question set', async () => {
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
 
@@ -190,9 +192,10 @@ describe('CONFIGURE_GAME', () => {
         questions: [],
       },
       () => crypto.randomUUID(),
+      null,
     );
 
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
 
@@ -214,7 +217,7 @@ describe('CONFIGURE_GAME', () => {
   });
 
   it('resets configuration on RESET_GAME', async () => {
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
 
@@ -254,7 +257,7 @@ describe('CONFIGURE_GAME', () => {
 
 describe('MEDIA_PREVIEW phase', () => {
   it('sends MEDIA_PREVIEW then QUESTION after host signals MEDIA_LOADED', async () => {
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
 
@@ -294,7 +297,7 @@ describe('MEDIA_PREVIEW phase', () => {
   }, 10000); // Extended timeout for timer-based test
 
   it('skips preview when host signals MEDIA_LOADED with failure', async () => {
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
 
@@ -331,7 +334,7 @@ describe('MEDIA_PREVIEW phase', () => {
   }, 10000);
 
   it('ignores stale MEDIA_LOADED with wrong questionId', async () => {
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
 
@@ -380,7 +383,7 @@ describe('MEDIA_PREVIEW phase', () => {
   }, 10000);
 
   it('sends QUESTION directly when question has no media', async () => {
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
 
@@ -416,7 +419,7 @@ describe('MEDIA_PREVIEW phase', () => {
 
 describe('configured game mode', () => {
   it('loads questions from a specific set when configured', async () => {
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
 
@@ -453,7 +456,7 @@ describe('configured game mode', () => {
   }, 10000);
 
   it('respects totalQuestions limit for configured games', async () => {
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
 
@@ -483,7 +486,7 @@ describe('configured game mode', () => {
 
 describe('timer cleanup', () => {
   it('cleans up media preview timeout on game reset', async () => {
-    const room = new GameRoom('TEST', db);
+    const room = new GameRoom('TEST', db, null);
     const hostWs = createMockWs({ data: { role: 'host' } });
     room.setHost(hostWs);
 

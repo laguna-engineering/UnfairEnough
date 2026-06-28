@@ -177,6 +177,7 @@ questions:
       uploadStatus.innerHTML = "";
 
       let succeeded = 0;
+      const allMissingMedia = [];
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -203,6 +204,12 @@ questions:
             row.className = "success";
             row.textContent = `${file.name}: ${data.message}`;
             succeeded++;
+            // Aggregate missing media from all YAML uploads
+            if (data.missingMedia && data.missingMedia.length > 0) {
+              for (const path of data.missingMedia) {
+                if (!allMissingMedia.includes(path)) allMissingMedia.push(path);
+              }
+            }
           }
         } catch (err) {
           row.className = "error";
@@ -215,6 +222,11 @@ questions:
       uploadBtn.disabled = false;
       uploadBtn.textContent = "Upload";
       if (succeeded > 0) load();
+
+      // Show media upload modal if any media files are missing
+      if (allMissingMedia.length > 0) {
+        showMediaUploadModal(allMissingMedia);
+      }
     });
 
     // Track which sets are expanded
@@ -709,6 +721,297 @@ questions:
       } catch (err) {
         alert(err.message);
       }
+    }
+
+    // ── Media Upload Modal ────────────────────────────────────
+
+    /** Upload concurrency limit */
+    const UPLOAD_CONCURRENCY = 3;
+
+    /**
+     * Show the media upload modal.
+     * @param {string[]} missingPaths - list of media paths that are missing (e.g. "media/topic/photo.jpg")
+     */
+    function showMediaUploadModal(missingPaths) {
+      // State: { targetPath, basename, status: "pending"|"uploading"|"done"|"failed", file: File|null, thumbUrl: string|null }
+      const items = missingPaths.map(p => ({
+        targetPath: p,
+        basename: p.split("/").pop(),
+        status: "pending",
+        file: null,
+        thumbUrl: null,
+      }));
+
+      // Build modal DOM
+      const overlay = document.createElement("div");
+      overlay.className = "modal-overlay";
+
+      const modal = document.createElement("div");
+      modal.className = "modal-content";
+
+      // Header
+      const header = document.createElement("div");
+      header.className = "modal-header";
+      const title = document.createElement("h2");
+      title.textContent = `Upload immagini mancanti (${missingPaths.length} file)`;
+      const closeBtn = document.createElement("button");
+      closeBtn.className = "modal-close";
+      closeBtn.innerHTML = "&times;";
+      header.appendChild(title);
+      header.appendChild(closeBtn);
+      modal.appendChild(header);
+
+      // Body
+      const body = document.createElement("div");
+      body.className = "modal-body";
+
+      const guidance = document.createElement("p");
+      guidance.style.cssText = "margin:0 0 1rem;font-size:0.85rem;color:#555;";
+      guidance.textContent = "Il YAML importato fa riferimento a immagini non presenti sul server. Seleziona i file corrispondenti dal tuo computer.";
+      body.appendChild(guidance);
+
+      const selectRow = document.createElement("div");
+      selectRow.style.cssText = "display:flex;gap:0.75rem;align-items:center;margin-bottom:1rem;";
+      const mediaInput = document.createElement("input");
+      mediaInput.type = "file";
+      mediaInput.multiple = true;
+      mediaInput.accept = "image/*";
+      mediaInput.style.fontSize = "0.85rem";
+      const selectLabel = document.createElement("span");
+      selectLabel.style.cssText = "font-size:0.8rem;color:#888;";
+      selectLabel.textContent = "Nessun file selezionato";
+      selectRow.appendChild(mediaInput);
+      selectRow.appendChild(selectLabel);
+      body.appendChild(selectRow);
+
+      const fileList = document.createElement("div");
+      fileList.className = "media-file-list";
+      body.appendChild(fileList);
+
+      modal.appendChild(body);
+
+      // Footer
+      const footer = document.createElement("div");
+      footer.className = "modal-footer";
+      const footerInfo = document.createElement("span");
+      footerInfo.style.cssText = "font-size:0.85rem;color:#555;";
+      const doneBtn = document.createElement("button");
+      doneBtn.textContent = "Chiudi";
+      footer.appendChild(footerInfo);
+      footer.appendChild(doneBtn);
+      modal.appendChild(footer);
+
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+
+      // Render file list
+      function renderList() {
+        fileList.innerHTML = "";
+        const pending = items.filter(i => i.status === "pending" && !i.file).length;
+        const matched = items.filter(i => i.file).length;
+        const done = items.filter(i => i.status === "done").length;
+        const failed = items.filter(i => i.status === "failed").length;
+
+        footerInfo.textContent = `${done}/${items.length} caricati` +
+          (failed > 0 ? ` — ${failed} falliti` : "") +
+          (pending > 0 ? ` — ${pending} senza file` : "");
+
+        for (const item of items) {
+          const row = document.createElement("div");
+          row.className = "media-file-item" +
+            (item.status === "done" ? " uploaded" : "") +
+            (item.status === "failed" ? " failed" : "") +
+            (item.status === "uploading" ? " uploading" : "");
+
+          // Thumbnail
+          const thumb = document.createElement("div");
+          thumb.className = "media-file-thumb";
+          if (item.thumbUrl) {
+            const img = document.createElement("img");
+            img.src = item.thumbUrl;
+            img.className = "media-file-thumb";
+            img.alt = item.basename;
+            row.appendChild(img);
+          } else {
+            thumb.style.display = "flex";
+            thumb.style.alignItems = "center";
+            thumb.style.justifyContent = "center";
+            thumb.style.color = "#aaa";
+            thumb.style.fontSize = "0.7rem";
+            thumb.textContent = "—";
+            row.appendChild(thumb);
+          }
+
+          // Info
+          const info = document.createElement("div");
+          info.className = "media-file-info";
+          const fnameEl = document.createElement("div");
+          fnameEl.className = "filename";
+          fnameEl.textContent = item.basename;
+          info.appendChild(fnameEl);
+          const pathEl = document.createElement("div");
+          pathEl.className = "target-path";
+          pathEl.textContent = item.targetPath;
+          info.appendChild(pathEl);
+          row.appendChild(info);
+
+          // Status
+          const statusEl = document.createElement("div");
+          statusEl.className = "media-file-status " + item.status;
+          if (item.status === "pending") {
+            statusEl.textContent = item.file ? "In coda" : "Mancante";
+          } else if (item.status === "uploading") {
+            statusEl.textContent = "Caricamento...";
+          } else if (item.status === "done") {
+            statusEl.textContent = "\u2713";
+          } else if (item.status === "failed") {
+            statusEl.textContent = "Errore";
+            const retryBtn = document.createElement("button");
+            retryBtn.className = "retry-btn";
+            retryBtn.textContent = "Riprova";
+            retryBtn.onclick = () => {
+              item.status = "pending";
+              renderList();
+              uploadMatched();
+            };
+            statusEl.appendChild(retryBtn);
+          }
+          row.appendChild(statusEl);
+
+          fileList.appendChild(row);
+        }
+      }
+
+      renderList();
+
+      // Match selected files by basename
+      mediaInput.addEventListener("change", () => {
+        const selectedFiles = [...mediaInput.files];
+        let matchCount = 0;
+
+        for (const file of selectedFiles) {
+          // Find items that match this filename and don't already have a file
+          const matches = items.filter(i => i.basename === file.name && !i.file && i.status !== "done");
+
+          if (matches.length === 1) {
+            matches[0].file = file;
+            matches[0].thumbUrl = URL.createObjectURL(file);
+            matchCount++;
+          } else if (matches.length > 1) {
+            // Duplicate basename: assign to first unmatched
+            matches[0].file = file;
+            matches[0].thumbUrl = URL.createObjectURL(file);
+            matchCount++;
+          }
+          // If matches.length === 0, file doesn't match any missing path — ignore
+        }
+
+        selectLabel.textContent = matchCount > 0
+          ? `${matchCount} file abbinati`
+          : "Nessuna corrispondenza trovata";
+        renderList();
+        uploadMatched();
+      });
+
+      // Upload matched files with concurrency
+      let uploading = 0;
+      function uploadMatched() {
+        while (uploading < UPLOAD_CONCURRENCY) {
+          const next = items.find(i => i.status === "pending" && i.file);
+          if (!next) break;
+          uploading++;
+          next.status = "uploading";
+          renderList();
+
+          const form = new FormData();
+          form.append("file", next.file);
+          form.append("targetPath", next.targetPath);
+
+          fetch("/api/media/upload", { method: "POST", body: form })
+            .then(async res => {
+              if (res.ok) {
+                next.status = "done";
+              } else {
+                const data = await res.json().catch(() => ({}));
+                console.error(`Upload failed for ${next.targetPath}:`, data.error);
+                next.status = "failed";
+              }
+            })
+            .catch(() => {
+              next.status = "failed";
+            })
+            .finally(() => {
+              uploading--;
+              renderList();
+              uploadMatched(); // Continue queue
+            });
+        }
+      }
+
+      // Close modal
+      function closeModal() {
+        // Revoke object URLs
+        for (const item of items) {
+          if (item.thumbUrl) URL.revokeObjectURL(item.thumbUrl);
+        }
+        overlay.remove();
+
+        // Show banner if files still missing
+        const remaining = items.filter(i => i.status !== "done");
+        if (remaining.length > 0) {
+          showMissingMediaBanner(remaining.length, remaining.map(i => i.targetPath));
+        }
+      }
+
+      closeBtn.addEventListener("click", closeModal);
+      doneBtn.addEventListener("click", closeModal);
+      overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) closeModal();
+      });
+      document.addEventListener("keydown", function escHandler(e) {
+        if (e.key === "Escape") {
+          document.removeEventListener("keydown", escHandler);
+          closeModal();
+        }
+      });
+    }
+
+    /** Show a warning banner about missing media files */
+    function showMissingMediaBanner(count, paths) {
+      // Remove any existing banner
+      const existing = document.querySelector(".missing-media-banner");
+      if (existing) existing.remove();
+
+      const banner = document.createElement("div");
+      banner.className = "missing-media-banner";
+      banner.innerHTML = `<strong>${count} immagini ancora mancanti.</strong> ` +
+        `Puoi ri-importare il YAML per riprovare il caricamento.`;
+
+      const details = document.createElement("details");
+      details.style.marginTop = "0.5rem";
+      const summary = document.createElement("summary");
+      summary.style.cssText = "cursor:pointer;font-size:0.8rem;";
+      summary.textContent = "Mostra file mancanti";
+      details.appendChild(summary);
+      const list = document.createElement("ul");
+      list.style.cssText = "margin:0.5rem 0 0;padding-left:1.5rem;font-size:0.8rem;";
+      for (const p of paths.slice(0, 20)) {
+        const li = document.createElement("li");
+        li.textContent = p;
+        list.appendChild(li);
+      }
+      if (paths.length > 20) {
+        const li = document.createElement("li");
+        li.textContent = `...e altri ${paths.length - 20} file`;
+        li.style.color = "#888";
+        list.appendChild(li);
+      }
+      details.appendChild(list);
+      banner.appendChild(details);
+
+      // Insert after the upload card
+      const uploadCard = fileInput.closest(".card");
+      uploadCard.after(banner);
     }
 
     document.addEventListener("DOMContentLoaded", load);

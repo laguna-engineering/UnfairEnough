@@ -12,6 +12,12 @@ export const spacing = {
   xxxl: 64,
 } as const;
 
+// TV safe zone insets (5% of 1080p)
+export const tvSafeArea = {
+  horizontal: 96,
+  vertical: 54,
+} as const;
+
 // Border radius values
 export const borderRadius = {
   none: 0,

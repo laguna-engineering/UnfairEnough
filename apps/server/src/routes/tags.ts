@@ -1,16 +1,18 @@
 import { playersRepo, playerTagScoresRepo, questionsRepo } from '@unfairenough/db';
 import { Hono } from 'hono';
+import type { AuthVariables } from '../auth/middleware';
 import { getDb } from '../db';
 
-const tags = new Hono();
+const tags = new Hono<{ Variables: AuthVariables }>();
 
 // GET /api/tags — all known tags with question counts
 tags.get('/', async (c) => {
   const db = getDb();
+  const hostId = c.get('hostId');
   const [playerTags, questions, allPlayers] = await Promise.all([
-    playerTagScoresRepo.getAllTags(db),
-    questionsRepo.getRandomQuestions(db, 10000), // Get all questions to count tags
-    playersRepo.listPlayers(db),
+    playerTagScoresRepo.getAllTags(db, hostId),
+    questionsRepo.getRandomQuestions(db, 10000, hostId), // Get all questions to count tags
+    playersRepo.listPlayers(db, hostId),
   ]);
 
   // Count questions per tag
@@ -40,9 +42,10 @@ tags.get('/:tag/players', async (c) => {
   const db = getDb();
   const tag = decodeURIComponent(c.req.param('tag')).toLowerCase().trim();
 
+  const hostId = c.get('hostId');
   const [allPlayers, tagScores] = await Promise.all([
-    playersRepo.listPlayers(db),
-    playerTagScoresRepo.getScoresByTag(db, tag),
+    playersRepo.listPlayers(db, hostId),
+    playerTagScoresRepo.getScoresByTag(db, tag, hostId),
   ]);
 
   const scoreByPlayerId = new Map(tagScores.map((ts) => [ts.playerId, ts.score]));

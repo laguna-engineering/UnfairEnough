@@ -30,6 +30,12 @@ import type { IGameController } from './IGameController';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
+export interface AuthChallenge {
+  userCode: string;
+  verificationUrl: string;
+  expiresIn: number;
+}
+
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000];
 const PING_INTERVAL = 30000;
 
@@ -41,19 +47,43 @@ export class HostedGameController implements IGameController {
   private reconnectAttempt = 0;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
+  private authMode = false;
+  invitationToken: string | null = null;
   private onRoomCreated?: (roomCode: string) => void;
   private onConnectionStateChange?: (state: ConnectionState) => void;
+  private onAuthChallenge?: (challenge: AuthChallenge) => void;
+  private onAuthSuccess?: (sessionToken: string, hostId: string, displayName: string) => void;
+  private onAuthFailed?: (reason: string) => void;
+  private onAuthExpired?: () => void;
+  private onSessionInvalid?: () => void;
+  private sessionToken?: string;
 
   constructor(
     serverUrl: string,
     callbacks?: {
       onRoomCreated?: (roomCode: string) => void;
       onConnectionStateChange?: (state: ConnectionState) => void;
+      /** Device-flow auth callbacks (set authMode=true to use) */
+      onAuthChallenge?: (challenge: AuthChallenge) => void;
+      onAuthSuccess?: (sessionToken: string, hostId: string, displayName: string) => void;
+      onAuthFailed?: (reason: string) => void;
+      onAuthExpired?: () => void;
+      /** Called when a stored session token is rejected by the server */
+      onSessionInvalid?: () => void;
+      /** Pre-authenticated session token to send via WS query param */
+      sessionToken?: string;
     },
   ) {
     this.serverUrl = serverUrl;
     this.onRoomCreated = callbacks?.onRoomCreated;
     this.onConnectionStateChange = callbacks?.onConnectionStateChange;
+    this.onAuthChallenge = callbacks?.onAuthChallenge;
+    this.onAuthSuccess = callbacks?.onAuthSuccess;
+    this.onAuthFailed = callbacks?.onAuthFailed;
+    this.onAuthExpired = callbacks?.onAuthExpired;
+    this.onSessionInvalid = callbacks?.onSessionInvalid;
+    this.sessionToken = callbacks?.sessionToken;
+    this.authMode = !!callbacks?.onAuthChallenge;
   }
 
   async initialize(): Promise<void> {
@@ -135,31 +165,42 @@ export class HostedGameController implements IGameController {
 
     this.setConnectionState('connecting');
 
-    // Normalize: strip protocol, ensure ws://
+    // Normalize: use wss:// for https, ws:// otherwise
+    const isSecure = /^https:\/\/|^wss:\/\//.test(this.serverUrl);
     const host = this.serverUrl.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '');
-    const url = `ws://${host}/ws?role=host`;
+    let url = `${isSecure ? 'wss' : 'ws'}://${host}/ws?role=host`;
+    if (this.sessionToken) {
+      url += `&token=${encodeURIComponent(this.sessionToken)}`;
+    }
 
+    console.log('[HostedGameController] connecting to:', url);
     try {
       this.ws = new WebSocket(url);
 
       this.ws.onopen = () => {
+        console.log('[HostedGameController] WS open');
         this.reconnectAttempt = 0;
         this.setConnectionState('connected');
         this.startPingInterval();
+
+        if (this.authMode) {
+          this.send({ type: 'REQUEST_AUTH' });
+        }
       };
 
       this.ws.onmessage = (event) => {
         this.handleMessage(event.data);
       };
 
-      this.ws.onclose = () => {
+      this.ws.onclose = (event) => {
+        console.log('[HostedGameController] WS closed, code:', event.code, 'reason:', event.reason);
         this.setConnectionState('disconnected');
         this.stopPingInterval();
         this.scheduleReconnect();
       };
 
       this.ws.onerror = (error) => {
-        console.error('HostedGameController WS error:', error);
+        console.error('[HostedGameController] WS error:', error);
       };
     } catch (error) {
       console.error('Failed to create WebSocket:', error);
@@ -169,6 +210,7 @@ export class HostedGameController implements IGameController {
   }
 
   private handleMessage(data: string): void {
+    console.log('[HostedGameController] received:', data.slice(0, 200));
     let message: ServerMessage;
     try {
       message = JSON.parse(data) as ServerMessage;
@@ -179,7 +221,8 @@ export class HostedGameController implements IGameController {
 
     switch (message.type) {
       case 'ROOM_CREATED': {
-        const { roomCode } = message.payload;
+        const { roomCode, invitationToken } = message.payload;
+        this.invitationToken = invitationToken ?? null;
         this.store.dispatch(setServerReady({ port: 0, localIp: this.serverUrl, roomCode }));
         this.onRoomCreated?.(roomCode);
         break;
@@ -284,8 +327,35 @@ export class HostedGameController implements IGameController {
         );
         break;
 
+      case 'AUTH_CHALLENGE':
+        this.onAuthChallenge?.(message.payload);
+        break;
+
+      case 'AUTH_SUCCESS':
+        this.authMode = false; // Auth complete, switch to normal mode
+        this.onAuthSuccess?.(
+          message.payload.sessionToken,
+          message.payload.hostId,
+          message.payload.displayName,
+        );
+        break;
+
+      case 'AUTH_FAILED':
+        this.onAuthFailed?.(message.payload.reason);
+        break;
+
+      case 'AUTH_EXPIRED':
+        this.onAuthExpired?.();
+        break;
+
       case 'ERROR':
         console.error('Server error:', message.payload.code, message.payload.message);
+        if (
+          message.payload.code === 'SESSION_INVALID' ||
+          message.payload.code === 'SESSION_EXPIRED'
+        ) {
+          this.onSessionInvalid?.();
+        }
         break;
 
       case 'PONG':

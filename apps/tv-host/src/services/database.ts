@@ -210,8 +210,12 @@ async function seedSampleQuestions(db: DbAdapter): Promise<void> {
     ],
   };
 
-  await questionsRepo.importQuestionSet(db, Crypto.randomUUID(), sampleSet, () =>
+  await questionsRepo.importQuestionSet(
+    db,
     Crypto.randomUUID(),
+    sampleSet,
+    () => Crypto.randomUUID(),
+    null,
   );
   console.log('Seeded 12 sample questions into local database');
 }

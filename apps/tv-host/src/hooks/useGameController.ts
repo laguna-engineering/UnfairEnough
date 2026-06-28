@@ -62,11 +62,16 @@ export function useGameController() {
   if (mode === 'local') {
     qrUrl = localIp && serverPort ? `ws://${localIp}:${serverPort}` : null;
   } else if (mode === 'hosted' && serverUrl && roomCode) {
+    const isSecure = /^https:\/\/|^wss:\/\//.test(serverUrl);
     const host = serverUrl.replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '');
-    if (mobileBaseUrl) {
-      qrUrl = `${mobileBaseUrl}/?roomCode=${roomCode}&server=${encodeURIComponent(host)}`;
+    const proto = isSecure ? 'https' : 'http';
+    // Include invitation token in QR URL if available (for guest linking)
+    const inviteParam = controller.invitationToken ? `&invite=${controller.invitationToken}` : '';
+    const isLan = /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(host);
+    if (isLan && mobileBaseUrl) {
+      qrUrl = `${mobileBaseUrl}/?roomCode=${roomCode}&server=${encodeURIComponent(host)}${inviteParam}`;
     } else {
-      qrUrl = `http://${host}/mobile/?roomCode=${roomCode}`;
+      qrUrl = `${proto}://${host}/mobile/?roomCode=${roomCode}${inviteParam}`;
     }
   }
 

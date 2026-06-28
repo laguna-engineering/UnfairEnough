@@ -2,14 +2,16 @@ import { gamesRepo, playersRepo, playerTagScoresRepo } from '@unfairenough/db';
 import { AVATAR_COLORS, AVATAR_EMOJIS } from '@unfairenough/shared';
 import { sanitizeName } from '@unfairenough/ws-protocol';
 import { Hono } from 'hono';
+import type { AuthVariables } from '../auth/middleware';
 import { getDb } from '../db';
 
-const players = new Hono();
+const players = new Hono<{ Variables: AuthVariables }>();
 
 // GET /api/players — list all player profiles
 players.get('/', async (c) => {
   const db = getDb();
-  const allPlayers = await playersRepo.listPlayers(db);
+  const hostId = c.get('hostId');
+  const allPlayers = await playersRepo.listPlayers(db, hostId);
   return c.json({ players: allPlayers });
 });
 
@@ -38,7 +40,14 @@ players.post('/', async (c) => {
   }
 
   const id = crypto.randomUUID();
-  const profile = await playersRepo.createProfile(db, id, displayName, avatarColor, avatarEmoji);
+  const profile = await playersRepo.createProfile(
+    db,
+    id,
+    displayName,
+    avatarColor,
+    avatarEmoji,
+    c.get('hostId'),
+  );
   return c.json({ player: profile }, 201);
 });
 
@@ -46,7 +55,7 @@ players.post('/', async (c) => {
 players.put('/:id', async (c) => {
   const db = getDb();
   const id = c.req.param('id');
-  const player = await playersRepo.getPlayer(db, id);
+  const player = await playersRepo.getPlayer(db, id, c.get('hostId'));
   if (!player) {
     return c.json({ error: 'Player not found' }, 404);
   }
@@ -86,7 +95,7 @@ players.put('/:id', async (c) => {
 players.put('/:id/unbind', async (c) => {
   const db = getDb();
   const id = c.req.param('id');
-  const player = await playersRepo.getPlayer(db, id);
+  const player = await playersRepo.getPlayer(db, id, c.get('hostId'));
   if (!player) {
     return c.json({ error: 'Player not found' }, 404);
   }
@@ -98,7 +107,7 @@ players.put('/:id/unbind', async (c) => {
 players.delete('/:id', async (c) => {
   const db = getDb();
   const id = c.req.param('id');
-  const deleted = await playersRepo.deleteProfile(db, id);
+  const deleted = await playersRepo.deleteProfile(db, id, c.get('hostId'));
   if (!deleted) {
     return c.json({ error: 'Player not found' }, 404);
   }
@@ -109,13 +118,13 @@ players.delete('/:id', async (c) => {
 players.get('/:id/stats', async (c) => {
   const db = getDb();
   const id = c.req.param('id');
-  const player = await playersRepo.getPlayer(db, id);
+  const player = await playersRepo.getPlayer(db, id, c.get('hostId'));
   if (!player) {
     return c.json({ error: 'Player not found' }, 404);
   }
 
   // Get recent games this player participated in
-  const recentGames = await gamesRepo.getRecentGames(db, 50);
+  const recentGames = await gamesRepo.getRecentGames(db, c.get('hostId'), 50);
   const playerGames: Array<{
     gameId: string;
     roomCode: string;
@@ -164,7 +173,7 @@ players.get('/:id/stats', async (c) => {
 players.put('/:id/tags', async (c) => {
   const db = getDb();
   const id = c.req.param('id');
-  const player = await playersRepo.getPlayer(db, id);
+  const player = await playersRepo.getPlayer(db, id, c.get('hostId'));
   if (!player) {
     return c.json({ error: 'Player not found' }, 404);
   }
@@ -179,7 +188,7 @@ players.put('/:id/tags', async (c) => {
     return c.json({ error: 'Missing "score" (number)' }, 400);
   }
 
-  await playerTagScoresRepo.setTagScore(db, id, tag, score);
+  await playerTagScoresRepo.setTagScore(db, id, tag, score, c.get('hostId'));
   return c.json({ tag, score });
 });
 

@@ -6,15 +6,13 @@ import {
   colors,
   ScreenBackground,
   spacing,
+  tvSafeArea,
   typography,
 } from '@unfairenough/ui';
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { addRecentServer, getRecentServers, initRecentServers } from '../services/recentServers';
-
-const TV_SAFE_HORIZONTAL = 96;
-const TV_SAFE_VERTICAL = 54;
 
 type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'failed';
 
@@ -43,30 +41,40 @@ export const ConnectScreen: React.FC<Props> = ({ onConnected, onBack }) => {
 
     setStatus('connecting');
 
-    // Normalize URL for health check
-    const host = serverUrl
-      .trim()
-      .replace(/^https?:\/\//, '')
-      .replace(/^wss?:\/\//, '');
-    const healthUrl = `http://${host}/api/health`;
+    // Normalize URL: extract host and detect protocol
+    const trimmed = serverUrl.trim();
+    const isSecure = /^https:\/\/|^wss:\/\//.test(trimmed);
+    const host = trimmed.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '');
+    const proto = isSecure ? 'https' : 'http';
+    const healthUrl = `${proto}://${host}/api/health`;
 
+    console.log('[ConnectScreen] healthUrl:', healthUrl, 'isSecure:', isSecure);
     fetch(healthUrl)
       .then(async (res) => {
+        console.log('[ConnectScreen] health response status:', res.status);
         if (res.ok) {
           setStatus('connected');
-          addRecentServer(host).then(() => setRecentServers(getRecentServers()));
+          addRecentServer(`${proto}://${host}`).then(() => setRecentServers(getRecentServers()));
 
-          // Use the server's LAN IP so the QR code works for other devices
+          // Use the server's LAN IP when on the same network, otherwise keep the original host
           const data = await res.json().catch(() => ({}));
-          const lanHost = data.lanIp && data.port ? `${data.lanIp}:${data.port}` : host;
+          console.log('[ConnectScreen] health data:', JSON.stringify(data));
+          const isLanConnection = /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(host);
+          const effectiveHost =
+            isLanConnection && data.lanIp && data.port
+              ? `${data.lanIp}:${data.port}`
+              : `${proto}://${host}`;
 
+          console.log('[ConnectScreen] calling onConnected with:', effectiveHost);
           // Short delay so user sees "Connected!" before transition
-          setTimeout(() => onConnected(lanHost, data.mobileBaseUrl ?? null), 500);
+          setTimeout(() => onConnected(effectiveHost, data.mobileBaseUrl ?? null), 500);
         } else {
+          console.log('[ConnectScreen] health check failed:', res.status);
           setStatus('failed');
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        console.log('[ConnectScreen] health check error:', err);
         setStatus('failed');
       });
   }, [serverUrl, onConnected]);
@@ -155,8 +163,8 @@ export const ConnectScreen: React.FC<Props> = ({ onConnected, onBack }) => {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: TV_SAFE_HORIZONTAL,
-    paddingVertical: TV_SAFE_VERTICAL,
+    paddingHorizontal: tvSafeArea.horizontal,
+    paddingVertical: tvSafeArea.vertical,
     justifyContent: 'center',
     alignItems: 'center',
   },

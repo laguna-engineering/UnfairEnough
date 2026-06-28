@@ -1,5 +1,6 @@
 import type { DbAdapter, SqlValue } from '../adapter';
 import type { PlayerProfile, PlayerRow } from '../schema';
+import { hostScope } from '../utils';
 
 function rowToProfile(row: PlayerRow): PlayerProfile {
   return {
@@ -20,13 +21,31 @@ function rowToProfile(row: PlayerRow): PlayerProfile {
 export async function findByDeviceId(
   db: DbAdapter,
   deviceId: string,
+  hostId: string | null,
 ): Promise<PlayerProfile | null> {
-  const row = await db.get<PlayerRow>('SELECT * FROM players WHERE device_id = ?', [deviceId]);
+  const { clause, params: scopeParams } = hostScope(hostId);
+  const row = await db.get<PlayerRow>(`SELECT * FROM players WHERE device_id = ? AND ${clause}`, [
+    deviceId,
+    ...scopeParams,
+  ]);
   return row ? rowToProfile(row) : null;
 }
 
-export async function getPlayer(db: DbAdapter, playerId: string): Promise<PlayerProfile | null> {
-  const row = await db.get<PlayerRow>('SELECT * FROM players WHERE id = ?', [playerId]);
+export async function getPlayer(
+  db: DbAdapter,
+  playerId: string,
+  hostId?: string | null,
+): Promise<PlayerProfile | null> {
+  let sql = 'SELECT * FROM players WHERE id = ?';
+  const params: SqlValue[] = [playerId];
+  // When hostId is provided (not undefined), enforce ownership
+  if (hostId !== undefined && hostId !== null) {
+    sql += ' AND host_id = ?';
+    params.push(hostId);
+  } else if (hostId === null) {
+    sql += ' AND host_id IS NULL';
+  }
+  const row = await db.get<PlayerRow>(sql, params);
   return row ? rowToProfile(row) : null;
 }
 
@@ -35,15 +54,17 @@ export async function createPlayer(
   id: string,
   displayName: string,
   avatarColor: string,
+  hostId: string | null,
   deviceId?: string,
 ): Promise<PlayerProfile> {
   await db.run(
-    `INSERT INTO players (id, device_id, display_name, avatar_color)
-     VALUES (?, ?, ?, ?)`,
-    [id, deviceId ?? null, displayName, avatarColor],
+    `INSERT INTO players (id, device_id, display_name, avatar_color, host_id)
+     VALUES (?, ?, ?, ?, ?)`,
+    [id, deviceId ?? null, displayName, avatarColor, hostId],
   );
   const profile = await getPlayer(db, id);
-  return profile!;
+  if (!profile) throw new Error(`BUG: player row missing after insert (id=${id})`);
+  return profile;
 }
 
 export async function updateDisplayName(
@@ -76,8 +97,12 @@ export async function incrementWins(db: DbAdapter, playerId: string): Promise<vo
   await db.run('UPDATE players SET total_wins = total_wins + 1 WHERE id = ?', [playerId]);
 }
 
-export async function listPlayers(db: DbAdapter): Promise<PlayerProfile[]> {
-  const rows = await db.all<PlayerRow>('SELECT * FROM players ORDER BY last_seen_at DESC');
+export async function listPlayers(db: DbAdapter, hostId: string | null): Promise<PlayerProfile[]> {
+  const { clause, params } = hostScope(hostId);
+  const rows = await db.all<PlayerRow>(
+    `SELECT * FROM players WHERE ${clause} ORDER BY last_seen_at DESC`,
+    params,
+  );
   return rows.map(rowToProfile);
 }
 
@@ -88,14 +113,16 @@ export async function createProfile(
   displayName: string,
   avatarColor: string,
   avatarEmoji: string,
+  hostId: string | null,
 ): Promise<PlayerProfile> {
   await db.run(
-    `INSERT INTO players (id, display_name, avatar_color, avatar_emoji, source)
-     VALUES (?, ?, ?, ?, 'admin')`,
-    [id, displayName, avatarColor, avatarEmoji],
+    `INSERT INTO players (id, display_name, avatar_color, avatar_emoji, source, host_id)
+     VALUES (?, ?, ?, ?, 'admin', ?)`,
+    [id, displayName, avatarColor, avatarEmoji, hostId],
   );
   const profile = await getPlayer(db, id);
-  return profile!;
+  if (!profile) throw new Error(`BUG: player profile missing after insert (id=${id})`);
+  return profile;
 }
 
 /** Update an existing profile's display fields. */
@@ -134,32 +161,59 @@ export async function unbindDevice(db: DbAdapter, playerId: string): Promise<voi
 /**
  * Atomically claim an unbound profile for a device.
  * Returns true if the claim succeeded, false if already claimed.
+ * Scoped by hostId to prevent cross-tenant profile claiming.
+ *
+ * Wrapped in a transaction so the old binding is preserved if the claim fails.
  */
 export async function claimProfile(
   db: DbAdapter,
   profileId: string,
   deviceId: string,
+  hostId: string | null,
 ): Promise<boolean> {
-  // First unbind any other profile this device may have
-  await db.run('UPDATE players SET device_id = NULL WHERE device_id = ?', [deviceId]);
-  // Atomically claim the target profile only if it's unbound
-  const result = await db.run(
-    'UPDATE players SET device_id = ? WHERE id = ? AND device_id IS NULL',
-    [deviceId, profileId],
-  );
-  return result.changes > 0;
+  return db.transaction(async () => {
+    // Unbind any other profile this device has within the SAME host
+    const { clause, params: scopeParams } = hostScope(hostId);
+    await db.run(`UPDATE players SET device_id = NULL WHERE device_id = ? AND ${clause}`, [
+      deviceId,
+      ...scopeParams,
+    ]);
+    // Atomically claim the target profile only if it's unbound AND in the same host scope
+    const result = await db.run(
+      `UPDATE players SET device_id = ? WHERE id = ? AND device_id IS NULL AND ${clause}`,
+      [deviceId, profileId, ...scopeParams],
+    );
+    return result.changes > 0;
+  });
 }
 
 /** List admin-created profiles that are not bound to any device. */
-export async function listAvailableProfiles(db: DbAdapter): Promise<PlayerProfile[]> {
+export async function listAvailableProfiles(
+  db: DbAdapter,
+  hostId: string | null,
+): Promise<PlayerProfile[]> {
+  const { clause, params } = hostScope(hostId);
   const rows = await db.all<PlayerRow>(
-    "SELECT * FROM players WHERE source = 'admin' AND device_id IS NULL ORDER BY display_name ASC",
+    `SELECT * FROM players WHERE source = 'admin' AND device_id IS NULL AND ${clause} ORDER BY display_name ASC`,
+    params,
   );
   return rows.map(rowToProfile);
 }
 
 /** Delete a profile and cascade-delete its tag scores. */
-export async function deleteProfile(db: DbAdapter, id: string): Promise<boolean> {
-  const result = await db.run('DELETE FROM players WHERE id = ?', [id]);
+export async function deleteProfile(
+  db: DbAdapter,
+  id: string,
+  hostId?: string | null,
+): Promise<boolean> {
+  let sql = 'DELETE FROM players WHERE id = ?';
+  const params: SqlValue[] = [id];
+  if (hostId !== undefined && hostId !== null) {
+    sql += ' AND host_id = ?';
+    params.push(hostId);
+  } else if (hostId === null) {
+    sql += ' AND host_id IS NULL';
+  }
+  const result = await db.run(sql, params);
   return result.changes > 0;
 }
