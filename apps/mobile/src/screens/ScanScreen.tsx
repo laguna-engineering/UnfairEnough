@@ -27,6 +27,33 @@ const LANGUAGES: { code: SupportedLanguage; label: string }[] = [
   { code: 'it', label: 'IT' },
 ];
 
+function stripProtocol(value: string): string {
+  return value
+    .replace(/^wss?:\/\//, '')
+    .replace(/^https?:\/\//, '')
+    .replace(/\/$/, '');
+}
+
+function hasExplicitPort(host: string): boolean {
+  return /:\d+$/.test(host);
+}
+
+function isLanHost(host: string): boolean {
+  const hostname = host.split(':')[0];
+  return /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|localhost$|127\.)/.test(hostname);
+}
+
+function normalizeHost(host: string): string {
+  return stripProtocol(host.trim());
+}
+
+function getWsScheme(input: string, host: string): 'ws' | 'wss' {
+  if (/^wss?:\/\//.test(input)) return input.match(/^(wss?):/)?.[1] === 'wss' ? 'wss' : 'ws';
+  if (/^https:\/\//.test(input)) return 'wss';
+  if (/^http:\/\//.test(input)) return 'ws';
+  return hasExplicitPort(host) || isLanHost(host) ? 'ws' : 'wss';
+}
+
 interface ScanScreenProps {
   onConnect: (url: string, invitationToken?: string) => void;
   onLanguageChange: (lang: SupportedLanguage) => void;
@@ -109,10 +136,9 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
         const url = new URL(data);
         const roomCode = url.searchParams.get('roomCode');
         const inviteToken = url.searchParams.get('invite') || undefined;
-        const serverHost = url.searchParams.get('server') || url.host;
+        const serverHost = normalizeHost(url.searchParams.get('server') || url.host);
         const wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-        const address = serverHost.includes(':') ? serverHost : `${serverHost}:${url.port || '80'}`;
-        addRecentServer(address).then(() => setRecentServers(getRecentServers()));
+        addRecentServer(serverHost).then(() => setRecentServers(getRecentServers()));
         const wsUrl = roomCode
           ? `${wsProtocol}//${serverHost}/ws?role=player&roomCode=${roomCode}`
           : `${wsProtocol}//${serverHost}/ws?role=player`;
@@ -161,15 +187,9 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
   const handleIpConnect = () => {
     const input = manualIp.trim() || 'localhost:3000';
     const code = manualCode.toUpperCase().trim();
-    addRecentServer(input).then(() => setRecentServers(getRecentServers()));
-    // Respect an explicit scheme; otherwise use ws for a local IP:port and wss
-    // for a hosted domain, so the same field works for both connection modes.
-    const host = input.replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '');
-    const scheme = /^wss?:\/\//.test(input)
-      ? (input.match(/^(wss?):/)?.[1] ?? 'ws')
-      : /:\d+$/.test(host)
-        ? 'ws'
-        : 'wss';
+    const host = normalizeHost(input);
+    const scheme = getWsScheme(input, host);
+    addRecentServer(host).then(() => setRecentServers(getRecentServers()));
     onConnect(`${scheme}://${host}/ws?role=player&roomCode=${code}`);
   };
 

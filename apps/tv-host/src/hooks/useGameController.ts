@@ -63,7 +63,11 @@ export function useGameController() {
     qrUrl = localIp && serverPort ? `ws://${localIp}:${serverPort}` : null;
   } else if (mode === 'hosted' && serverUrl && roomCode) {
     const isSecure = /^https:\/\/|^wss:\/\//.test(serverUrl);
-    const host = serverUrl.replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '');
+    const rawHost = serverUrl
+      .replace(/^wss?:\/\//, '')
+      .replace(/^https?:\/\//, '')
+      .replace(/\/$/, '');
+    const host = rawHost;
     const proto = isSecure ? 'https' : 'http';
     // Include invitation token in QR URL if available (for guest linking)
     const inviteParam = controller.invitationToken ? `&invite=${controller.invitationToken}` : '';
