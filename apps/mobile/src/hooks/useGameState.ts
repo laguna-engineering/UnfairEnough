@@ -159,6 +159,16 @@ export function useGameState() {
       onError: (err) => {
         debugLog('[game-state] ws error received', err);
         setError(err.message);
+
+        if (err.code === 'PROFILE_ALREADY_CLAIMED') {
+          const deviceId = getDeviceId();
+          if (deviceId) {
+            setPhase('IDENTIFYING');
+            wsClient.identify(deviceId);
+          }
+          return;
+        }
+
         // Fatal connection errors strand the IDENTIFYING spinner — drop back to
         // the scan screen and surface the reason so the user can retry.
         if (

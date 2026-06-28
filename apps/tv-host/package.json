@@ -6,6 +6,7 @@
   "scripts": {
     "start": "EXPO_TV=1 expo start --dev-client --port 8082",
     "android": "EXPO_TV=1 expo run:android --port 8082",
+    "android:release": "cd android && EXPO_TV=1 NODE_ENV=production ./gradlew assembleRelease",
     "ios": "EXPO_TV=1 expo run:ios --port 8082",
     "web": "expo start --web --port 8082",
     "prebuild": "EXPO_TV=1 expo prebuild --clean",

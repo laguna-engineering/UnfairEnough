@@ -49,17 +49,15 @@ export function createBunAdapter(db: {
       db.run(sql);
     },
     async transaction<T>(fn: () => Promise<T>): Promise<T> {
-      // bun:sqlite transactions are synchronous, but our fn is async.
-      // Since bun adapter promises resolve synchronously (Promise.resolve wrappers),
-      // we can safely use a sync transaction wrapper.
-      const txn = db.transaction(() => {
-        let result: T;
-        fn().then((r) => {
-          result = r;
-        });
-        return result!;
-      });
-      return txn();
+      await db.run('BEGIN IMMEDIATE');
+      try {
+        const result = await fn();
+        await db.run('COMMIT');
+        return result;
+      } catch (err) {
+        await db.run('ROLLBACK');
+        throw err;
+      }
     },
   };
 }

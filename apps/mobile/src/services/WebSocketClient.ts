@@ -53,18 +53,78 @@ class WebSocketClient {
   private pendingSessionToken: string | null = null;
   private pendingInvitationToken: string | null = null;
   private connectionState: ConnectionState = 'disconnected';
+  private connectionId = 0;
 
   setCallbacks(callbacks: Callbacks): void {
     this.callbacks = { ...this.callbacks, ...callbacks };
   }
 
+  private isCurrentSocket(socket: WebSocket, connectionId: number): boolean {
+    return this.ws === socket && this.connectionId === connectionId;
+  }
+
+  private closeCurrentSocket({
+    sendLeave = false,
+    clearPlayerId = false,
+  }: {
+    sendLeave?: boolean;
+    clearPlayerId?: boolean;
+  } = {}): void {
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+
+    this.stopPingInterval();
+
+    const socket = this.ws;
+    if (sendLeave && socket?.readyState === WebSocket.OPEN) {
+      try {
+        debugLog('[ws-client] send', { type: 'LEAVE' });
+        socket.send(JSON.stringify({ type: 'LEAVE' }));
+      } catch {
+        // Socket may already be closing; best-effort leave is enough.
+      }
+    }
+
+    this.connectionId++;
+    this.ws = null;
+    this.url = null;
+    this.pendingDeviceId = null;
+    this.pendingSessionToken = null;
+    this.pendingInvitationToken = null;
+    this.reconnectAttempt = 0;
+    if (clearPlayerId) this.playerId = null;
+
+    socket?.close();
+    this.setConnectionState('disconnected');
+  }
+
   connect(url: string, deviceId?: string, sessionToken?: string, invitationToken?: string): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      debugLog('[ws-client] connect ignored; socket already open', {
+    const isExplicitHandshake = !!deviceId || !!sessionToken || !!invitationToken;
+
+    if (this.ws && this.ws.readyState !== WebSocket.CLOSED) {
+      if (!isExplicitHandshake) {
+        debugLog('[ws-client] connect ignored; socket already active', {
+          currentUrl: this.url,
+          requestedUrl: url,
+          readyState: this.ws.readyState,
+        });
+        return;
+      }
+
+      debugLog('[ws-client] replacing active socket for explicit connect', {
         currentUrl: this.url,
         requestedUrl: url,
+        readyState: this.ws.readyState,
       });
-      return;
+      this.closeCurrentSocket({ sendLeave: true, clearPlayerId: true });
+    } else if (this.ws?.readyState === WebSocket.CLOSED) {
+      this.ws = null;
+    }
+
+    if (isExplicitHandshake) {
+      this.playerId = null;
     }
 
     this.url = url;
@@ -81,9 +141,13 @@ class WebSocketClient {
     this.setConnectionState('connecting');
 
     try {
-      this.ws = new WebSocket(url);
+      const connectionId = ++this.connectionId;
+      const socket = new WebSocket(url);
+      this.ws = socket;
 
-      this.ws.onopen = () => {
+      socket.onopen = () => {
+        if (!this.isCurrentSocket(socket, connectionId)) return;
+
         debugLog('[ws-client] open', {
           url: this.url,
           hasPlayerId: !!this.playerId,
@@ -116,22 +180,27 @@ class WebSocketClient {
         }
       };
 
-      this.ws.onmessage = (event) => {
+      socket.onmessage = (event) => {
+        if (!this.isCurrentSocket(socket, connectionId)) return;
         this.handleMessage(event.data);
       };
 
-      this.ws.onclose = (event) => {
+      socket.onclose = (event) => {
+        if (!this.isCurrentSocket(socket, connectionId)) return;
+
         debugLog('[ws-client] close', {
           code: (event as { code?: number })?.code,
           reason: (event as { reason?: string })?.reason,
           url: this.url,
         });
+        this.ws = null;
         this.setConnectionState('disconnected');
         this.stopPingInterval();
         this.scheduleReconnect();
       };
 
-      this.ws.onerror = (error) => {
+      socket.onerror = (error) => {
+        if (!this.isCurrentSocket(socket, connectionId)) return;
         debugLog('[ws-client] error:', error);
       };
     } catch (error) {
@@ -301,15 +370,10 @@ class WebSocketClient {
     }
   }
 
-  /** Cancel any pending reconnect and stop retrying the current URL. */
+  /** Cancel any pending reconnect and fully reset the current socket. */
   private stopReconnecting(): void {
     debugLog('[ws-client] stopReconnecting (fatal error)');
-    this.url = null;
-    this.reconnectAttempt = 0;
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-      this.reconnectTimeout = null;
-    }
+    this.closeCurrentSocket({ clearPlayerId: true });
   }
 
   private scheduleReconnect(): void {
@@ -341,22 +405,7 @@ class WebSocketClient {
   }
 
   disconnect(): void {
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-      this.reconnectTimeout = null;
-    }
-    this.stopPingInterval();
-    // Send LEAVE so the server skips the grace period
-    this.send({ type: 'LEAVE' });
-    this.url = null;
-    this.pendingDeviceId = null;
-    this.pendingSessionToken = null;
-    this.pendingInvitationToken = null;
-    this.reconnectAttempt = 0;
-    this.playerId = null;
-    this.ws?.close();
-    this.ws = null;
-    this.setConnectionState('disconnected');
+    this.closeCurrentSocket({ sendLeave: true, clearPlayerId: true });
   }
 }
 

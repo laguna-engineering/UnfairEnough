@@ -128,6 +128,26 @@ describe('player profile matching on JOIN', () => {
     expect(welcome.payload.profile).toBeUndefined();
   });
 
+  it('preserves the current device binding when claiming an unavailable profile', async () => {
+    const deviceId = crypto.randomUUID();
+    const otherDeviceId = crypto.randomUUID();
+    const currentProfileId = crypto.randomUUID();
+    const unavailableProfileId = crypto.randomUUID();
+
+    await playersRepo.createProfile(db, currentProfileId, 'Current', '#FF6B9D', '🐱', null);
+    await playersRepo.createProfile(db, unavailableProfileId, 'Taken', '#4ECDC4', '🐶', null);
+
+    expect(await playersRepo.claimProfile(db, currentProfileId, deviceId, null)).toBe(true);
+    expect(await playersRepo.claimProfile(db, unavailableProfileId, otherDeviceId, null)).toBe(
+      true,
+    );
+
+    expect(await playersRepo.claimProfile(db, unavailableProfileId, deviceId, null)).toBe(false);
+
+    const currentBinding = await playersRepo.findByDeviceId(db, deviceId, null);
+    expect(currentBinding?.id).toBe(currentProfileId);
+  });
+
   it('rejects players when room is full', async () => {
     const room = new GameRoom('TEST', db, null);
 

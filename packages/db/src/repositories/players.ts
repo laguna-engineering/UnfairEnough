@@ -172,18 +172,41 @@ export async function claimProfile(
   hostId: string | null,
 ): Promise<boolean> {
   return db.transaction(async () => {
-    // Unbind any other profile this device has within the SAME host
     const { clause, params: scopeParams } = hostScope(hostId);
-    await db.run(`UPDATE players SET device_id = NULL WHERE device_id = ? AND ${clause}`, [
-      deviceId,
-      ...scopeParams,
-    ]);
-    // Atomically claim the target profile only if it's unbound AND in the same host scope
+
+    const target = await db.get<{ id: string; device_id: string | null }>(
+      `SELECT id, device_id FROM players WHERE id = ? AND ${clause}`,
+      [profileId, ...scopeParams],
+    );
+    if (!target) return false;
+    if (target.device_id === deviceId) return true;
+    if (target.device_id !== null) return false;
+
+    const existingForDevice = await db.get<{ id: string }>(
+      `SELECT id FROM players WHERE device_id = ? AND ${clause}`,
+      [deviceId, ...scopeParams],
+    );
+
+    if (existingForDevice) {
+      await db.run('UPDATE players SET device_id = NULL WHERE id = ?', [existingForDevice.id]);
+    }
+
     const result = await db.run(
       `UPDATE players SET device_id = ? WHERE id = ? AND device_id IS NULL AND ${clause}`,
       [deviceId, profileId, ...scopeParams],
     );
-    return result.changes > 0;
+
+    if (result.changes > 0) return true;
+
+    // Race: someone else claimed the target after we checked it. Restore the
+    // previous binding so a failed claim doesn't leave this device unassigned.
+    if (existingForDevice) {
+      await db.run('UPDATE players SET device_id = ? WHERE id = ? AND device_id IS NULL', [
+        deviceId,
+        existingForDevice.id,
+      ]);
+    }
+    return false;
   });
 }
 
