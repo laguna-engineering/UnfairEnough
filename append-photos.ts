@@ -38,7 +38,7 @@ const yamlText = await Bun.file(yamlPath).text();
 const parsed = parseQuestionSetYaml(yamlText);
 if (!parsed.success) {
   console.error('YAML validation FAILED:');
-  for (const e of parsed.errors.slice(0, 20)) console.error('  - ' + e);
+  for (const e of parsed.errors.slice(0, 20)) console.error(`  - ${e}`);
   process.exit(1);
 }
 const input = parsed.data;
@@ -50,7 +50,7 @@ db.exec('PRAGMA busy_timeout = 8000');
 
 const matches = db
   .query('SELECT id, name, question_count, deleted_at FROM question_sets WHERE id = ? OR id LIKE ?')
-  .all(setSel, setSel + '%') as Array<{
+  .all(setSel, `${setSel}%`) as Array<{
   id: string;
   name: string;
   question_count: number;

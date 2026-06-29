@@ -26,6 +26,7 @@ import { generatePlayerId, parseClientMessage } from '@unfairenough/ws-protocol'
 import type { ServerWebSocket } from 'bun';
 import {
   buildQuestionPool,
+  filterRecentlyServedQuestions,
   selectNextQuestion,
 } from '../../../packages/game-logic/src/utils/questionSelection';
 import {
@@ -69,6 +70,12 @@ const COUNTDOWN_SECONDS = 3;
 const REVEAL_DELAY_MS = 2000;
 const RESULTS_DELAY_MS = 5000;
 const MEDIA_LOAD_TIMEOUT_MS = 10_000;
+
+// How many recently-served question IDs a room remembers across consecutive games
+// so the next game's selection can avoid repeating them. filterRecentlyServed()
+// relaxes this whenever a set pool is too small to fill a game without reuse, so a
+// generous window is safe.
+const RECENT_QUESTION_MEMORY = 500;
 const GUEST_SESSION_TTL_DAYS = 90;
 
 type GamePhase =
@@ -110,6 +117,11 @@ export class GameRoom {
   private questions: QuestionWithMeta[] = [];
   private questionPool: QuestionWithMeta[] = [];
   private usedQuestionIds = new Set<string>();
+  // Question IDs served in this room's recent games, oldest→newest. Unlike
+  // usedQuestionIds (within-game, cleared each game), this persists across games
+  // for the room's lifetime so back-to-back games don't repeat questions. It is
+  // deliberately NOT cleared in reset().
+  private recentlyServedQuestionIds: string[] = [];
   private currentQuestionIndex = 0;
   private activeQuestion: QuestionWithMeta | null = null;
   private questionStartTime = 0;
@@ -803,8 +815,15 @@ export class GameRoom {
     // Load questions based on game configuration
     if (this.gameType === 'custom' && this.questionSetIds.length > 0) {
       // Custom mode: load from multiple sets
-      const rawPool = await questionsRepo.getQuestionsBySetIds(this.db, this.questionSetIds);
-      const requestedCount = this.configuredTotalQuestions ?? rawPool.length;
+      const fetched = await questionsRepo.getQuestionsBySetIds(this.db, this.questionSetIds);
+      const requestedCount = this.configuredTotalQuestions ?? fetched.length;
+      // Drop questions this room served in recent games so back-to-back games
+      // don't repeat (relaxed automatically when the pool is too small).
+      const rawPool = filterRecentlyServedQuestions(
+        fetched,
+        requestedCount,
+        this.recentlyServedQuestionIds,
+      );
 
       if (this.adaptiveMode) {
         // Adaptive: use selection pipeline
@@ -855,6 +874,14 @@ export class GameRoom {
           this.language,
         );
       }
+
+      // Drop questions this room served in recent games (relaxed when the pool
+      // is too small) so consecutive games don't repeat.
+      rawPool = filterRecentlyServedQuestions(
+        rawPool,
+        requestedCount,
+        this.recentlyServedQuestionIds,
+      );
 
       if (this.gameType === 'casual') {
         // Casual: completely random (DB already orders by freshness + random)
@@ -916,6 +943,15 @@ export class GameRoom {
     }, 1000);
   }
 
+  /** Remember a served question ID for cross-game de-duplication (bounded, deduped). */
+  private recordServedQuestion(id: string): void {
+    const existing = this.recentlyServedQuestionIds.indexOf(id);
+    if (existing !== -1) this.recentlyServedQuestionIds.splice(existing, 1);
+    this.recentlyServedQuestionIds.push(id);
+    const overflow = this.recentlyServedQuestionIds.length - RECENT_QUESTION_MEMORY;
+    if (overflow > 0) this.recentlyServedQuestionIds.splice(0, overflow);
+  }
+
   private showNextQuestion(): void {
     if (this.currentQuestionIndex >= this.totalQuestionCount) {
       this.endGame();
@@ -947,6 +983,7 @@ export class GameRoom {
     }
 
     this.activeQuestion = q;
+    this.recordServedQuestion(q.id);
 
     // Compute per-player difficulties for this question
     this.computeRoundDifficulties(q);

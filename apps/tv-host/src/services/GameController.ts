@@ -24,6 +24,7 @@ import {
   difficultyMultiplier,
   ELO_BASELINE,
   endGame,
+  filterRecentlyServedQuestions,
   nextQuestion,
   playersSelectors,
   type RootState,
@@ -51,6 +52,11 @@ import { wsServer } from './WebSocketServer';
 
 const MEDIA_LOAD_TIMEOUT_MS = 10_000;
 
+// How many recently-served question IDs the controller remembers across consecutive
+// games so the next game's selection can avoid repeating them. filterRecentlyServed()
+// relaxes this whenever a set pool is too small to fill a game without reuse.
+const RECENT_QUESTION_MEMORY = 500;
+
 /** In-memory player profile info resolved at join time */
 interface LocalPlayerProfile {
   profileId: string;
@@ -76,6 +82,10 @@ class GameController implements IGameController {
   // Question state — keep full QuestionWithMeta for tags, difficulty, etc.
   private questionPool: QuestionWithMeta[] = [];
   private usedQuestionIds = new Set<string>();
+  // Question IDs served in recent games, oldest→newest. Unlike usedQuestionIds
+  // (within-game, cleared each game), this persists across games (NOT cleared in
+  // reset()) so back-to-back games don't repeat questions.
+  private recentlyServedQuestionIds: string[] = [];
   private currentQuestionIndex = 0;
   private activeQuestion: QuestionWithMeta | null = null;
   private questionStartTime = 0;
@@ -216,7 +226,14 @@ class GameController implements IGameController {
 
     if (gameType === 'custom' && questionSetIds && questionSetIds.length > 0) {
       // Custom mode: load from multiple sets
-      const rawPool = await questionsRepo.getQuestionsBySetIds(db, questionSetIds);
+      const fetched = await questionsRepo.getQuestionsBySetIds(db, questionSetIds);
+      // Drop questions served in recent games so back-to-back games don't repeat
+      // (relaxed automatically when the pool is too small).
+      const rawPool = filterRecentlyServedQuestions(
+        fetched,
+        totalQuestions,
+        this.recentlyServedQuestionIds,
+      );
 
       if (adaptiveMode) {
         // Adaptive: use selection pipeline
@@ -253,6 +270,14 @@ class GameController implements IGameController {
           this.language,
         );
       }
+
+      // Drop questions served in recent games (relaxed when the pool is too small)
+      // so consecutive games don't repeat.
+      rawPool = filterRecentlyServedQuestions(
+        rawPool,
+        totalQuestions,
+        this.recentlyServedQuestionIds,
+      );
 
       if (gameType === 'casual') {
         // Casual: completely random (DB already orders by freshness + random)
@@ -415,6 +440,15 @@ class GameController implements IGameController {
   /**
    * Show the next question (with optional media preview)
    */
+  /** Remember a served question ID for cross-game de-duplication (bounded, deduped). */
+  private recordServedQuestion(id: string): void {
+    const existing = this.recentlyServedQuestionIds.indexOf(id);
+    if (existing !== -1) this.recentlyServedQuestionIds.splice(existing, 1);
+    this.recentlyServedQuestionIds.push(id);
+    const overflow = this.recentlyServedQuestionIds.length - RECENT_QUESTION_MEMORY;
+    if (overflow > 0) this.recentlyServedQuestionIds.splice(0, overflow);
+  }
+
   private showNextQuestion(): void {
     if (this.currentQuestionIndex >= this.totalQuestionCount) {
       this.endGame();
@@ -460,6 +494,7 @@ class GameController implements IGameController {
     }
 
     this.activeQuestion = question;
+    this.recordServedQuestion(question.id);
 
     // Compute per-player difficulties for this question
     this.computeRoundDifficulties(question);

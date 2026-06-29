@@ -283,6 +283,43 @@ export function selectNextQuestion<T extends SelectableQuestion>(
   return topCandidates[0].question;
 }
 
+// ── Cross-game de-duplication ─────────────────────────────────────────
+
+/**
+ * Remove questions served in recent games so consecutive games don't repeat them,
+ * preserving the input order among the kept (unseen) questions.
+ *
+ * If too few unseen questions remain to fill `requestedCount`, the filter relaxes:
+ * it adds back previously-served questions least-recently-served first, so the most
+ * recently seen ones stay out the longest. This keeps selection working even when a
+ * set pool is smaller than a game.
+ *
+ * @param recentlyServedIds Served question IDs, oldest→newest.
+ */
+export function filterRecentlyServedQuestions<T extends { id: string }>(
+  pool: T[],
+  requestedCount: number,
+  recentlyServedIds: readonly string[],
+): T[] {
+  if (recentlyServedIds.length === 0) return pool;
+  const recencyRank = new Map<string, number>();
+  recentlyServedIds.forEach((id, i) => {
+    recencyRank.set(id, i);
+  });
+
+  const unseen: T[] = [];
+  const seen: T[] = [];
+  for (const q of pool) {
+    if (recencyRank.has(q.id)) seen.push(q);
+    else unseen.push(q);
+  }
+  if (unseen.length >= requestedCount) return unseen;
+
+  // Not enough unseen questions; add back the least-recently-served first.
+  seen.sort((a, b) => (recencyRank.get(a.id) ?? 0) - (recencyRank.get(b.id) ?? 0));
+  return unseen.concat(seen);
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function shuffle<T>(arr: T[], random: () => number): T[] {

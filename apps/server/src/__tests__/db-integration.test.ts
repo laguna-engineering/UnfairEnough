@@ -29,8 +29,12 @@ afterAll(() => {
 
 describe('migrations', () => {
   it('sets user_version to latest after migration', async () => {
+    // runMigrations returns the latest applied version — assert PRAGMA matches it
+    // rather than hard-coding a number that goes stale whenever a migration is added.
+    const latest = await runMigrations(db);
     const row = await db.get<{ user_version: number }>('PRAGMA user_version');
-    expect(row?.user_version).toBe(15);
+    expect(row?.user_version).toBe(latest);
+    expect(latest).toBeGreaterThanOrEqual(16);
   });
 
   it('creates all expected tables', async () => {
@@ -46,8 +50,10 @@ describe('migrations', () => {
   });
 
   it('is idempotent (running twice does not error)', async () => {
-    const version = await runMigrations(db);
-    expect(version).toBe(15);
+    // beforeEach already migrated once; running again must return the same version.
+    const first = await runMigrations(db);
+    const second = await runMigrations(db);
+    expect(second).toBe(first);
   });
 });
 

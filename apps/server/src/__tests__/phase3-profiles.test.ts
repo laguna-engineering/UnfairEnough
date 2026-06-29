@@ -69,10 +69,13 @@ describe('player profile matching on JOIN', () => {
 
     await room.addPlayer(ws, 'Alice', 'device-new-123');
 
-    // WELCOME should be sent without profile (first time)
+    // A fresh profile is created and returned in WELCOME with a clean slate
     const welcome = ws._messages.find((m: any) => m.type === 'WELCOME');
     expect(welcome).toBeDefined();
-    expect(welcome.payload.profile).toBeUndefined();
+    expect(welcome.payload.profile).toBeDefined();
+    expect(welcome.payload.profile.displayName).toBe('Alice');
+    expect(welcome.payload.profile.totalGames).toBe(0);
+    expect(welcome.payload.profile.totalWins).toBe(0);
 
     // Profile should exist in DB
     const profile = await playersRepo.findByDeviceId(db, 'device-new-123', null);
@@ -108,11 +111,11 @@ describe('player profile matching on JOIN', () => {
 
     await room.addPlayer(ws, 'NewName', 'device-rename');
 
-    // Profile should have old name in WELCOME (shows previous name)
+    // WELCOME reflects the updated name, and the DB is updated to match
     const welcome = ws._messages.find((m: any) => m.type === 'WELCOME');
-    expect(welcome.payload.profile.displayName).toBe('OldName');
+    expect(welcome.payload.profile.displayName).toBe('NewName');
 
-    // But DB should be updated with new name
+    // DB should be updated with new name
     const updated = await playersRepo.getPlayer(db, 'rename-p');
     expect(updated!.displayName).toBe('NewName');
   });

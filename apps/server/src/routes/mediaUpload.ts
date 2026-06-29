@@ -59,7 +59,7 @@ function validateTargetPath(targetPath: string): {
   const resolved = resolve(QUESTIONS_DIR, targetPath);
 
   // Must resolve within the questions directory
-  if (!resolved.startsWith(QUESTIONS_DIR + '/')) {
+  if (!resolved.startsWith(`${QUESTIONS_DIR}/`)) {
     return { valid: false, resolved: '', error: 'targetPath resolves outside allowed directory' };
   }
 

@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import type { QuestionWithMeta } from '@unfairenough/db';
 import type { RoundSelectionContext, SelectableQuestion } from '../utils/questionSelection';
-import { buildQuestionPool, selectNextQuestion } from '../utils/questionSelection';
+import {
+  buildQuestionPool,
+  filterRecentlyServedQuestions,
+  selectNextQuestion,
+} from '../utils/questionSelection';
 
 function makeQuestion(id: string, tags: string[] = [], difficulty = 3): QuestionWithMeta {
   return {
@@ -623,5 +627,53 @@ describe('selectNextQuestion — tag avoidance', () => {
     }
     // science should be preferred due to catch-up
     expect(scienceCount).toBeGreaterThan(100);
+  });
+});
+
+describe('filterRecentlyServedQuestions', () => {
+  // The function only reads `.id`, so minimal objects exercise the contract.
+  const q = (id: string) => ({ id });
+  const ids = (pool: { id: string }[]) => pool.map((p) => p.id);
+
+  test('returns the pool unchanged when nothing has been served', () => {
+    const pool = [q('a'), q('b'), q('c')];
+    expect(filterRecentlyServedQuestions(pool, 2, [])).toBe(pool);
+  });
+
+  test('excludes recently-served questions when enough fresh ones remain', () => {
+    const pool = [q('a'), q('b'), q('c'), q('d'), q('e')];
+    // 'a' and 'b' were served; pool has 3 others and we need 2.
+    expect(ids(filterRecentlyServedQuestions(pool, 2, ['a', 'b']))).toEqual(['c', 'd', 'e']);
+  });
+
+  test('preserves input order among the unseen questions', () => {
+    const pool = [q('a'), q('b'), q('c'), q('d')];
+    expect(ids(filterRecentlyServedQuestions(pool, 2, ['c']))).toEqual(['a', 'b', 'd']);
+  });
+
+  test('relaxes when too few unseen remain, reusing the least-recently-served first', () => {
+    const pool = [q('x'), q('y'), q('z'), q('fresh')];
+    // Served oldest→newest: x, y, z. Need 3 but only 'fresh' is unseen.
+    const result = ids(filterRecentlyServedQuestions(pool, 3, ['x', 'y', 'z']));
+    expect(result[0]).toBe('fresh'); // unseen first
+    expect(result[result.length - 1]).toBe('z'); // most-recently-served reused last
+    expect(result).toEqual(['fresh', 'x', 'y', 'z']);
+  });
+
+  test('reproduces the production fix: a question from the previous game is not re-served', () => {
+    const g13Served = ['metal-gear', 'band', 'q3', 'q4', 'q5'];
+    const g14Pool = [
+      q('metal-gear'),
+      q('band'),
+      q('n1'),
+      q('n2'),
+      q('n3'),
+      q('n4'),
+      q('n5'),
+      q('q3'),
+    ];
+    const selected = ids(filterRecentlyServedQuestions(g14Pool, 4, g13Served)).slice(0, 4);
+    expect(selected).not.toContain('metal-gear');
+    expect(selected).not.toContain('band');
   });
 });
