@@ -16,7 +16,10 @@ import type {
   PlayerRanking,
   PlayerResult,
   PositionSnapshot,
+  Question,
+  RoundResult,
   ServerMessage,
+  StateSnapshotPayload,
   WelcomePayload,
 } from '@unfairenough/ws-protocol';
 import { generatePlayerId, parseClientMessage } from '@unfairenough/ws-protocol';
@@ -113,6 +116,8 @@ export class GameRoom {
   private answers = new Map<string, PlayerAnswer>();
   private positionHistory: PositionSnapshot[] = [];
   private gameId: string | null = null;
+  private lastRoundResult: RoundResult | null = null;
+  private countdownRemaining = 0;
 
   // Tag-based personalization state
   private playerTagScores = new Map<string, Map<string, number>>();
@@ -142,6 +147,7 @@ export class GameRoom {
   private waitingForMediaLoad = false;
   private pendingMediaQuestion: QuestionWithMeta | null = null;
   private pendingPreviewDuration = 0;
+  private mediaPreviewEndsAt = 0;
 
   constructor(
     roomCode: string,
@@ -552,7 +558,7 @@ export class GameRoom {
   private sendGameStateToPlayer(player: RoomPlayer): void {
     if (!player.ws) return;
 
-    // Always re-send WELCOME so the client knows it's restored
+    // Re-send WELCOME so the client restores its identity (playerId/color/room).
     this.sendTo(player.ws, {
       type: 'WELCOME',
       payload: {
@@ -563,53 +569,97 @@ export class GameRoom {
       },
     });
 
-    // Send current phase-specific state
-    switch (this.phase) {
-      case 'QUESTION': {
-        const q = this.getCurrentQuestion();
-        if (q && !this.answers.has(player.playerId)) {
-          const timeLimit = this.configuredTimeLimit ?? q.timeLimit ?? DEFAULT_QUESTION_TIME_LIMIT;
-          const elapsed = Math.floor((Date.now() - this.questionStartTime) / 1000);
-          const remaining = Math.max(0, timeLimit - elapsed);
+    // Send a full snapshot of the current phase so the client renders it
+    // directly instead of falling back to the lobby/waiting screen.
+    this.sendTo(player.ws, {
+      type: 'STATE_SNAPSHOT',
+      payload: this.buildStateSnapshot(player),
+    });
+  }
 
-          this.sendTo(player.ws, {
-            type: 'QUESTION',
-            payload: {
-              id: q.id,
-              text: q.text,
-              type: q.type,
-              options: q.options,
-              timeLimit: remaining,
-              questionNumber: this.currentQuestionIndex + 1,
-              totalQuestions: this.totalQuestionCount,
-              serverTimestamp: this.questionStartTime,
-              tags: !q.hideTags && q.tags.length > 0 ? q.tags : undefined,
-              media: q.media
-                ? { type: q.media.type, url: q.media.url, previewDuration: q.media.previewDuration }
-                : undefined,
-            },
-          });
-        }
-        break;
+  /** Assemble the current-phase snapshot for a (re)connecting player. */
+  private buildStateSnapshot(player: RoomPlayer): StateSnapshotPayload {
+    const phase = this.phase;
+    switch (phase) {
+      case 'COUNTDOWN':
+        return { phase, countdown: Math.max(0, this.countdownRemaining) };
+
+      case 'MEDIA_PREVIEW': {
+        const q = this.getCurrentQuestion();
+        if (!q?.media) return { phase };
+        return {
+          phase,
+          mediaPreview: {
+            questionId: q.id,
+            questionNumber: this.currentQuestionIndex + 1,
+            totalQuestions: this.totalQuestionCount,
+            media: { type: q.media.type, url: q.media.url },
+            duration: this.getMediaPreviewRemainingSeconds(),
+          },
+        };
       }
-      case 'REVEALING':
-        this.sendTo(player.ws, { type: 'REVEALING' });
-        break;
+
+      case 'QUESTION':
+      case 'REVEALING': {
+        const q = this.getCurrentQuestion();
+        const answer = this.answers.get(player.playerId);
+        return {
+          phase,
+          question: q ? this.buildQuestionPayload(q) : undefined,
+          hasAnswered: !!answer,
+          yourAnswer: answer?.answer,
+        };
+      }
+
+      case 'RESULTS':
+        return { phase, roundResult: this.lastRoundResult ?? undefined };
+
       case 'GAME_OVER': {
         const rankings = this.buildRankings();
         const winner = rankings[0] ?? { playerId: '', name: '', score: 0 };
-        this.sendTo(player.ws, {
-          type: 'GAME_OVER',
-          payload: {
+        return {
+          phase,
+          gameResult: {
             rankings,
             winner: { playerId: winner.playerId, name: winner.name, score: winner.score },
             positionHistory: this.positionHistory,
           },
-        });
-        break;
+        };
       }
-      // LOBBY, COUNTDOWN, MEDIA_PREVIEW, RESULTS — no special state needed beyond WELCOME
+
+      default:
+        return { phase: 'LOBBY' };
     }
+  }
+
+  /** Remaining media-preview display time, or the full duration before the TV has loaded it. */
+  private getMediaPreviewRemainingSeconds(): number {
+    if (this.mediaPreviewEndsAt > 0) {
+      return Math.max(0, Math.ceil((this.mediaPreviewEndsAt - Date.now()) / 1000));
+    }
+    return Math.max(0, this.pendingPreviewDuration);
+  }
+
+  /** Build a QUESTION payload, with `timeLimit` set to the remaining time. */
+  private buildQuestionPayload(q: QuestionWithMeta): Question & { serverTimestamp: number } {
+    const timeLimit = this.configuredTimeLimit ?? q.timeLimit ?? DEFAULT_QUESTION_TIME_LIMIT;
+    const elapsed = Math.floor((Date.now() - this.questionStartTime) / 1000);
+    const remaining = Math.max(0, timeLimit - elapsed);
+
+    return {
+      id: q.id,
+      text: q.text,
+      type: q.type,
+      options: q.options,
+      timeLimit: remaining,
+      questionNumber: this.currentQuestionIndex + 1,
+      totalQuestions: this.totalQuestionCount,
+      serverTimestamp: this.questionStartTime,
+      tags: !q.hideTags && q.tags.length > 0 ? q.tags : undefined,
+      media: q.media
+        ? { type: q.media.type, url: q.media.url, previewDuration: q.media.previewDuration }
+        : undefined,
+    };
   }
 
   // ── Game configuration ───────────────────────────────────────
@@ -851,10 +901,12 @@ export class GameRoom {
     });
 
     let countdown = COUNTDOWN_SECONDS;
+    this.countdownRemaining = countdown;
     this.broadcast({ type: 'GAME_STARTING', payload: { countdown } });
 
     this.countdownTimer = setInterval(() => {
       countdown--;
+      this.countdownRemaining = countdown;
       if (countdown <= 0) {
         this.clearTimer('countdown');
         this.showNextQuestion();
@@ -921,12 +973,14 @@ export class GameRoom {
       this.waitingForMediaLoad = true;
       this.pendingMediaQuestion = q;
       this.pendingPreviewDuration = previewDuration;
+      this.mediaPreviewEndsAt = 0;
 
       this.mediaLoadWaitTimeout = setTimeout(() => {
         this.mediaLoadWaitTimeout = null;
         if (!this.waitingForMediaLoad) return;
         this.waitingForMediaLoad = false;
         this.pendingMediaQuestion = null;
+        this.mediaPreviewEndsAt = 0;
         this.sendQuestion(q);
       }, MEDIA_LOAD_TIMEOUT_MS);
     } else {
@@ -952,6 +1006,7 @@ export class GameRoom {
       this.waitingForMediaLoad = false;
       const q = this.pendingMediaQuestion;
       this.pendingMediaQuestion = null;
+      this.mediaPreviewEndsAt = 0;
       if (q) this.sendQuestion(q);
     }
   }
@@ -967,8 +1022,10 @@ export class GameRoom {
 
     if (!q) return;
 
+    this.mediaPreviewEndsAt = Date.now() + previewDuration * 1000;
     this.mediaPreviewTimeout = setTimeout(() => {
       this.mediaPreviewTimeout = null;
+      this.mediaPreviewEndsAt = 0;
       this.sendQuestion(q);
     }, previewDuration * 1000);
   }
@@ -977,6 +1034,7 @@ export class GameRoom {
     const timeLimit = this.configuredTimeLimit ?? q.timeLimit ?? DEFAULT_QUESTION_TIME_LIMIT;
 
     this.phase = 'QUESTION';
+    this.mediaPreviewEndsAt = 0;
     this.answers.clear();
     this.questionStartTime = Date.now();
 
@@ -1311,17 +1369,17 @@ export class GameRoom {
 
     this.phase = 'RESULTS';
 
-    this.broadcast({
-      type: 'ROUND_END',
-      payload: {
-        questionId: q.id,
-        correctAnswer,
-        tags: q.tags.length > 0 ? q.tags : undefined,
-        questionDifficulty: q.difficulty ?? 3,
-        playerResults,
-        rankings,
-      },
-    });
+    const roundResult: RoundResult = {
+      questionId: q.id,
+      correctAnswer,
+      tags: q.tags.length > 0 ? q.tags : undefined,
+      questionDifficulty: q.difficulty ?? 3,
+      playerResults,
+      rankings,
+    };
+    this.lastRoundResult = roundResult;
+
+    this.broadcast({ type: 'ROUND_END', payload: roundResult });
 
     // Track question usage (fire-and-forget)
     questionsRepo
@@ -1580,6 +1638,9 @@ export class GameRoom {
     this.positionHistory = [];
     this.activeQuestion = null;
     this.gameId = null;
+    this.lastRoundResult = null;
+    this.countdownRemaining = 0;
+    this.mediaPreviewEndsAt = 0;
     this.configurePromise = null;
     this.playerTagScores.clear();
     this.currentRoundDifficulties.clear();
@@ -1655,6 +1716,7 @@ export class GameRoom {
     }
     this.waitingForMediaLoad = false;
     this.pendingMediaQuestion = null;
+    this.mediaPreviewEndsAt = 0;
     if (this.mediaPreviewTimeout) {
       clearTimeout(this.mediaPreviewTimeout);
       this.mediaPreviewTimeout = null;

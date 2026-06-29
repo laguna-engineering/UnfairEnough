@@ -13,6 +13,7 @@ import type {
   Question,
   RoundResult,
   ServerMessage,
+  StateSnapshotPayload,
   WelcomePayload,
 } from '@unfairenough/ws-protocol';
 
@@ -22,6 +23,7 @@ interface Callbacks {
   onConnectionStateChange?: (state: ConnectionState) => void;
   onIdentity?: (data: IdentityPayload) => void;
   onWelcome?: (data: WelcomePayload) => void;
+  onStateSnapshot?: (snapshot: StateSnapshotPayload) => void;
   onPlayerJoined?: (data: { playerId: string; name: string; color: string }) => void;
   onPlayerLeft?: (data: { playerId: string }) => void;
   onPlayerDisconnected?: (data: { playerId: string }) => void;
@@ -232,6 +234,10 @@ class WebSocketClient {
         case 'WELCOME':
           this.playerId = message.payload.playerId;
           this.callbacks.onWelcome?.(message.payload);
+          break;
+
+        case 'STATE_SNAPSHOT':
+          this.callbacks.onStateSnapshot?.(message.payload);
           break;
 
         case 'PLAYER_JOINED':

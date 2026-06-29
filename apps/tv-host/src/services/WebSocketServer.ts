@@ -3,7 +3,7 @@
  * Uses react-native-tcp-socket to run a real WebSocket server
  */
 
-import type { Question, ServerMessage } from '@unfairenough/ws-protocol';
+import type { Question, ServerMessage, StateSnapshotPayload } from '@unfairenough/ws-protocol';
 import { Buffer } from 'buffer';
 import * as Crypto from 'expo-crypto';
 import * as Network from 'expo-network';
@@ -50,6 +50,7 @@ interface Callbacks {
   onPlayerDisconnected?: PlayerDisconnectedCallback;
   onPlayerReconnected?: PlayerReconnectedCallback;
   onAnswerReceived?: AnswerReceivedCallback;
+  onBuildStateSnapshot?: (playerId: string) => StateSnapshotPayload | null;
 }
 
 interface GraveyardEntry {
@@ -293,7 +294,12 @@ class WebSocketServerService {
 
           this.sendToClient(client, {
             type: 'WELCOME',
-            payload: { ...playerData, language: this.language },
+            payload: {
+              playerId,
+              playerColor: color,
+              roomCode: this.roomCode,
+              language: this.language,
+            },
           });
           this.callbacks.onPlayerJoined?.({ ...playerData, deviceId });
           this.broadcast({ type: 'PLAYER_JOINED', payload: playerData });
@@ -331,6 +337,8 @@ class WebSocketServerService {
           clearTimeout(entry.timer);
           this.graveyard.delete(entry.playerId);
           client.playerId = entry.playerId;
+          client.playerName = entry.name;
+          client.playerColor = entry.color;
 
           // Re-send WELCOME
           this.sendToClient(client, {
@@ -342,6 +350,13 @@ class WebSocketServerService {
               language: this.language,
             },
           });
+
+          // Send a full snapshot of the current phase so the client renders it
+          // directly instead of falling back to the lobby/waiting screen.
+          const snapshot = this.callbacks.onBuildStateSnapshot?.(entry.playerId);
+          if (snapshot) {
+            this.sendToClient(client, { type: 'STATE_SNAPSHOT', payload: snapshot });
+          }
 
           this.callbacks.onPlayerReconnected?.({ playerId: entry.playerId });
           this.broadcast({

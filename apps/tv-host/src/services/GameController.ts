@@ -44,7 +44,7 @@ import {
   tickQuestionTimer,
   updateConfig,
 } from '@unfairenough/game-logic';
-import type { AnswerKey, PlayerResult } from '@unfairenough/ws-protocol';
+import type { AnswerKey, PlayerResult, StateSnapshotPayload } from '@unfairenough/ws-protocol';
 import { getDb, initDatabase } from './database';
 import type { IGameController } from './IGameController';
 import { wsServer } from './WebSocketServer';
@@ -71,6 +71,7 @@ class GameController implements IGameController {
   private waitingForMediaLoad = false;
   private pendingMediaQuestion: QuestionWithMeta | null = null;
   private pendingPreviewDuration = 0;
+  private mediaPreviewEndsAt = 0;
 
   // Question state — keep full QuestionWithMeta for tags, difficulty, etc.
   private questionPool: QuestionWithMeta[] = [];
@@ -117,6 +118,7 @@ class GameController implements IGameController {
       onPlayerReconnected: (data) => {
         this.store.dispatch(setPlayerConnected({ id: data.playerId, isConnected: true }));
       },
+      onBuildStateSnapshot: (playerId) => this.buildStateSnapshot(playerId),
       onPlayerLeft: (data) => {
         // Timer expired or intentional LEAVE — full removal
         this.store.dispatch(removePlayer(data.playerId));
@@ -327,6 +329,90 @@ class GameController implements IGameController {
   }
 
   /**
+   * Assemble the current-phase snapshot for a reconnecting player, so the
+   * client can render the live phase instead of falling back to the lobby.
+   */
+  private buildStateSnapshot(playerId: string): StateSnapshotPayload {
+    const { game, players } = this.getState();
+    const phase = game.phase;
+
+    switch (phase) {
+      case 'COUNTDOWN':
+        return { phase, countdown: Math.max(0, game.countdown) };
+
+      case 'MEDIA_PREVIEW': {
+        const mp = game.mediaPreview;
+        if (!mp) return { phase };
+        return {
+          phase,
+          mediaPreview: {
+            questionId: mp.questionId,
+            questionNumber: mp.questionNumber,
+            totalQuestions: mp.totalQuestions,
+            media: { type: mp.type, url: mp.url },
+            duration: this.getMediaPreviewRemainingSeconds(),
+          },
+        };
+      }
+
+      case 'QUESTION':
+      case 'REVEALING': {
+        const answer = game.answers[playerId];
+        const cq = game.currentQuestion;
+        return {
+          phase,
+          question: cq ? { ...cq, timeLimit: Math.max(0, game.countdown) } : undefined,
+          hasAnswered: !!answer,
+          yourAnswer: answer?.answer,
+        };
+      }
+
+      case 'RESULTS': {
+        if (!game.correctAnswer) return { phase };
+        return {
+          phase,
+          roundResult: {
+            questionId: game.currentQuestion?.id ?? '',
+            correctAnswer: game.correctAnswer,
+            tags: game.roundTags.length > 0 ? game.roundTags : undefined,
+            questionDifficulty: this.activeQuestion?.difficulty ?? 3,
+            playerResults: game.roundResults,
+            rankings: game.rankings,
+          },
+        };
+      }
+
+      case 'GAME_OVER': {
+        const rankings = rankPlayers(
+          playersSelectors
+            .selectAll(players)
+            .map((p) => ({ id: p.id, name: p.name, score: p.score })),
+        ).map((r) => ({ playerId: r.id, name: r.name, score: r.score, rank: r.rank }));
+        const winner = rankings[0] ?? { playerId: '', name: '', score: 0 };
+        return {
+          phase,
+          gameResult: {
+            rankings,
+            winner: { playerId: winner.playerId, name: winner.name, score: winner.score },
+            positionHistory: game.positionHistory,
+          },
+        };
+      }
+
+      default:
+        return { phase: 'LOBBY' };
+    }
+  }
+
+  /** Remaining media-preview display time, or the full duration before the TV has loaded it. */
+  private getMediaPreviewRemainingSeconds(): number {
+    if (this.mediaPreviewEndsAt > 0) {
+      return Math.max(0, Math.ceil((this.mediaPreviewEndsAt - Date.now()) / 1000));
+    }
+    return Math.max(0, this.pendingPreviewDuration);
+  }
+
+  /**
    * Show the next question (with optional media preview)
    */
   private showNextQuestion(): void {
@@ -400,12 +486,14 @@ class GameController implements IGameController {
       this.waitingForMediaLoad = true;
       this.pendingMediaQuestion = question;
       this.pendingPreviewDuration = previewDuration;
+      this.mediaPreviewEndsAt = 0;
 
       this.mediaLoadWaitTimeout = setTimeout(() => {
         this.mediaLoadWaitTimeout = null;
         if (!this.waitingForMediaLoad) return;
         this.waitingForMediaLoad = false;
         this.pendingMediaQuestion = null;
+        this.mediaPreviewEndsAt = 0;
         this.sendQuestion(question);
       }, MEDIA_LOAD_TIMEOUT_MS);
     } else {
@@ -473,6 +561,7 @@ class GameController implements IGameController {
       this.waitingForMediaLoad = false;
       const question = this.pendingMediaQuestion;
       this.pendingMediaQuestion = null;
+      this.mediaPreviewEndsAt = 0;
       if (question) this.sendQuestion(question);
     }
   }
@@ -490,8 +579,10 @@ class GameController implements IGameController {
 
     if (!question) return;
 
+    this.mediaPreviewEndsAt = Date.now() + previewDuration * 1000;
     this.mediaPreviewTimeout = setTimeout(() => {
       this.mediaPreviewTimeout = null;
+      this.mediaPreviewEndsAt = 0;
       this.sendQuestion(question);
     }, previewDuration * 1000);
   }
@@ -500,6 +591,7 @@ class GameController implements IGameController {
    * Send the actual question (after optional media preview)
    */
   private sendQuestion(question: QuestionWithMeta): void {
+    this.mediaPreviewEndsAt = 0;
     const state = this.getState();
     const timeLimit = state.game.config.questionTimeLimit;
 
@@ -909,6 +1001,7 @@ class GameController implements IGameController {
     this.usedQuestionIds.clear();
     this.currentQuestionIndex = 0;
     this.activeQuestion = null;
+    this.mediaPreviewEndsAt = 0;
     this.playerTagScores.clear();
     this.currentRoundDifficulties.clear();
   }
@@ -936,6 +1029,7 @@ class GameController implements IGameController {
     }
     this.waitingForMediaLoad = false;
     this.pendingMediaQuestion = null;
+    this.mediaPreviewEndsAt = 0;
     if (this.mediaPreviewTimeout) {
       clearTimeout(this.mediaPreviewTimeout);
       this.mediaPreviewTimeout = null;

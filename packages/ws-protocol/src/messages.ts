@@ -32,6 +32,7 @@ export type ServerMessage =
   | { type: 'REVEALING' }
   | { type: 'ROUND_END'; payload: RoundResult }
   | { type: 'GAME_OVER'; payload: GameResult }
+  | { type: 'STATE_SNAPSHOT'; payload: StateSnapshotPayload }
   | {
       type: 'GAME_CONFIGURED';
       payload: {
@@ -162,6 +163,36 @@ export interface GameResult {
   rankings: PlayerRanking[];
   winner: { playerId: string; name: string; score: number };
   positionHistory?: PositionSnapshot[];
+}
+
+/**
+ * Full current-phase state, sent to a player when they reconnect so the client
+ * can render the live phase atomically instead of falling back to the lobby
+ * screen. Only the fields relevant to `phase` are populated.
+ */
+export interface StateSnapshotPayload {
+  phase:
+    | 'LOBBY'
+    | 'COUNTDOWN'
+    | 'MEDIA_PREVIEW'
+    | 'QUESTION'
+    | 'REVEALING'
+    | 'RESULTS'
+    | 'GAME_OVER';
+  /** COUNTDOWN: whole seconds remaining. */
+  countdown?: number;
+  /** MEDIA_PREVIEW: the media preview to show. */
+  mediaPreview?: MediaPreviewPayload;
+  /** QUESTION/REVEALING: the active question (`timeLimit` is the remaining time). */
+  question?: Question & { serverTimestamp: number };
+  /** QUESTION/REVEALING: whether this player has already submitted an answer. */
+  hasAnswered?: boolean;
+  /** QUESTION/REVEALING: this player's answer, if already submitted. */
+  yourAnswer?: AnswerKey;
+  /** RESULTS: the last round's result. */
+  roundResult?: RoundResult;
+  /** GAME_OVER: the final standings. */
+  gameResult?: GameResult;
 }
 
 // Host -> Server messages

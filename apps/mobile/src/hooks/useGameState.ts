@@ -127,6 +127,69 @@ export function useGameState() {
           changeLanguage(data.language as SupportedLanguage);
         }
       },
+      // Reconnect catch-up: render the live phase directly instead of being
+      // stranded on the waiting screen until the next broadcast.
+      onStateSnapshot: (snap) => {
+        debugLog('[game-state] state snapshot received', {
+          phase: snap.phase,
+          hasAnswered: snap.hasAnswered,
+        });
+        setError(null);
+        switch (snap.phase) {
+          case 'COUNTDOWN':
+            setCountdown(snap.countdown ?? 0);
+            setPhase('COUNTDOWN');
+            break;
+          case 'MEDIA_PREVIEW':
+            if (snap.mediaPreview) {
+              setMediaPreview(snap.mediaPreview);
+              setPhase('MEDIA_PREVIEW');
+            } else {
+              setPhase('WAITING');
+            }
+            break;
+          case 'QUESTION':
+          case 'REVEALING':
+            if (!snap.question) {
+              setPhase('WAITING');
+              break;
+            }
+            setCurrentQuestion(snap.question);
+            setTimeRemaining(snap.question.timeLimit);
+            setMediaPreview(null);
+            if (snap.hasAnswered || snap.phase === 'REVEALING') {
+              // Already answered, or the answer window has closed — show the
+              // post-answer waiting state rather than an answerable question.
+              setSelectedAnswer(snap.yourAnswer ?? null);
+              setConfirmedAnswer(snap.yourAnswer ?? null);
+              setPhase('ANSWERED');
+            } else {
+              setSelectedAnswer(null);
+              setConfirmedAnswer(null);
+              setPhase('PLAYING');
+            }
+            break;
+          case 'RESULTS':
+            if (snap.roundResult) {
+              setRoundResult(snap.roundResult);
+              setPhase('RESULT');
+            } else {
+              setPhase('WAITING');
+            }
+            break;
+          case 'GAME_OVER':
+            if (snap.gameResult) {
+              setGameResult(snap.gameResult);
+              setPhase('GAME_OVER');
+            } else {
+              setPhase('WAITING');
+            }
+            break;
+          default:
+            setPhase('WAITING');
+            break;
+        }
+      },
       onGameStarting: (count) => {
         setPhase('COUNTDOWN');
         setCountdown(count);
@@ -166,6 +229,29 @@ export function useGameState() {
           if (deviceId) {
             setPhase('IDENTIFYING');
             wsClient.identify(deviceId);
+          }
+          return;
+        }
+
+        // The reconnect grace period lapsed and the server dropped our in-room
+        // player session. Re-identifying on the same socket can't restore that
+        // player mid-game, and JOIN may be rejected while a game is in progress,
+        // so fail loudly and send the user back through the normal entry flow.
+        if (err.code === 'SESSION_EXPIRED') {
+          connectAttemptRef.current += 1;
+          wsClient.disconnect();
+          setCurrentQuestion(null);
+          setSelectedAnswer(null);
+          setConfirmedAnswer(null);
+          setRoundResult(null);
+          setGameResult(null);
+          setMediaPreview(null);
+          setPhase('SCAN');
+          if (Platform.OS === 'web') {
+            alert(err.message);
+          } else {
+            const { Alert } = require('react-native');
+            Alert.alert(err.message);
           }
           return;
         }
