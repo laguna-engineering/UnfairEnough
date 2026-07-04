@@ -19,6 +19,9 @@ export function useBgMusic() {
   const [isMuted, setIsMuted] = useState(false);
   const playerRef = useRef<AudioPlayer | null>(null);
   const trackIndexRef = useRef(0);
+  // Ref-counted so overlapping screens during a phase transition (e.g. one
+  // screen unmounting as the next mounts) can't leave the ambient track stuck.
+  const duckDepthRef = useRef(0);
 
   // Create the player once and loop through the bundled tracks.
   useEffect(() => {
@@ -53,5 +56,18 @@ export function useBgMusic() {
 
   const toggleMute = useCallback(() => setIsMuted((m) => !m), []);
 
-  return { isMuted, toggleMute, hasTracks: TRACKS.length > 0 };
+  // Duck the ambient track while question/preview audio plays. `resume` plays
+  // through the still-synced `muted` flag, so a user-muted track stays muted.
+  const pause = useCallback(() => {
+    duckDepthRef.current += 1;
+    if (duckDepthRef.current === 1) playerRef.current?.pause();
+  }, []);
+
+  const resume = useCallback(() => {
+    if (duckDepthRef.current === 0) return;
+    duckDepthRef.current -= 1;
+    if (duckDepthRef.current === 0) playerRef.current?.play();
+  }, []);
+
+  return { isMuted, toggleMute, hasTracks: TRACKS.length > 0, pause, resume };
 }

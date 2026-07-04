@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useBgMusic } from '../hooks/useBgMusic';
+import { BgMusicProvider, useBgMusicContext } from '../hooks/BgMusicContext';
 import { useGameController } from '../hooks/useGameController';
 import { CountdownScreen } from './CountdownScreen';
 import { GameOverScreen } from './GameOverScreen';
@@ -9,9 +9,9 @@ import { QuestionScreen } from './QuestionScreen';
 import { ResultsScreen } from './ResultsScreen';
 import { RevealScreen } from './RevealScreen';
 
-export const GameScreen: React.FC = () => {
+const GameScreenInner: React.FC = () => {
   const { phase } = useGameController();
-  const bgMusic = useBgMusic();
+  const bgMusic = useBgMusicContext();
 
   switch (phase) {
     case 'LOBBY':
@@ -32,3 +32,9 @@ export const GameScreen: React.FC = () => {
       return <LobbyScreen bgMusic={bgMusic} />;
   }
 };
+
+export const GameScreen: React.FC = () => (
+  <BgMusicProvider>
+    <GameScreenInner />
+  </BgMusicProvider>
+);
