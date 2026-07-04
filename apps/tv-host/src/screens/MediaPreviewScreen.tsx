@@ -6,27 +6,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { useBgMusicContext } from '../hooks/BgMusicContext';
 import { useGameController } from '../hooks/useGameController';
+import { resolveMediaUrl } from '../utils/mediaUrl';
 
 // If the clip hasn't reported "ready" within this window we treat it as a load
 // failure and skip the preview — expo-audio surfaces no load-error event, so a
 // timeout stands in for the image path's onError. Kept under the server's 10s
 // MEDIA_LOAD backstop so the TV drives the skip.
 const AUDIO_LOAD_TIMEOUT_MS = 8000;
-
-/** Resolve a possibly-relative media URL to something playable/loadable. */
-function resolveMediaUrl(
-  raw: string | undefined | null,
-  mode: string,
-  serverUrl: string | null | undefined,
-): string | null {
-  if (!raw) return null;
-  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
-  if (mode === 'hosted' && serverUrl) {
-    const host = serverUrl.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '');
-    return `http://${host}/${raw}`;
-  }
-  return null;
-}
 
 export const MediaPreviewScreen: React.FC = () => {
   const { t } = useTranslation();

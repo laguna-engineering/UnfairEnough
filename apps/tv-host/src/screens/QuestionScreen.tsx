@@ -9,9 +9,13 @@ import {
   Timer,
   typography,
 } from '@unfairenough/ui';
+import { type AudioPlayer, createAudioPlayer } from 'expo-audio';
 import type React from 'react';
+import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { useBgMusicContext } from '../hooks/BgMusicContext';
 import { useGameController } from '../hooks/useGameController';
+import { resolveMediaUrl } from '../utils/mediaUrl';
 
 const answerColors = {
   A: colors.primary,
@@ -22,7 +26,38 @@ const answerColors = {
 
 export const QuestionScreen: React.FC = () => {
   const { t } = useTranslation();
-  const { state, currentQuestion, countdown } = useGameController();
+  const { state, currentQuestion, countdown, mode, serverUrl } = useGameController();
+  const { pause, resume } = useBgMusicContext();
+
+  // Answer-slot audio: play `play: question` clips during the QUESTION phase.
+  // Subject clips play once (then silence until reveal); background music loops.
+  const audio = currentQuestion?.audio;
+  const audioUrl = audio?.play === 'question' ? resolveMediaUrl(audio.url, mode, serverUrl) : null;
+  const shouldLoop = audio?.role === 'background';
+
+  // Duck the ambient app track while the question clip plays; restore at reveal
+  // (this screen unmounts on the phase change to REVEALING).
+  useEffect(() => {
+    if (!audioUrl) return;
+    pause();
+    return () => resume();
+  }, [audioUrl, pause, resume]);
+
+  // Start the clip on phase entry; tear it down on unmount so it never bleeds
+  // into the reveal or the next question.
+  useEffect(() => {
+    if (!audioUrl) return;
+    let player: AudioPlayer | null = null;
+    try {
+      player = createAudioPlayer({ uri: audioUrl });
+      player.volume = 1;
+      player.loop = shouldLoop;
+      player.play();
+    } catch {
+      // Non-fatal — the question proceeds without audio.
+    }
+    return () => player?.remove();
+  }, [audioUrl, shouldLoop]);
 
   if (!currentQuestion) return null;
 
