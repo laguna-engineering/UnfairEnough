@@ -12,11 +12,16 @@
     <h1>Question Sets</h1>
 
     <div class="card">
-      <h2 style="margin-top:0">Upload YAML</h2>
+      <h2 style="margin-top:0">Upload YAML or bundle</h2>
       <div class="upload-form">
-        <input type="file" id="file-input" accept=".yaml,.yml" multiple>
+        <input type="file" id="file-input" accept=".yaml,.yml,.zip" multiple>
         <button id="upload-btn" disabled>Upload</button>
       </div>
+      <p style="margin:0.5rem 0 0;font-size:0.8rem;color:#888;">
+        Upload a <code>.yaml</code>/<code>.yml</code> question set, or a
+        <code>.zip</code> bundle containing the YAML plus its <code>media/</code>
+        folder. Max bundle size 300&nbsp;MB.
+      </p>
       <div id="upload-status"></div>
 
       <details style="margin-top:1rem;">
@@ -168,6 +173,79 @@ questions:
       uploadBtn.disabled = !fileInput.files.length;
     });
 
+    const MAX_BUNDLE_BYTES = 300 * 1024 * 1024;
+
+    function addMissing(all, paths) {
+      if (!paths) return;
+      for (const path of paths) {
+        if (!all.includes(path)) all.push(path);
+      }
+    }
+
+    // Upload a single .yaml/.yml question set. Returns true on success.
+    async function uploadYaml(file, row, allMissingMedia) {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/question-sets", { method: "POST", body: form });
+      const data = await res.json();
+
+      if (!res.ok) {
+        const detail = data.details ? `\n${JSON.stringify(data.details, null, 2)}` : "";
+        row.className = "error";
+        row.innerHTML = `${escapeHtml(file.name)}: ${escapeHtml(data.error || "Upload failed")}${detail ? `<pre>${escapeHtml(detail)}</pre>` : ""}`;
+        return false;
+      }
+      row.className = "success";
+      row.textContent = `${file.name}: ${data.message}`;
+      addMissing(allMissingMedia, data.missingMedia);
+      return true;
+    }
+
+    // Upload a .zip bundle (YAML + media). Returns true if any set imported.
+    async function uploadBundle(file, row, allMissingMedia) {
+      // Client-side size guard — never upload a doomed oversized file.
+      if (file.size > MAX_BUNDLE_BYTES) {
+        row.className = "error";
+        row.textContent = `${file.name}: bundle too large (max 300 MB)`;
+        return false;
+      }
+      row.textContent = `Uploading ${file.name} (${Math.round(file.size / 1024 / 1024)} MB)...`;
+
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/question-sets/bundle", { method: "POST", body: form });
+      const data = await res.json();
+
+      // Request-level failure (413 oversize, 400 corrupt/invalid zip): one error row.
+      if (!res.ok) {
+        row.className = "error";
+        row.textContent = `${file.name}: ${data.error || "Bundle upload failed"}`;
+        // A whole-bundle 400 may still carry per-set errors — show them below.
+        renderSetRows(file.name, data.sets);
+        return false;
+      }
+
+      row.remove(); // replaced by per-set rows
+      renderSetRows(file.name, data.sets);
+      addMissing(allMissingMedia, data.missingMedia);
+      return (data.sets || []).some((s) => !s.error);
+    }
+
+    // Render one status row per set in a bundle response.
+    function renderSetRows(bundleName, sets) {
+      for (const set of sets || []) {
+        const setRow = document.createElement("p");
+        if (set.error) {
+          setRow.className = "error";
+          setRow.textContent = `${bundleName} → ${set.name}: ${set.error}`;
+        } else {
+          setRow.className = "success";
+          setRow.textContent = `${bundleName} → ${set.name}: imported ${set.questionCount} questions`;
+        }
+        uploadStatus.appendChild(setRow);
+      }
+    }
+
     uploadBtn.addEventListener("click", async () => {
       const files = [...fileInput.files];
       if (files.length === 0) return;
@@ -191,26 +269,11 @@ questions:
         uploadStatus.appendChild(row);
 
         try {
-          const form = new FormData();
-          form.append("file", file);
-          const res = await fetch("/api/question-sets", { method: "POST", body: form });
-          const data = await res.json();
-
-          if (!res.ok) {
-            const detail = data.details ? `\n${JSON.stringify(data.details, null, 2)}` : "";
-            row.className = "error";
-            row.innerHTML = `${escapeHtml(file.name)}: ${escapeHtml(data.error || "Upload failed")}${detail ? `<pre>${escapeHtml(detail)}</pre>` : ""}`;
-          } else {
-            row.className = "success";
-            row.textContent = `${file.name}: ${data.message}`;
-            succeeded++;
-            // Aggregate missing media from all YAML uploads
-            if (data.missingMedia && data.missingMedia.length > 0) {
-              for (const path of data.missingMedia) {
-                if (!allMissingMedia.includes(path)) allMissingMedia.push(path);
-              }
-            }
-          }
+          const isBundle = file.name.toLowerCase().endsWith(".zip");
+          const ok = isBundle
+            ? await uploadBundle(file, row, allMissingMedia)
+            : await uploadYaml(file, row, allMissingMedia);
+          if (ok) succeeded++;
         } catch (err) {
           row.className = "error";
           row.textContent = `${file.name}: ${err.message}`;
@@ -753,7 +816,7 @@ questions:
       const header = document.createElement("div");
       header.className = "modal-header";
       const title = document.createElement("h2");
-      title.textContent = `Upload immagini mancanti (${missingPaths.length} file)`;
+      title.textContent = `Upload file mancanti (${missingPaths.length} file)`;
       const closeBtn = document.createElement("button");
       closeBtn.className = "modal-close";
       closeBtn.innerHTML = "&times;";
@@ -767,7 +830,7 @@ questions:
 
       const guidance = document.createElement("p");
       guidance.style.cssText = "margin:0 0 1rem;font-size:0.85rem;color:#555;";
-      guidance.textContent = "Il YAML importato fa riferimento a immagini non presenti sul server. Seleziona i file corrispondenti dal tuo computer.";
+      guidance.textContent = "Il set importato fa riferimento a file multimediali (immagini, audio o video) non presenti sul server. Seleziona i file corrispondenti dal tuo computer.";
       body.appendChild(guidance);
 
       const selectRow = document.createElement("div");
@@ -775,7 +838,7 @@ questions:
       const mediaInput = document.createElement("input");
       mediaInput.type = "file";
       mediaInput.multiple = true;
-      mediaInput.accept = "image/*";
+      mediaInput.accept = "image/*,audio/*,video/*";
       mediaInput.style.fontSize = "0.85rem";
       const selectLabel = document.createElement("span");
       selectLabel.style.cssText = "font-size:0.8rem;color:#888;";
@@ -895,12 +958,12 @@ questions:
 
           if (matches.length === 1) {
             matches[0].file = file;
-            matches[0].thumbUrl = URL.createObjectURL(file);
+            matches[0].thumbUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : null;
             matchCount++;
           } else if (matches.length > 1) {
             // Duplicate basename: assign to first unmatched
             matches[0].file = file;
-            matches[0].thumbUrl = URL.createObjectURL(file);
+            matches[0].thumbUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : null;
             matchCount++;
           }
           // If matches.length === 0, file doesn't match any missing path — ignore
