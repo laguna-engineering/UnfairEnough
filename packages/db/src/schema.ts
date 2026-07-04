@@ -1,4 +1,4 @@
-import type { QuestionOption } from '@unfairenough/ws-protocol';
+import type { QuestionAudio, QuestionOption } from '@unfairenough/ws-protocol';
 
 // ── Row types (match SQLite columns) ─────────────────────────
 
@@ -37,6 +37,10 @@ export interface QuestionRow {
   media_type: MediaType | null;
   media_url: string | null;
   media_preview_duration: number;
+  audio_url: string | null;
+  audio_play: 'preview' | 'question' | null;
+  audio_role: 'subject' | 'background' | null;
+  audio_duration: number | null;
   options: string; // JSON array of {key, text}
   correct_answer: string;
   player_difficulty: string | null; // JSON object
@@ -127,6 +131,7 @@ export interface QuestionWithMeta {
     url: string;
     previewDuration: number;
   } | null;
+  audio: QuestionAudio | null;
   options: QuestionOption[];
   correctAnswer: string;
   playerDifficulty: Record<string, number> | null;

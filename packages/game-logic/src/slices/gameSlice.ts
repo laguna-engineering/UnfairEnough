@@ -6,6 +6,7 @@ import type {
   PlayerResult,
   PositionSnapshot,
   Question,
+  QuestionAudio,
 } from '@unfairenough/ws-protocol';
 
 // State machine pattern for game phases - prevents invalid transitions
@@ -53,8 +54,9 @@ interface GameState {
   phase: GamePhase;
   currentQuestion: (Question & { serverTimestamp: number }) | null;
   mediaPreview: {
-    type: 'image' | 'audio' | 'video';
-    url: string;
+    type?: 'image' | 'audio' | 'video';
+    url?: string;
+    audio?: QuestionAudio;
     questionId?: string;
     questionNumber: number;
     totalQuestions: number;
@@ -121,6 +123,7 @@ const gameSlice = createSlice({
       state.countdown = action.payload.duration;
       state.mediaPreview = {
         ...action.payload.media,
+        audio: action.payload.audio,
         questionId: action.payload.questionId,
         questionNumber: action.payload.questionNumber,
         totalQuestions: action.payload.totalQuestions,

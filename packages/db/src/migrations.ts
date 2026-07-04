@@ -298,6 +298,18 @@ CREATE INDEX IF NOT EXISTS idx_invitation_tokens_room ON invitation_tokens(room_
 CREATE INDEX IF NOT EXISTS idx_invitation_tokens_host ON invitation_tokens(host_id);
 `;
 
+/**
+ * V17: Per-question audio behavior (KTD1). `audio_url` holds the clip; `audio_play`
+ * (preview|question) and `audio_role` (subject|background) drive playback slot and
+ * scoring; `audio_duration` optionally bounds the clip. Orthogonal to media_* (image).
+ */
+const MIGRATION_V17 = `
+ALTER TABLE questions ADD COLUMN audio_url TEXT;
+ALTER TABLE questions ADD COLUMN audio_play TEXT;
+ALTER TABLE questions ADD COLUMN audio_role TEXT;
+ALTER TABLE questions ADD COLUMN audio_duration INTEGER;
+`;
+
 interface Migration {
   version: number;
   sql: string;
@@ -322,6 +334,7 @@ const migrations: Migration[] = [
   { version: 14, sql: MIGRATION_V14 },
   { version: 15, sql: MIGRATION_V15_FK_OFF, needsFkOff: true },
   { version: 16, sql: MIGRATION_V16 },
+  { version: 17, sql: MIGRATION_V17 },
 ];
 
 /**

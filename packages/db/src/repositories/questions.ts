@@ -23,6 +23,14 @@ function rowToQuestionWithMeta(row: QuestionRow): QuestionWithMeta {
       row.media_type && row.media_url
         ? { type: row.media_type, url: row.media_url, previewDuration: row.media_preview_duration }
         : null,
+    audio: row.audio_url
+      ? {
+          url: row.audio_url,
+          play: row.audio_play ?? 'question',
+          role: row.audio_role ?? 'background',
+          duration: row.audio_duration ?? undefined,
+        }
+      : null,
     options: JSON.parse(row.options),
     correctAnswer: row.correct_answer,
     playerDifficulty: row.player_difficulty ? JSON.parse(row.player_difficulty) : null,
@@ -86,8 +94,9 @@ export async function importQuestionSet(
     const questionId = generateId();
     await db.run(
       `INSERT INTO questions (id, set_id, original_id, type, text, category, tags, time_limit,
-        media_type, media_url, media_preview_duration, options, correct_answer, player_difficulty, difficulty, explanation, hide_tags, language)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        media_type, media_url, media_preview_duration, audio_url, audio_play, audio_role, audio_duration,
+        options, correct_answer, player_difficulty, difficulty, explanation, hide_tags, language)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         questionId,
         setId,
@@ -100,6 +109,10 @@ export async function importQuestionSet(
         q.media?.type ?? null,
         q.media?.url ?? null,
         q.media?.previewDuration ?? 5,
+        q.audio?.url ?? null,
+        q.audio?.play ?? null,
+        q.audio?.role ?? null,
+        q.audio?.duration ?? null,
         JSON.stringify(q.options),
         q.correctAnswer,
         q.playerDifficulty ? JSON.stringify(q.playerDifficulty) : null,

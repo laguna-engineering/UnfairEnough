@@ -99,6 +99,19 @@ export interface QuestionOption {
   text: string;
 }
 
+/**
+ * Authored audio behavior for a question (KTD1). Orthogonal to `media` (the
+ * image): `play` picks the phase the clip sounds in and `role` picks whether
+ * the clip is the subject of the question (scored) or ambient background.
+ * `preview` implies `subject` (a preview clip is always the subject).
+ */
+export interface QuestionAudio {
+  url: string;
+  play: 'preview' | 'question';
+  role: 'subject' | 'background';
+  duration?: number;
+}
+
 export interface Question {
   id: string;
   text: string;
@@ -113,13 +126,17 @@ export interface Question {
     url: string;
     previewDuration: number;
   };
+  audio?: QuestionAudio;
 }
 
 export interface MediaPreviewPayload {
   questionId?: string;
   questionNumber: number;
   totalQuestions: number;
-  media: { type: 'image' | 'audio' | 'video'; url: string };
+  /** The image to show during preview. Absent for audio-only (listen-first) previews. */
+  media?: { type: 'image' | 'audio' | 'video'; url: string };
+  /** Listen-first audio to play during preview, if any. */
+  audio?: QuestionAudio;
   duration: number;
 }
 

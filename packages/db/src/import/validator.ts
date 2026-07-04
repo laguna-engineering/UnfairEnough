@@ -9,6 +9,13 @@ export interface MediaInput {
   previewDuration?: number;
 }
 
+export interface AudioInput {
+  url: string;
+  play: 'preview' | 'question';
+  role: 'subject' | 'background';
+  duration?: number;
+}
+
 export interface QuestionInput {
   id?: string;
   text: string;
@@ -19,6 +26,7 @@ export interface QuestionInput {
   language?: string;
   timeLimit?: number;
   media?: MediaInput;
+  audio?: AudioInput;
   options: QuestionOptionInput[];
   correctAnswer: string;
   playerDifficulty?: Record<string, number>;
@@ -41,6 +49,8 @@ const VALID_ANSWER_KEYS = ['A', 'B', 'C', 'D'];
 const VALID_TF_ANSWERS = ['true', 'false'];
 const VALID_MEDIA_TYPES = ['image', 'audio', 'video'];
 const VALID_QUESTION_TYPES = ['multiple_choice', 'true_false'];
+const VALID_AUDIO_PLAY = ['preview', 'question'];
+const VALID_AUDIO_ROLE = ['subject', 'background'];
 
 export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; errors: string[] } {
   const errors: string[] = [];
@@ -148,6 +158,45 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
       };
     }
 
+    // Validate audio (KTD1): separate block from `media`. Defaults:
+    // play='question', role='background'. `preview` requires `subject`.
+    let audio: AudioInput | undefined;
+    if (qObj.audio && typeof qObj.audio === 'object') {
+      const a = qObj.audio as Record<string, unknown>;
+
+      if (typeof a.url !== 'string' || a.url.trim().length === 0) {
+        errors.push(`${prefix}.audio.url: required non-empty string`);
+      }
+      if (a.play !== undefined && !VALID_AUDIO_PLAY.includes(a.play as string)) {
+        errors.push(`${prefix}.audio.play: must be preview or question`);
+      }
+      if (a.role !== undefined && !VALID_AUDIO_ROLE.includes(a.role as string)) {
+        errors.push(`${prefix}.audio.role: must be subject or background`);
+      }
+      if (a.duration !== undefined && (typeof a.duration !== 'number' || a.duration <= 0)) {
+        errors.push(`${prefix}.audio.duration: must be a positive number`);
+      }
+
+      const play = VALID_AUDIO_PLAY.includes(a.play as string)
+        ? (a.play as AudioInput['play'])
+        : 'question';
+      const role = VALID_AUDIO_ROLE.includes(a.role as string)
+        ? (a.role as AudioInput['role'])
+        : 'background';
+
+      // A preview clip is always the subject of the question.
+      if (play === 'preview' && role === 'background') {
+        errors.push(`${prefix}.audio: play "preview" requires role "subject"`);
+      }
+
+      audio = {
+        url: typeof a.url === 'string' ? a.url : '',
+        play,
+        role,
+        duration: typeof a.duration === 'number' && a.duration > 0 ? a.duration : undefined,
+      };
+    }
+
     // Validate timeLimit
     if (
       qObj.timeLimit !== undefined &&
@@ -187,6 +236,7 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
         : undefined,
       timeLimit: typeof qObj.timeLimit === 'number' ? qObj.timeLimit : undefined,
       media,
+      audio,
       options: Array.isArray(qObj.options)
         ? qObj.options.map((o: any) => ({ key: String(o?.key ?? ''), text: String(o?.text ?? '') }))
         : [],
