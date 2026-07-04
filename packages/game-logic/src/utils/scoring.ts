@@ -1,6 +1,13 @@
 export const BASE_POINTS = 100;
 export const MAX_TIME_BONUS = 400; // Total max = 500 points
 
+/**
+ * Speed-bonus weight for "answer-while-playing" subject-audio questions
+ * (role: subject + play: question). Amplifies the time bonus so answering
+ * earlier — while the clip is still playing — is worth visibly more. Tunable.
+ */
+export const SUBJECT_SPEED_BONUS_MULTIPLIER = 1.5;
+
 export interface ScoreBreakdown {
   basePoints: number;
   timeBonus: number;
@@ -8,19 +15,22 @@ export interface ScoreBreakdown {
 
 /**
  * Calculate score for a single answer.
+ * @param speedBonusMultiplier weights the time bonus up for amplified modes
+ *   (default 1 = unchanged). Applied to the timeBonus term only.
  * @returns { basePoints, timeBonus } — both 0 if incorrect
  */
 export function calculateScore(
   isCorrect: boolean,
   responseTimeMs: number,
   timeLimitSeconds: number,
+  speedBonusMultiplier = 1,
 ): ScoreBreakdown {
   if (!isCorrect) return { basePoints: 0, timeBonus: 0 };
 
   const timeLimitMs = timeLimitSeconds * 1000;
   // timeRatio: 1.0 for instant answer, 0.0 for answering at time limit
   const timeRatio = Math.max(0, 1 - responseTimeMs / timeLimitMs);
-  const timeBonus = Math.floor(MAX_TIME_BONUS * timeRatio);
+  const timeBonus = Math.floor(MAX_TIME_BONUS * timeRatio * speedBonusMultiplier);
 
   return { basePoints: BASE_POINTS, timeBonus };
 }

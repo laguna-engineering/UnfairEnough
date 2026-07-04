@@ -69,6 +69,7 @@ export {
   type RankedPlayer,
   rankPlayers,
   type ScoreBreakdown,
+  SUBJECT_SPEED_BONUS_MULTIPLIER,
 } from './utils/scoring';
 export {
   computeEffectiveDifficulty,

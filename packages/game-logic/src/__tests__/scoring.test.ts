@@ -6,6 +6,7 @@ import {
   computeLifetimeHandicap,
   computeTimeBonusMultiplier,
   MAX_TIME_BONUS,
+  SUBJECT_SPEED_BONUS_MULTIPLIER,
 } from '../utils/scoring';
 
 // ── calculateScore ──────────────────────────────────────────────────
@@ -41,6 +42,60 @@ describe('calculateScore', () => {
   test('max possible score is BASE_POINTS + MAX_TIME_BONUS = 500', () => {
     const { basePoints, timeBonus } = calculateScore(true, 0, timeLimit);
     expect(basePoints + timeBonus).toBe(500);
+  });
+});
+
+// ── calculateScore: amplified speed bonus (answer-while-playing) ─────
+
+describe('calculateScore speed bonus multiplier', () => {
+  const timeLimit = 15;
+
+  test('default multiplier of 1 is identical to omitting it (regression)', () => {
+    expect(calculateScore(true, 5000, timeLimit, 1)).toEqual(calculateScore(true, 5000, timeLimit));
+  });
+
+  test('amplified answer scores strictly higher than normal at the same time', () => {
+    const normal = calculateScore(true, 5000, timeLimit);
+    const amplified = calculateScore(true, 5000, timeLimit, SUBJECT_SPEED_BONUS_MULTIPLIER);
+    expect(amplified.timeBonus).toBeGreaterThan(normal.timeBonus);
+    // basePoints unchanged — only the time bonus is weighted
+    expect(amplified.basePoints).toBe(normal.basePoints);
+  });
+
+  test('amplifies the time bonus by the multiplier', () => {
+    // Mirror the implementation's exact arithmetic (5s of 15s → timeRatio ≈ 2/3).
+    const timeRatio = 1 - 5000 / (timeLimit * 1000);
+    const { timeBonus } = calculateScore(true, 5000, timeLimit, 1.5);
+    expect(timeBonus).toBe(Math.floor(MAX_TIME_BONUS * timeRatio * 1.5));
+  });
+
+  test('incorrect answer is zero regardless of multiplier', () => {
+    expect(calculateScore(false, 0, timeLimit, SUBJECT_SPEED_BONUS_MULTIPLIER)).toEqual({
+      basePoints: 0,
+      timeBonus: 0,
+    });
+  });
+
+  test('composes multiplicatively with computeTimeBonusMultiplier (both applied)', () => {
+    // Amplifier weights timeBonus at calculateScore; catch-up weights it again at adjustedScore.
+    const responseTimeMs = 5000;
+    const tbMult = computeTimeBonusMultiplier(0, [0, 1000]); // trailing → 1.3
+
+    const normal = calculateScore(true, responseTimeMs, timeLimit);
+    const amplified = calculateScore(
+      true,
+      responseTimeMs,
+      timeLimit,
+      SUBJECT_SPEED_BONUS_MULTIPLIER,
+    );
+
+    const normalAdjusted = normal.basePoints + normal.timeBonus * tbMult;
+    const amplifiedAdjusted = amplified.basePoints + amplified.timeBonus * tbMult;
+
+    // Both factors present: the amplified adjusted score exceeds the normal one,
+    // and the catch-up multiplier still shaped the (larger) time bonus.
+    expect(amplifiedAdjusted).toBeGreaterThan(normalAdjusted);
+    expect(amplifiedAdjusted - normal.basePoints).toBeCloseTo(amplified.timeBonus * tbMult, 5);
   });
 });
 

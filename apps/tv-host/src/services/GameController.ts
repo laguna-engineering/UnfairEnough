@@ -35,6 +35,7 @@ import {
   removePlayer,
   resetGame,
   resolvePlayerDifficulty,
+  SUBJECT_SPEED_BONUS_MULTIPLIER,
   selectNextQuestion,
   setPlayerConnected,
   setServerReady,
@@ -377,7 +378,8 @@ class GameController implements IGameController {
             questionId: mp.questionId,
             questionNumber: mp.questionNumber,
             totalQuestions: mp.totalQuestions,
-            media: { type: mp.type, url: mp.url },
+            media: mp.type && mp.url ? { type: mp.type, url: mp.url } : undefined,
+            audio: mp.audio,
             duration: this.getMediaPreviewRemainingSeconds(),
           },
         };
@@ -726,6 +728,12 @@ class GameController implements IGameController {
     const correctAnswer = currentQuestion.correctAnswer as AnswerKey;
     const timeLimit = state.game.config.questionTimeLimit;
 
+    // Amplify the speed bonus for answer-while-playing subject-audio questions.
+    const speedBonusMultiplier =
+      currentQuestion.audio?.role === 'subject' && currentQuestion.audio?.play === 'question'
+        ? SUBJECT_SPEED_BONUS_MULTIPLIER
+        : 1;
+
     const players = playersSelectors.selectAll(state.players);
     const answers = state.game.answers;
 
@@ -741,7 +749,12 @@ class GameController implements IGameController {
 
       if (playerAnswer) {
         responseTimeMs = playerAnswer.serverReceivedAt - this.questionStartTime;
-        ({ basePoints, timeBonus } = calculateScore(isCorrect, responseTimeMs, timeLimit));
+        ({ basePoints, timeBonus } = calculateScore(
+          isCorrect,
+          responseTimeMs,
+          timeLimit,
+          speedBonusMultiplier,
+        ));
       }
 
       // Position-based time bonus multiplier (trailing players get a boost)

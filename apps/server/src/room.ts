@@ -36,6 +36,7 @@ import {
   computeLifetimeHandicap,
   computeTimeBonusMultiplier,
   rankPlayers,
+  SUBJECT_SPEED_BONUS_MULTIPLIER,
 } from '../../../packages/game-logic/src/utils/scoring';
 import {
   computeEffectiveDifficulty,
@@ -1341,6 +1342,12 @@ export class GameRoom {
     const correctAnswer = q.correctAnswer as AnswerKey;
     const timeLimit = this.configuredTimeLimit ?? q.timeLimit ?? DEFAULT_QUESTION_TIME_LIMIT;
 
+    // Amplify the speed bonus for answer-while-playing subject-audio questions.
+    const speedBonusMultiplier =
+      q.audio?.role === 'subject' && q.audio?.play === 'question'
+        ? SUBJECT_SPEED_BONUS_MULTIPLIER
+        : 1;
+
     const playerResults: PlayerResult[] = [];
     const preRoundScores = [...this.players.values()].map((p) => p.score);
     const allLifetimeScores = [...this.players.values()].map((p) => p.lifetimeScore);
@@ -1354,7 +1361,12 @@ export class GameRoom {
 
       if (ans) {
         responseTimeMs = ans.serverReceivedAt - this.questionStartTime;
-        ({ basePoints, timeBonus } = calculateScore(isCorrect, responseTimeMs, timeLimit));
+        ({ basePoints, timeBonus } = calculateScore(
+          isCorrect,
+          responseTimeMs,
+          timeLimit,
+          speedBonusMultiplier,
+        ));
       }
 
       // Position-based time bonus multiplier (trailing players get a boost)
