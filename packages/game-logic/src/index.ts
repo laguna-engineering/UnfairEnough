@@ -62,6 +62,7 @@ export {
   calculateScore,
   computeCatchUpInfluence,
   computeLifetimeHandicap,
+  computeSpeedBonusMultiplier,
   computeTimeBonusMultiplier,
   getPositionSuffix,
   MAX_TIME_BONUS,

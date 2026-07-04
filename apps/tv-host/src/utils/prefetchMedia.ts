@@ -1,5 +1,6 @@
 import { createAudioPlayer } from 'expo-audio';
 import { Image } from 'react-native';
+import type { GameMode } from '../context/GameModeContext';
 import { resolveMediaUrl } from './mediaUrl';
 
 // Cap how long we wait for an audio file to buffer before treating the warm as
@@ -11,9 +12,11 @@ function warmAudio(url: string): Promise<void> {
   return new Promise((resolve) => {
     let done = false;
     let player: ReturnType<typeof createAudioPlayer> | null = null;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
     const finish = () => {
       if (done) return;
       done = true;
+      if (timeout) clearTimeout(timeout);
       player?.remove();
       resolve();
     };
@@ -25,7 +28,7 @@ function warmAudio(url: string): Promise<void> {
           finish();
         }
       });
-      setTimeout(() => {
+      timeout = setTimeout(() => {
         sub.remove();
         finish();
       }, AUDIO_WARM_TIMEOUT_MS);
@@ -44,7 +47,7 @@ function warmAudio(url: string): Promise<void> {
  */
 export async function prefetchMedia(
   media: { image?: string; audio?: string },
-  mode: string,
+  mode: GameMode,
   serverUrl: string | null | undefined,
 ): Promise<boolean> {
   const imageUrl = resolveMediaUrl(media.image, mode, serverUrl);

@@ -13,6 +13,7 @@ import type {
   AnswerKey,
   ClientMessage,
   IdentityPayload,
+  MediaPreviewPayload,
   PlayerRanking,
   PlayerResult,
   PositionSnapshot,
@@ -34,9 +35,9 @@ import {
 import {
   calculateScore,
   computeLifetimeHandicap,
+  computeSpeedBonusMultiplier,
   computeTimeBonusMultiplier,
   rankPlayers,
-  SUBJECT_SPEED_BONUS_MULTIPLIER,
 } from '../../../packages/game-logic/src/utils/scoring';
 import {
   computeEffectiveDifficulty,
@@ -623,8 +624,7 @@ export class GameRoom {
             questionId: q.id,
             questionNumber: this.currentQuestionIndex + 1,
             totalQuestions: this.totalQuestionCount,
-            media: q.media ? { type: q.media.type, url: q.media.url } : undefined,
-            audio: hasPreviewAudio ? (q.audio ?? undefined) : undefined,
+            ...this.previewMediaFields(q),
             duration: this.getMediaPreviewRemainingSeconds(),
           },
         };
@@ -672,6 +672,18 @@ export class GameRoom {
   }
 
   /** Build a QUESTION payload, with `timeLimit` set to the remaining time. */
+  /**
+   * The image + listen-first-audio fields shared by every MEDIA_PREVIEW payload
+   * (live broadcast and reconnect snapshot). Image is optional; audio appears
+   * only when the question is authored listen-first (play: preview).
+   */
+  private previewMediaFields(q: QuestionWithMeta): Pick<MediaPreviewPayload, 'media' | 'audio'> {
+    return {
+      media: q.media ? { type: q.media.type, url: q.media.url } : undefined,
+      audio: q.audio && q.audio.play === 'preview' ? q.audio : undefined,
+    };
+  }
+
   private buildQuestionPayload(q: QuestionWithMeta): Question & { serverTimestamp: number } {
     const timeLimit = this.configuredTimeLimit ?? q.timeLimit ?? DEFAULT_QUESTION_TIME_LIMIT;
     const elapsed = Math.floor((Date.now() - this.questionStartTime) / 1000);
@@ -1028,8 +1040,7 @@ export class GameRoom {
           questionId: q.id,
           questionNumber: this.currentQuestionIndex + 1,
           totalQuestions: this.totalQuestionCount,
-          media: q.media ? { type: q.media.type, url: q.media.url } : undefined,
-          audio: hasPreviewAudio ? (q.audio ?? undefined) : undefined,
+          ...this.previewMediaFields(q),
           duration: previewDuration,
         },
       });
@@ -1369,10 +1380,7 @@ export class GameRoom {
     const timeLimit = this.configuredTimeLimit ?? q.timeLimit ?? DEFAULT_QUESTION_TIME_LIMIT;
 
     // Amplify the speed bonus for answer-while-playing subject-audio questions.
-    const speedBonusMultiplier =
-      q.audio?.role === 'subject' && q.audio?.play === 'question'
-        ? SUBJECT_SPEED_BONUS_MULTIPLIER
-        : 1;
+    const speedBonusMultiplier = computeSpeedBonusMultiplier(q.audio);
 
     const playerResults: PlayerResult[] = [];
     const preRoundScores = [...this.players.values()].map((p) => p.score);

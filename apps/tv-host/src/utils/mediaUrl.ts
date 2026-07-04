@@ -1,3 +1,5 @@
+import type { GameMode } from '../context/GameModeContext';
+
 /**
  * Resolve a possibly-relative media/audio URL to something the TV can load.
  * Absolute http(s) URLs pass through; in hosted mode a relative path is joined
@@ -5,7 +7,7 @@
  */
 export function resolveMediaUrl(
   raw: string | undefined | null,
-  mode: string,
+  mode: GameMode,
   serverUrl: string | null | undefined,
 ): string | null {
   if (!raw) return null;

@@ -17,6 +17,7 @@ import {
   computeEffectiveDifficulty,
   computeLifetimeHandicap,
   computePlayerDifficulty,
+  computeSpeedBonusMultiplier,
   computeTagUpdates,
   computeTimeBonusMultiplier,
   createStore,
@@ -35,7 +36,6 @@ import {
   removePlayer,
   resetGame,
   resolvePlayerDifficulty,
-  SUBJECT_SPEED_BONUS_MULTIPLIER,
   selectNextQuestion,
   setPlayerConnected,
   setServerReady,
@@ -752,10 +752,7 @@ class GameController implements IGameController {
     const timeLimit = state.game.config.questionTimeLimit;
 
     // Amplify the speed bonus for answer-while-playing subject-audio questions.
-    const speedBonusMultiplier =
-      currentQuestion.audio?.role === 'subject' && currentQuestion.audio?.play === 'question'
-        ? SUBJECT_SPEED_BONUS_MULTIPLIER
-        : 1;
+    const speedBonusMultiplier = computeSpeedBonusMultiplier(currentQuestion.audio);
 
     const players = playersSelectors.selectAll(state.players);
     const answers = state.game.answers;

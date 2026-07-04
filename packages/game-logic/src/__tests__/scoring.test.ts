@@ -4,6 +4,7 @@ import {
   calculateScore,
   computeCatchUpInfluence,
   computeLifetimeHandicap,
+  computeSpeedBonusMultiplier,
   computeTimeBonusMultiplier,
   MAX_TIME_BONUS,
   SUBJECT_SPEED_BONUS_MULTIPLIER,
@@ -96,6 +97,23 @@ describe('calculateScore speed bonus multiplier', () => {
     // and the catch-up multiplier still shaped the (larger) time bonus.
     expect(amplifiedAdjusted).toBeGreaterThan(normalAdjusted);
     expect(amplifiedAdjusted - normal.basePoints).toBeCloseTo(amplified.timeBonus * tbMult, 5);
+  });
+});
+
+// ── computeSpeedBonusMultiplier ─────────────────────────────────────
+
+describe('computeSpeedBonusMultiplier', () => {
+  test('amplifies answer-while-playing subject audio', () => {
+    expect(computeSpeedBonusMultiplier({ url: 'x', play: 'question', role: 'subject' })).toBe(
+      SUBJECT_SPEED_BONUS_MULTIPLIER,
+    );
+  });
+
+  test('neutral for background music, preview clips, and no audio', () => {
+    expect(computeSpeedBonusMultiplier({ url: 'x', play: 'question', role: 'background' })).toBe(1);
+    expect(computeSpeedBonusMultiplier({ url: 'x', play: 'preview', role: 'subject' })).toBe(1);
+    expect(computeSpeedBonusMultiplier(undefined)).toBe(1);
+    expect(computeSpeedBonusMultiplier(null)).toBe(1);
   });
 });
 

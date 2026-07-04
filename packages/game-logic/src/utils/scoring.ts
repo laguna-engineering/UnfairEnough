@@ -1,3 +1,5 @@
+import type { QuestionAudio } from '@unfairenough/ws-protocol';
+
 export const BASE_POINTS = 100;
 export const MAX_TIME_BONUS = 400; // Total max = 500 points
 
@@ -7,6 +9,17 @@ export const MAX_TIME_BONUS = 400; // Total max = 500 points
  * earlier — while the clip is still playing — is worth visibly more. Tunable.
  */
 export const SUBJECT_SPEED_BONUS_MULTIPLIER = 1.5;
+
+/**
+ * The speed-bonus weight for a question's active audio: amplified for
+ * answer-while-playing subject clips, neutral (1) otherwise. Shared by both
+ * orchestrators so the "is this scored faster?" rule lives in one place.
+ */
+export function computeSpeedBonusMultiplier(audio?: QuestionAudio | null): number {
+  return audio?.role === 'subject' && audio?.play === 'question'
+    ? SUBJECT_SPEED_BONUS_MULTIPLIER
+    : 1;
+}
 
 export interface ScoreBreakdown {
   basePoints: number;
