@@ -320,6 +320,94 @@ export function filterRecentlyServedQuestions<T extends { id: string }>(
   return unseen.concat(seen);
 }
 
+// ── Picture year balancing ───────────────────────────────────────────
+
+/**
+ * Max photo questions sharing the same correct-answer year that may appear in a
+ * single game. Once players learn the year a photo was taken, another photo from
+ * that same year is a near-giveaway, so we cap the repeats.
+ */
+export const MAX_PICTURES_PER_ANSWER_YEAR = 2;
+
+interface DatedPictureQuestion {
+  media?: { type: string } | null;
+  options: readonly { key: string; text: string }[];
+  correctAnswer: string;
+}
+
+/**
+ * The 4-digit year of an image question's correct answer (e.g. "Novembre 2025"
+ * → 2025), or null for anything that isn't a picture with a year answer — those
+ * are never constrained.
+ */
+function pictureAnswerYear(q: DatedPictureQuestion): number | null {
+  if (q.media?.type !== 'image') return null;
+  const correct = q.options.find((o) => o.key === q.correctAnswer);
+  const match = correct?.text.match(/\b(\d{4})\b/);
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * Move same-year picture overflow to the back so no more than `maxPerYear`
+ * questions sharing a correct-answer year land in a game's front slots. Input
+ * order is preserved among kept questions; overflow is appended (not dropped),
+ * so a caller that slices `requestedCount` from the front still fills the game
+ * when the capped pool would otherwise be too small.
+ *
+ * Non-picture questions (and pictures without a year answer) are never limited.
+ */
+export function limitPicturesPerAnswerYear<T extends DatedPictureQuestion>(
+  pool: T[],
+  maxPerYear = MAX_PICTURES_PER_ANSWER_YEAR,
+): T[] {
+  const counts = new Map<number, number>();
+  const kept: T[] = [];
+  const overflow: T[] = [];
+  for (const q of pool) {
+    const year = pictureAnswerYear(q);
+    if (year === null) {
+      kept.push(q);
+      continue;
+    }
+    const n = counts.get(year) ?? 0;
+    if (n < maxPerYear) {
+      counts.set(year, n + 1);
+      kept.push(q);
+    } else {
+      overflow.push(q);
+    }
+  }
+  return overflow.length === 0 ? kept : [...kept, ...overflow];
+}
+
+/**
+ * Drop candidates whose correct-answer year has already been served `maxPerYear`
+ * times this game, so per-round (adaptive / meta) selection never exceeds the
+ * picture year cap. Falls back to the full candidate list when every candidate
+ * would be filtered out — mirroring the tag-avoidance fallback — so selection
+ * never stalls when only over-cap photos remain.
+ *
+ * Non-picture questions (and pictures without a year answer) are never filtered.
+ */
+export function filterOverusedPictureYears<T extends DatedPictureQuestion>(
+  candidates: T[],
+  servedQuestions: readonly DatedPictureQuestion[],
+  maxPerYear = MAX_PICTURES_PER_ANSWER_YEAR,
+): T[] {
+  const counts = new Map<number, number>();
+  for (const q of servedQuestions) {
+    const year = pictureAnswerYear(q);
+    if (year !== null) counts.set(year, (counts.get(year) ?? 0) + 1);
+  }
+  if (counts.size === 0) return candidates;
+
+  const filtered = candidates.filter((q) => {
+    const year = pictureAnswerYear(q);
+    return year === null || (counts.get(year) ?? 0) < maxPerYear;
+  });
+  return filtered.length > 0 ? filtered : candidates;
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function shuffle<T>(arr: T[], random: () => number): T[] {

@@ -26,7 +26,9 @@ import { generatePlayerId, parseClientMessage } from '@unfairenough/ws-protocol'
 import type { ServerWebSocket } from 'bun';
 import {
   buildQuestionPool,
+  filterOverusedPictureYears,
   filterRecentlyServedQuestions,
+  limitPicturesPerAnswerYear,
   selectNextQuestion,
 } from '../../../packages/game-logic/src/utils/questionSelection';
 import {
@@ -836,8 +838,9 @@ export class GameRoom {
         // Non-adaptive: pick freshest questions, then shuffle for presentation order.
         // The DB returns questions ordered by freshness (never-asked first, then
         // least-recently-asked, with RANDOM() among ties), so slicing from the
-        // front gives us the freshest subset.
-        const selected = rawPool.slice(0, requestedCount);
+        // front gives us the freshest subset. Cap same-year photos first so one
+        // year can't dominate and turn later photos into giveaways.
+        const selected = limitPicturesPerAnswerYear(rawPool).slice(0, requestedCount);
         for (let i = selected.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [selected[i], selected[j]] = [selected[j], selected[i]];
@@ -971,7 +974,11 @@ export class GameRoom {
         this.endGame();
         return;
       }
-      q = this.selectQuestionForRound(remaining);
+      // Skip photos whose year has already been served twice this game, so an
+      // adaptive/meta run honours the same cap as non-adaptive selection.
+      const served = this.questionPool.filter((qn) => this.usedQuestionIds.has(qn.id));
+      const eligible = filterOverusedPictureYears(remaining, served);
+      q = this.selectQuestionForRound(eligible);
       this.usedQuestionIds.add(q.id);
     } else {
       // Configured (authored order) or casual (random from DB)

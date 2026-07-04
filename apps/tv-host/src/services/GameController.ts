@@ -24,7 +24,9 @@ import {
   difficultyMultiplier,
   ELO_BASELINE,
   endGame,
+  filterOverusedPictureYears,
   filterRecentlyServedQuestions,
+  limitPicturesPerAnswerYear,
   nextQuestion,
   playersSelectors,
   type RootState,
@@ -242,13 +244,14 @@ class GameController implements IGameController {
           playerTagScores: this.playerTagScores,
         });
       } else {
-        // Non-adaptive: Fisher-Yates shuffle then slice
+        // Non-adaptive: Fisher-Yates shuffle, cap same-year photos so one year
+        // can't dominate and turn later photos into giveaways, then slice.
         const shuffled = [...rawPool];
         for (let i = shuffled.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
         }
-        this.questionPool = shuffled.slice(0, totalQuestions);
+        this.questionPool = limitPicturesPerAnswerYear(shuffled).slice(0, totalQuestions);
       }
     } else if (gameType === 'configured' && questionSetId && !this.isMetaSet) {
       // Regular configured set: serve in authored order
@@ -470,12 +473,16 @@ class GameController implements IGameController {
         this.endGame();
         return;
       }
+      // Skip photos whose year has already been served twice this game, so an
+      // adaptive/meta run honours the same cap as non-adaptive selection.
+      const served = this.questionPool.filter((q) => this.usedQuestionIds.has(q.id));
+      const eligible = filterOverusedPictureYears(remaining, served);
 
       const players = this.buildSelectionPlayers();
       if (players.length === 0) {
-        question = remaining[Math.floor(Math.random() * remaining.length)];
+        question = eligible[Math.floor(Math.random() * eligible.length)];
       } else {
-        question = selectNextQuestion(remaining, {
+        question = selectNextQuestion(eligible, {
           players,
           playerTagScores: this.playerTagScores,
           roundIndex: this.currentQuestionIndex,

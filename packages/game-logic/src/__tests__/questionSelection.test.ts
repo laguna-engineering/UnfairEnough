@@ -3,7 +3,9 @@ import type { QuestionWithMeta } from '@unfairenough/db';
 import type { RoundSelectionContext, SelectableQuestion } from '../utils/questionSelection';
 import {
   buildQuestionPool,
+  filterOverusedPictureYears,
   filterRecentlyServedQuestions,
+  limitPicturesPerAnswerYear,
   selectNextQuestion,
 } from '../utils/questionSelection';
 
@@ -675,5 +677,102 @@ describe('filterRecentlyServedQuestions', () => {
     const selected = ids(filterRecentlyServedQuestions(g14Pool, 4, g13Served)).slice(0, 4);
     expect(selected).not.toContain('metal-gear');
     expect(selected).not.toContain('band');
+  });
+});
+
+// ── limitPicturesPerAnswerYear ─────────────────────────────────────
+
+/** A "when was this photo taken?" question whose correct answer is `answer`. */
+function makePhoto(id: string, answer: string): QuestionWithMeta {
+  return {
+    ...makeQuestion(id),
+    media: { type: 'image', url: `media/${id}.jpg`, previewDuration: 5 },
+    options: [
+      { key: 'A' as const, text: answer },
+      { key: 'B' as const, text: 'Gennaio 1999' },
+    ],
+    correctAnswer: 'A',
+  };
+}
+
+describe('limitPicturesPerAnswerYear', () => {
+  const ids = (pool: { id: string }[]) => pool.map((p) => p.id);
+
+  test('holds same-year photo overflow behind other questions', () => {
+    // Four photos all taken in 2025 — once you know one, the rest are giveaways.
+    const pool = [
+      makePhoto('p1', 'Marzo 2025'),
+      makePhoto('p2', 'Luglio 2025'),
+      makePhoto('p3', 'Settembre 2025'),
+      makePhoto('p4', 'Novembre 2025'),
+      makePhoto('p5', 'Giugno 2024'),
+    ];
+
+    const result = ids(limitPicturesPerAnswerYear(pool, 2));
+
+    // At most two 2025 photos before the overflow is pushed to the back.
+    const front = result.slice(0, 3);
+    expect(front).toEqual(['p1', 'p2', 'p5']);
+    // Nothing is dropped — overflow still trails the pool as fallback.
+    expect(result.slice().sort()).toEqual(['p1', 'p2', 'p3', 'p4', 'p5']);
+  });
+
+  test('only a game-sized slice from the front honours the cap', () => {
+    const pool = [
+      makePhoto('a', 'Marzo 2025'),
+      makePhoto('b', 'Luglio 2025'),
+      makePhoto('c', 'Settembre 2025'),
+    ];
+    const game = ids(limitPicturesPerAnswerYear(pool, 2)).slice(0, 2);
+    expect(game).toEqual(['a', 'b']);
+  });
+
+  test('non-picture questions and pictures without a year are never limited', () => {
+    const pool = [
+      makeQuestion('trivia-1'), // no media
+      makeQuestion('trivia-2'),
+      makeQuestion('trivia-3'),
+      makePhoto('no-year', 'Sometime in spring'),
+    ];
+    // Order is fully preserved; nothing is treated as a repeated year.
+    expect(ids(limitPicturesPerAnswerYear(pool, 2))).toEqual([
+      'trivia-1',
+      'trivia-2',
+      'trivia-3',
+      'no-year',
+    ]);
+  });
+});
+
+describe('filterOverusedPictureYears', () => {
+  const ids = (pool: { id: string }[]) => pool.map((p) => p.id);
+
+  test('excludes candidates whose year is already served maxPerYear times', () => {
+    const served = [makePhoto('s1', 'Marzo 2025'), makePhoto('s2', 'Luglio 2025')];
+    const candidates = [
+      makePhoto('c1', 'Settembre 2025'), // 2025 already served twice → out
+      makePhoto('c2', 'Giugno 2024'), // different year → stays
+    ];
+    expect(ids(filterOverusedPictureYears(candidates, served, 2))).toEqual(['c2']);
+  });
+
+  test('keeps a year until it reaches the cap', () => {
+    const served = [makePhoto('s1', 'Marzo 2025')]; // only one 2025 served
+    const candidates = [makePhoto('c1', 'Settembre 2025'), makePhoto('c2', 'Giugno 2024')];
+    // Second 2025 still allowed (cap is 2), so nothing is dropped.
+    expect(ids(filterOverusedPictureYears(candidates, served, 2))).toEqual(['c1', 'c2']);
+  });
+
+  test('falls back to all candidates when every one is over the cap', () => {
+    const served = [makePhoto('s1', 'Marzo 2025'), makePhoto('s2', 'Luglio 2025')];
+    const candidates = [makePhoto('c1', 'Settembre 2025'), makePhoto('c2', 'Novembre 2025')];
+    // All remaining are 2025; rather than stall, selection proceeds with them.
+    expect(ids(filterOverusedPictureYears(candidates, served, 2))).toEqual(['c1', 'c2']);
+  });
+
+  test('non-picture served questions never constrain candidates', () => {
+    const served = [makeQuestion('t1'), makeQuestion('t2'), makeQuestion('t3')];
+    const candidates = [makePhoto('c1', 'Marzo 2025'), makeQuestion('t4')];
+    expect(ids(filterOverusedPictureYears(candidates, served, 2))).toEqual(['c1', 't4']);
   });
 });

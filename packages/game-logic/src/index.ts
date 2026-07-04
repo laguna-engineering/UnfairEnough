@@ -46,7 +46,10 @@ export {
 export { type AppDispatch, type AppStore, createStore, type RootState } from './store';
 export {
   buildQuestionPool,
+  filterOverusedPictureYears,
   filterRecentlyServedQuestions,
+  limitPicturesPerAnswerYear,
+  MAX_PICTURES_PER_ANSWER_YEAR,
   type PoolBuildContext,
   type RoundSelectionContext,
   type RoundSelectionPlayer,
