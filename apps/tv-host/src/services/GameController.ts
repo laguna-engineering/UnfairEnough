@@ -49,11 +49,15 @@ import {
   updateConfig,
 } from '@unfairenough/game-logic';
 import type { AnswerKey, PlayerResult, StateSnapshotPayload } from '@unfairenough/ws-protocol';
+import { prefetchMedia } from '../utils/prefetchMedia';
 import { getDb, initDatabase } from './database';
 import type { IGameController } from './IGameController';
 import { wsServer } from './WebSocketServer';
 
 const MEDIA_LOAD_TIMEOUT_MS = 10_000;
+// Backstop for the between-questions "hold until the next media is warm" gate
+// (mirrors room.ts): advance even if the prefetch never settles.
+const PRELOAD_HOLD_TIMEOUT_MS = 5000;
 
 // How many recently-served question IDs the controller remembers across consecutive
 // games so the next game's selection can avoid repeating them. filterRecentlyServed()
@@ -81,6 +85,13 @@ class GameController implements IGameController {
   private pendingMediaQuestion: QuestionWithMeta | null = null;
   private pendingPreviewDuration = 0;
   private mediaPreviewEndsAt = 0;
+
+  // One-question lookahead (KTD3/4) — mirrors room.ts. Local mode warms the
+  // next question's media in-process (no WS round-trip) and holds the advance.
+  private preloadPending = false;
+  private preloadReady = false;
+  private awaitingPreloadAdvance = false;
+  private preloadHoldTimeout: ReturnType<typeof setTimeout> | null = null;
 
   // Question state — keep full QuestionWithMeta for tags, difficulty, etc.
   private questionPool: QuestionWithMeta[] = [];
@@ -665,6 +676,9 @@ class GameController implements IGameController {
     this.store.dispatch(showQuestion(questionPayload));
     wsServer.sendQuestion(questionPayload);
 
+    // Warm the next question's media while this one plays.
+    this.requestPreload();
+
     // Start question timer
     this.questionTimer = setInterval(() => {
       this.store.dispatch(tickQuestionTimer());
@@ -860,17 +874,83 @@ class GameController implements IGameController {
       );
     }
 
-    // Move to next question after showing results
+    // Move to next question after showing results, holding for the next media.
     this.resultsTimeout = setTimeout(() => {
       this.resultsTimeout = null;
-      this.currentQuestionIndex++;
-      if (this.currentQuestionIndex < this.totalQuestionCount) {
-        this.store.dispatch(nextQuestion());
-        this.showNextQuestion();
-      } else {
-        this.endGame();
-      }
+      this.advanceWhenPreloadReady();
     }, 5000);
+  }
+
+  /**
+   * Warm the next question's media in-process (KTD3). Only the deterministic
+   * path (authored/casual/configured) can peek `questionPool[i+1]`; adaptive/meta
+   * selects at advance-time and can't be peeked, so it skips preload.
+   */
+  private requestPreload(): void {
+    this.clearPreloadState();
+
+    const { gameType, adaptiveMode } = this.getState().game.config;
+    const usePoolSelection =
+      (this.isMetaSet || (gameType === 'custom' && adaptiveMode)) &&
+      this.questionPool.length > this.currentQuestionIndex;
+    const nextIndex = this.currentQuestionIndex + 1;
+    if (
+      usePoolSelection ||
+      nextIndex >= this.totalQuestionCount ||
+      nextIndex >= this.questionPool.length
+    ) {
+      return;
+    }
+
+    const next = this.questionPool[nextIndex];
+    const image = next.media?.url;
+    const audio = next.audio?.url;
+    if (!image && !audio) return;
+
+    this.preloadPending = true;
+    this.preloadReady = false;
+    prefetchMedia({ image, audio }, 'local', null)
+      .then(() => this.onPreloadReady())
+      .catch(() => this.onPreloadReady());
+  }
+
+  private onPreloadReady(): void {
+    if (!this.preloadPending) return;
+    this.preloadReady = true;
+    if (this.awaitingPreloadAdvance) this.advanceToNextQuestion();
+  }
+
+  /** Hold the advance until the next media is warm (KTD4), with a backstop. */
+  private advanceWhenPreloadReady(): void {
+    if (this.preloadPending && !this.preloadReady) {
+      this.awaitingPreloadAdvance = true;
+      this.preloadHoldTimeout = setTimeout(() => {
+        this.preloadHoldTimeout = null;
+        this.advanceToNextQuestion();
+      }, PRELOAD_HOLD_TIMEOUT_MS);
+      return;
+    }
+    this.advanceToNextQuestion();
+  }
+
+  private advanceToNextQuestion(): void {
+    this.awaitingPreloadAdvance = false;
+    if (this.preloadHoldTimeout) {
+      clearTimeout(this.preloadHoldTimeout);
+      this.preloadHoldTimeout = null;
+    }
+    this.currentQuestionIndex++;
+    if (this.currentQuestionIndex < this.totalQuestionCount) {
+      this.store.dispatch(nextQuestion());
+      this.showNextQuestion();
+    } else {
+      this.endGame();
+    }
+  }
+
+  private clearPreloadState(): void {
+    this.preloadPending = false;
+    this.preloadReady = false;
   }
 
   /**
@@ -1106,6 +1186,12 @@ class GameController implements IGameController {
       clearTimeout(this.resultsTimeout);
       this.resultsTimeout = null;
     }
+    if (this.preloadHoldTimeout) {
+      clearTimeout(this.preloadHoldTimeout);
+      this.preloadHoldTimeout = null;
+    }
+    this.awaitingPreloadAdvance = false;
+    this.clearPreloadState();
   }
 
   cleanup(): void {

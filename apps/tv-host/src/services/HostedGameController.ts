@@ -27,6 +27,7 @@ import {
 } from '@unfairenough/game-logic';
 import { debugLog } from '@unfairenough/shared';
 import type { ServerMessage } from '@unfairenough/ws-protocol';
+import { prefetchMedia } from '../utils/prefetchMedia';
 import type { IGameController } from './IGameController';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected';
@@ -287,6 +288,19 @@ export class HostedGameController implements IGameController {
         }
         this.store.dispatch(showQuestion(message.payload));
         break;
+
+      case 'MEDIA_PRELOAD': {
+        // Warm the next question's media, then ack so the server can advance.
+        const { questionId, image, audio } = message.payload;
+        prefetchMedia({ image, audio }, 'hosted', this.serverUrl)
+          .then((success) =>
+            this.send({ type: 'MEDIA_PRELOADED', payload: { success, questionId } }),
+          )
+          .catch(() =>
+            this.send({ type: 'MEDIA_PRELOADED', payload: { success: false, questionId } }),
+          );
+        break;
+      }
 
       case 'TICK':
         this.store.dispatch(setCountdown(message.payload.remaining));

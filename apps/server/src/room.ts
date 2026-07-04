@@ -73,6 +73,10 @@ const COUNTDOWN_SECONDS = 3;
 const REVEAL_DELAY_MS = 2000;
 const RESULTS_DELAY_MS = 5000;
 const MEDIA_LOAD_TIMEOUT_MS = 10_000;
+// Backstop for the between-questions "hold until the next media is warm" gate:
+// if the host never acks the preload, advance anyway so a slow/dead host can't
+// wedge the game (the at-preview MEDIA_LOADED handshake is the secondary net).
+const PRELOAD_HOLD_TIMEOUT_MS = 5000;
 
 // How many recently-served question IDs a room remembers across consecutive games
 // so the next game's selection can avoid repeating them. filterRecentlyServed()
@@ -163,6 +167,13 @@ export class GameRoom {
   private pendingMediaQuestion: QuestionWithMeta | null = null;
   private pendingPreviewDuration = 0;
   private mediaPreviewEndsAt = 0;
+
+  // One-question lookahead (KTD2/3/4) — the next question's media the host is
+  // warming, its ack, and the between-questions hold that waits for it.
+  private preloadQuestionId: string | null = null;
+  private preloadAcked = false;
+  private awaitingPreloadAdvance = false;
+  private preloadHoldTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     roomCode: string,
@@ -563,6 +574,9 @@ export class GameRoom {
         break;
       case 'MEDIA_LOADED':
         this.onMediaLoaded(message.payload?.success ?? true, message.payload?.questionId);
+        break;
+      case 'MEDIA_PRELOADED':
+        this.onMediaPreloaded(message.payload.success, message.payload.questionId);
         break;
     }
   }
@@ -1111,6 +1125,9 @@ export class GameRoom {
 
     this.broadcast({ type: 'QUESTION', payload });
 
+    // Warm the next question's media on the host while this one plays.
+    this.requestPreload();
+
     this.logEvent('QUESTION_SENT', null, {
       questionId: q.id,
       text: q.text,
@@ -1487,13 +1504,87 @@ export class GameRoom {
     }
 
     this.resultsTimeout = setTimeout(() => {
-      this.currentQuestionIndex++;
-      if (this.currentQuestionIndex < this.totalQuestionCount) {
-        this.showNextQuestion();
-      } else {
-        this.endGame();
-      }
+      this.resultsTimeout = null;
+      this.advanceWhenPreloadReady();
     }, RESULTS_DELAY_MS);
+  }
+
+  /**
+   * Ask the host to warm the *next* question's media (KTD3). Only the
+   * deterministic path (authored/casual/configured/custom) can peek
+   * `questions[i+1]`; adaptive/meta picks at advance-time and can't be peeked,
+   * so it skips preload and relies on the at-preview MEDIA_LOADED handshake.
+   */
+  private requestPreload(): void {
+    this.clearPreloadState();
+
+    const usePoolSelection =
+      (this.isMetaSet || (this.gameType === 'custom' && this.adaptiveMode)) &&
+      this.questionPool.length > 0;
+    const nextIndex = this.currentQuestionIndex + 1;
+    if (
+      usePoolSelection ||
+      nextIndex >= this.totalQuestionCount ||
+      nextIndex >= this.questions.length
+    ) {
+      return;
+    }
+
+    const next = this.questions[nextIndex];
+    const image = next.media?.url;
+    const audio = next.audio?.url;
+    if (!image && !audio) return;
+
+    this.preloadQuestionId = next.id;
+    this.preloadAcked = false;
+    this.sendToHost({ type: 'MEDIA_PRELOAD', payload: { questionId: next.id, image, audio } });
+  }
+
+  /** Host TV signals it has warmed (or failed to warm) the next question's media. */
+  private onMediaPreloaded(success: boolean, questionId: string): void {
+    // Ignore stale acks from an earlier preload request.
+    if (!this.preloadQuestionId || questionId !== this.preloadQuestionId) return;
+    // Any ack (success or failure) releases the hold — a failed prefetch still
+    // gets a second chance via the at-preview MEDIA_LOADED handshake.
+    void success;
+    this.preloadAcked = true;
+    if (this.awaitingPreloadAdvance) this.advanceToNextQuestion();
+  }
+
+  /**
+   * Hold the results→next-question advance until the host has the upcoming
+   * media in hand (KTD4). Advances immediately when no preload is pending or it
+   * is already acked; otherwise waits for the ack with a timeout backstop.
+   */
+  private advanceWhenPreloadReady(): void {
+    if (this.preloadQuestionId && !this.preloadAcked) {
+      this.awaitingPreloadAdvance = true;
+      this.preloadHoldTimeout = setTimeout(() => {
+        this.preloadHoldTimeout = null;
+        this.advanceToNextQuestion();
+      }, PRELOAD_HOLD_TIMEOUT_MS);
+      return;
+    }
+    this.advanceToNextQuestion();
+  }
+
+  private advanceToNextQuestion(): void {
+    this.awaitingPreloadAdvance = false;
+    if (this.preloadHoldTimeout) {
+      clearTimeout(this.preloadHoldTimeout);
+      this.preloadHoldTimeout = null;
+    }
+    this.currentQuestionIndex++;
+    if (this.currentQuestionIndex < this.totalQuestionCount) {
+      this.showNextQuestion();
+    } else {
+      this.endGame();
+    }
+  }
+
+  private clearPreloadState(): void {
+    this.preloadQuestionId = null;
+    this.preloadAcked = false;
   }
 
   private buildRankings(): PlayerRanking[] {
@@ -1786,6 +1877,12 @@ export class GameRoom {
       clearTimeout(this.mediaPreviewTimeout);
       this.mediaPreviewTimeout = null;
     }
+    if (this.preloadHoldTimeout) {
+      clearTimeout(this.preloadHoldTimeout);
+      this.preloadHoldTimeout = null;
+    }
+    this.awaitingPreloadAdvance = false;
+    this.clearPreloadState();
   }
 
   cleanup(): void {

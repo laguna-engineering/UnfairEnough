@@ -29,6 +29,7 @@ export type ServerMessage =
   | { type: 'ANSWER_ACK'; payload: { questionId: string; serverReceivedAt: number } }
   | { type: 'PLAYER_ANSWERED'; payload: { playerId: string; questionId: string } }
   | { type: 'MEDIA_PREVIEW'; payload: MediaPreviewPayload }
+  | { type: 'MEDIA_PRELOAD'; payload: MediaPreloadPayload }
   | { type: 'REVEALING' }
   | { type: 'ROUND_END'; payload: RoundResult }
   | { type: 'GAME_OVER'; payload: GameResult }
@@ -140,6 +141,20 @@ export interface MediaPreviewPayload {
   duration: number;
 }
 
+/**
+ * Server→host one-question lookahead (KTD2): ask the TV to warm the *next*
+ * question's media during the current question so playback never stalls between
+ * questions. `questionId` correlates the ack. Sent only to the host; players
+ * never prefetch.
+ */
+export interface MediaPreloadPayload {
+  questionId: string;
+  /** Absolute or server-relative image URL to prefetch, if the next question has one. */
+  image?: string;
+  /** Absolute or server-relative audio URL to warm, if the next question has one. */
+  audio?: string;
+}
+
 export interface PlayerResult {
   playerId: string;
   name: string;
@@ -219,6 +234,7 @@ export type HostMessage =
   | { type: 'SET_LANGUAGE'; payload: { language: string } }
   | { type: 'CONFIGURE_GAME'; payload: ConfigureGamePayload }
   | { type: 'MEDIA_LOADED'; payload?: { success: boolean; questionId?: string } }
+  | { type: 'MEDIA_PRELOADED'; payload: { success: boolean; questionId: string } }
   | { type: 'REQUEST_AUTH' }
   | { type: 'PING' };
 

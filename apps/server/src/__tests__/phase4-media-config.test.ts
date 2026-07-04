@@ -168,6 +168,42 @@ beforeEach(async () => {
     null,
   );
 
+  // Seed two consecutive image questions to exercise one-question-lookahead preload.
+  await questionsRepo.importQuestionSet(
+    db,
+    'preload-set',
+    {
+      name: 'Preload Questions',
+      defaultTimeLimit: 10,
+      questions: [
+        {
+          id: 'preload-q1',
+          type: 'multiple_choice' as const,
+          text: 'First image question',
+          media: { type: 'image', url: 'https://example.com/first.jpg', previewDuration: 1 },
+          options: [
+            { key: 'A', text: 'Option A' },
+            { key: 'B', text: 'Option B' },
+          ],
+          correctAnswer: 'A' as const,
+        },
+        {
+          id: 'preload-q2',
+          type: 'multiple_choice' as const,
+          text: 'Second image question',
+          media: { type: 'image', url: 'https://example.com/second.jpg', previewDuration: 1 },
+          options: [
+            { key: 'A', text: 'Option A' },
+            { key: 'B', text: 'Option B' },
+          ],
+          correctAnswer: 'B' as const,
+        },
+      ],
+    },
+    () => crypto.randomUUID(),
+    null,
+  );
+
   // Seed a listen-first clip that carries an explicit preview duration.
   await questionsRepo.importQuestionSet(
     db,
@@ -610,6 +646,156 @@ describe('audio question routing', () => {
 
     room.cleanup();
   }, 10000);
+});
+
+// ── Media preloading / one-question lookahead (U7) ────────────
+
+describe('media preloading', () => {
+  it('sends MEDIA_PRELOAD to the host for the next media question during the current one', async () => {
+    const room = new GameRoom('TEST', db, null);
+    const hostWs = createMockWs({ data: { role: 'host' } });
+    room.setHost(hostWs);
+
+    const playerWs = createMockWs();
+    await room.addPlayer(playerWs, 'Alice');
+
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'CONFIGURE_GAME',
+        payload: { gameType: 'configured', questionSetId: 'preload-set', totalQuestions: 2 },
+      }),
+    );
+    await wait(50);
+    room.handleHostMessage(hostWs, JSON.stringify({ type: 'START_GAME' }));
+
+    // Q1 shows a preview; ack it to reach the QUESTION phase.
+    const mp = await waitForMessage(playerWs, 'MEDIA_PREVIEW');
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'MEDIA_LOADED',
+        payload: { success: true, questionId: mp.payload.questionId },
+      }),
+    );
+    await waitForMessage(playerWs, 'QUESTION');
+
+    // The host should now be asked to warm Q2's image.
+    const preload = await waitForMessage(hostWs, 'MEDIA_PRELOAD');
+    expect(preload.payload.image).toBe('https://example.com/second.jpg');
+    expect(preload.payload.questionId).toBeDefined();
+    // Preload goes only to the host, never to players.
+    expect(playerWs._messages.find((m: any) => m.type === 'MEDIA_PRELOAD')).toBeUndefined();
+
+    room.cleanup();
+  }, 10000);
+
+  it('does not preload when the next question has no media', async () => {
+    const room = new GameRoom('TEST', db, null);
+    const hostWs = createMockWs({ data: { role: 'host' } });
+    room.setHost(hostWs);
+
+    const playerWs = createMockWs();
+    await room.addPlayer(playerWs, 'Alice');
+
+    // media-set: Q1 has an image, Q2 has no media → no preload after Q1.
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'CONFIGURE_GAME',
+        payload: { gameType: 'configured', questionSetId: 'media-set', totalQuestions: 2 },
+      }),
+    );
+    await wait(50);
+    room.handleHostMessage(hostWs, JSON.stringify({ type: 'START_GAME' }));
+
+    const mp = await waitForMessage(playerWs, 'MEDIA_PREVIEW');
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'MEDIA_LOADED',
+        payload: { success: true, questionId: mp.payload.questionId },
+      }),
+    );
+    await waitForMessage(playerWs, 'QUESTION');
+    await expectNoMessage(hostWs, 'MEDIA_PRELOAD');
+
+    room.cleanup();
+  }, 10000);
+
+  it('does not preload on the last question', async () => {
+    const room = new GameRoom('TEST', db, null);
+    const hostWs = createMockWs({ data: { role: 'host' } });
+    room.setHost(hostWs);
+
+    const playerWs = createMockWs();
+    await room.addPlayer(playerWs, 'Alice');
+
+    // A single question → no i+1 to peek.
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'CONFIGURE_GAME',
+        payload: { gameType: 'configured', questionSetId: 'audio-answer-set', totalQuestions: 1 },
+      }),
+    );
+    await wait(50);
+    room.handleHostMessage(hostWs, JSON.stringify({ type: 'START_GAME' }));
+
+    await waitForMessage(playerWs, 'QUESTION');
+    await expectNoMessage(hostWs, 'MEDIA_PRELOAD');
+
+    room.cleanup();
+  }, 10000);
+
+  it('ignores a stale MEDIA_PRELOADED ack with the wrong questionId', () => {
+    const room = new GameRoom('TEST', db, null) as any;
+    room.preloadQuestionId = 'upcoming-q';
+    room.preloadAcked = false;
+
+    room.onMediaPreloaded(true, 'some-other-q');
+    expect(room.preloadAcked).toBe(false);
+
+    room.onMediaPreloaded(true, 'upcoming-q');
+    expect(room.preloadAcked).toBe(true);
+
+    room.cleanup();
+  });
+
+  it('holds the advance until the preload is acked, then proceeds', () => {
+    const room = new GameRoom('TEST', db, null) as any;
+    let advanced = 0;
+    room.advanceToNextQuestion = () => {
+      advanced++;
+    };
+
+    // Preload in flight, not yet acked → advance is held.
+    room.preloadQuestionId = 'upcoming-q';
+    room.preloadAcked = false;
+    room.advanceWhenPreloadReady();
+    expect(advanced).toBe(0);
+    expect(room.awaitingPreloadAdvance).toBe(true);
+
+    // Ack arrives → the held advance fires exactly once.
+    room.onMediaPreloaded(true, 'upcoming-q');
+    expect(advanced).toBe(1);
+
+    room.cleanup();
+  });
+
+  it('advances immediately when no preload is pending', () => {
+    const room = new GameRoom('TEST', db, null) as any;
+    let advanced = 0;
+    room.advanceToNextQuestion = () => {
+      advanced++;
+    };
+
+    room.preloadQuestionId = null;
+    room.advanceWhenPreloadReady();
+    expect(advanced).toBe(1);
+
+    room.cleanup();
+  });
 });
 
 // ── Configured game question loading ──────────────────────────
