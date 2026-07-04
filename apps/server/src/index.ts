@@ -9,6 +9,7 @@ import { createAuthMiddleware } from './auth/middleware';
 import { createPendingLogin, removePendingLoginByWs } from './auth/pendingLogins';
 import { hashToken } from './auth/tokens';
 import { getDb, initDatabase } from './db';
+import { MAX_BUNDLE_SIZE } from './media/mediaStore';
 import { resolveGuestSession } from './room';
 import { createRoom, destroyRoom, findRoomByHostId, getRoom, setDbAdapter } from './roomManager';
 import authRoutes from './routes/auth';
@@ -491,9 +492,9 @@ export default {
   port,
   fetch: app.fetch,
   websocket,
-  // Allow question-set bundles up to 300 MB (default is 128 MB, which would
-  // abort large bundle uploads before the handler's size check runs).
-  maxRequestBodySize: 300 * 1024 * 1024,
+  // Allow question-set bundles up to the handler's ceiling (default is 128 MB,
+  // which would abort large bundle uploads before the handler's size check runs).
+  maxRequestBodySize: MAX_BUNDLE_SIZE,
 };
 
 console.log(`Server listening on http://localhost:${port}`);

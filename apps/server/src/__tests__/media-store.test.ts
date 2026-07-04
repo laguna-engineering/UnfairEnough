@@ -2,11 +2,11 @@ import { describe, expect, it } from 'bun:test';
 import { mediaTypeForExtension, validateMediaFile, validateTargetPath } from '../media/mediaStore';
 
 // Minimal valid magic-byte headers.
-const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]).buffer;
-const GARBAGE = new Uint8Array([0x00, 0x01, 0x02, 0x03]).buffer;
+const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+const GARBAGE = new Uint8Array([0x00, 0x01, 0x02, 0x03]);
 
-function bufOfSize(bytes: number): ArrayBuffer {
-  return new Uint8Array(bytes).buffer;
+function bufOfSize(bytes: number): Uint8Array {
+  return new Uint8Array(bytes);
 }
 
 describe('mediaTypeForExtension', () => {
@@ -39,7 +39,7 @@ describe('validateTargetPath', () => {
 describe('validateMediaFile', () => {
   it('accepts a valid image by magic bytes', () => {
     const r = validateMediaFile({
-      buffer: JPEG,
+      bytes: JPEG,
       size: 6,
       targetPath: 'media/x/a.jpg',
       mediaType: 'image',
@@ -49,7 +49,7 @@ describe('validateMediaFile', () => {
 
   it('rejects an image whose content fails the magic-byte check', () => {
     const r = validateMediaFile({
-      buffer: GARBAGE,
+      bytes: GARBAGE,
       size: 4,
       targetPath: 'media/x/a.jpg',
       mediaType: 'image',
@@ -59,7 +59,7 @@ describe('validateMediaFile', () => {
 
   it('accepts audio by extension without content validation', () => {
     const r = validateMediaFile({
-      buffer: GARBAGE,
+      bytes: GARBAGE,
       size: 1000,
       targetPath: 'media/x/a.mp3',
       mediaType: 'audio',
@@ -69,7 +69,7 @@ describe('validateMediaFile', () => {
 
   it('rejects a file whose extension does not match its declared media type', () => {
     const r = validateMediaFile({
-      buffer: GARBAGE,
+      bytes: GARBAGE,
       size: 1000,
       targetPath: 'media/x/a.txt',
       mediaType: 'audio',
@@ -79,7 +79,7 @@ describe('validateMediaFile', () => {
 
   it('rejects a video over the per-type size ceiling', () => {
     const r = validateMediaFile({
-      buffer: bufOfSize(8),
+      bytes: bufOfSize(8),
       size: 101 * 1024 * 1024,
       targetPath: 'media/x/a.mp4',
       mediaType: 'video',

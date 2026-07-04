@@ -1,8 +1,9 @@
-import { parseQuestionSetYaml, questionsRepo } from '@unfairenough/db';
+import { questionsRepo } from '@unfairenough/db';
 import { Hono } from 'hono';
 import type { AuthVariables } from '../auth/middleware';
 import { getDb } from '../db';
 import { collectMissingMedia } from '../media/mediaStore';
+import { importAndPersistSet } from '../questionSetImport';
 
 const MAX_YAML_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -59,35 +60,21 @@ questionSets.post('/', async (c) => {
     );
   }
 
-  const result = parseQuestionSetYaml(yamlText);
-  if (!result.success) {
-    return c.json({ error: 'Validation failed', details: result.errors }, 400);
+  const imported = await importAndPersistSet(getDb(), yamlText, c.get('hostId'));
+  if (!imported.ok) {
+    return c.json({ error: 'Validation failed', details: imported.errors }, 400);
   }
-
-  const db = getDb();
-  const setId = crypto.randomUUID();
-  await db.transaction(async () => {
-    await questionsRepo.importQuestionSet(
-      db,
-      setId,
-      result.data,
-      () => crypto.randomUUID(),
-      c.get('hostId'),
-    );
-  });
-
-  const set = await questionsRepo.getQuestionSet(db, setId);
-  const questions = await questionsRepo.getQuestionsBySet(db, setId);
+  const { set, questions } = imported;
 
   // Check which local media files are missing from disk
   const missingMedia = await collectMissingMedia(questions);
 
   return c.json(
     {
-      id: setId,
-      name: set!.name,
-      questionCount: set!.questionCount,
-      message: `Imported ${set!.questionCount} questions`,
+      id: set.id,
+      name: set.name,
+      questionCount: set.questionCount,
+      message: `Imported ${set.questionCount} questions`,
       missingMedia,
     },
     201,

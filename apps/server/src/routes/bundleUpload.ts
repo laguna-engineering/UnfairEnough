@@ -1,17 +1,18 @@
-import { type MediaType, parseQuestionSetYaml, questionsRepo } from '@unfairenough/db';
+import type { MediaType, QuestionWithMeta } from '@unfairenough/db';
 import { unzipSync } from 'fflate';
 import { Hono } from 'hono';
 import type { AuthVariables } from '../auth/middleware';
 import { getDb } from '../db';
 import {
   collectMissingMedia,
+  isLocalMediaUrl,
+  MAX_BUNDLE_SIZE,
   validateMediaFile,
   validateTargetPath,
   writeMediaFile,
 } from '../media/mediaStore';
+import { importAndPersistSet } from '../questionSetImport';
 
-/** Whole-archive ceiling (R7). Enforced here AND via maxRequestBodySize in index.ts. */
-const MAX_BUNDLE_SIZE = 300 * 1024 * 1024; // 300 MB
 const MAX_MB = MAX_BUNDLE_SIZE / 1024 / 1024;
 
 interface SetResult {
@@ -29,10 +30,12 @@ bundleUpload.post('/', async (c) => {
     return c.json({ error: 'Use multipart/form-data' }, 400);
   }
 
+  const tooLarge = () => c.json({ error: `Bundle too large. Max ${MAX_MB}MB` }, 413);
+
   // Reject oversized archives early (authoritative check is file.size below).
   const contentLength = Number(c.req.header('Content-Length') ?? '0');
   if (contentLength > MAX_BUNDLE_SIZE) {
-    return c.json({ error: `Bundle too large. Max ${MAX_MB}MB` }, 413);
+    return tooLarge();
   }
 
   const body = await c.req.parseBody();
@@ -41,7 +44,7 @@ bundleUpload.post('/', async (c) => {
     return c.json({ error: 'No file uploaded. Use field name "file"' }, 400);
   }
   if (file.size > MAX_BUNDLE_SIZE) {
-    return c.json({ error: `Bundle too large. Max ${MAX_MB}MB` }, 413);
+    return tooLarge();
   }
 
   // Unzip in memory (accepted for a single-admin tool; see plan Risks).
@@ -67,27 +70,13 @@ bundleUpload.post('/', async (c) => {
 
   // Import each YAML independently — one bad set does not roll back the others.
   const sets: SetResult[] = [];
-  const importedQuestions: Awaited<ReturnType<typeof questionsRepo.getQuestionsBySet>> = [];
+  const importedQuestions: QuestionWithMeta[] = [];
 
   for (const name of yamlEntries) {
     const yamlText = new TextDecoder().decode(entries[name]);
-    const result = parseQuestionSetYaml(yamlText);
-    if (!result.success) {
-      sets.push({ name, error: `Validation failed: ${result.errors.join('; ')}` });
-      continue;
-    }
-
-    const setId = crypto.randomUUID();
+    let result: Awaited<ReturnType<typeof importAndPersistSet>>;
     try {
-      await db.transaction(async () => {
-        await questionsRepo.importQuestionSet(
-          db,
-          setId,
-          result.data,
-          () => crypto.randomUUID(),
-          hostId,
-        );
-      });
+      result = await importAndPersistSet(db, yamlText, hostId);
     } catch (err) {
       sets.push({
         name,
@@ -95,14 +84,13 @@ bundleUpload.post('/', async (c) => {
       });
       continue;
     }
+    if (!result.ok) {
+      sets.push({ name, error: `Validation failed: ${result.errors.join('; ')}` });
+      continue;
+    }
 
-    const set = await questionsRepo.getQuestionSet(db, setId);
-    const questions = await questionsRepo.getQuestionsBySet(db, setId);
-    importedQuestions.push(...questions);
-    sets.push({
-      name: set?.name ?? result.data.name,
-      questionCount: set?.questionCount ?? questions.length,
-    });
+    importedQuestions.push(...result.questions);
+    sets.push({ name: result.set.name, questionCount: result.set.questionCount });
   }
 
   // Request-level 400 only when nothing could be imported.
@@ -114,24 +102,28 @@ bundleUpload.post('/', async (c) => {
   // from the question (R2); the path is validated for traversal before writing.
   const referenced = new Map<string, MediaType>();
   for (const q of importedQuestions) {
-    if (q.media?.url.startsWith('media/') && !q.media.url.startsWith('http')) {
+    if (q.media && isLocalMediaUrl(q.media.url)) {
       referenced.set(q.media.url, q.media.type);
     }
   }
 
-  for (const [url, mediaType] of referenced) {
-    const pathCheck = validateTargetPath(url);
-    if (!pathCheck.valid) continue; // traversal/unsafe → skip, reported as missing
-    const entry = entries[url];
-    if (!entry) continue; // not bundled → reported as missing
-    // Copy into a fresh, non-shared ArrayBuffer of exactly the entry's bytes.
-    const copy = new Uint8Array(entry.byteLength);
-    copy.set(entry);
-    const buffer = copy.buffer;
-    const check = validateMediaFile({ buffer, size: entry.byteLength, targetPath: url, mediaType });
-    if (!check.valid) continue; // invalid type/size → skip, reported as missing
-    await writeMediaFile(pathCheck.resolved, buffer);
-  }
+  // Writes are independent — validate synchronously, then fan out the disk I/O.
+  await Promise.all(
+    [...referenced].map(async ([url, mediaType]) => {
+      const pathCheck = validateTargetPath(url);
+      if (!pathCheck.valid) return; // traversal/unsafe → skip, reported as missing
+      const entry = entries[url];
+      if (!entry) return; // not bundled → reported as missing
+      const check = validateMediaFile({
+        bytes: entry,
+        size: entry.byteLength,
+        targetPath: url,
+        mediaType,
+      });
+      if (!check.valid) return; // invalid type/size → skip, reported as missing
+      await writeMediaFile(pathCheck.resolved, entry);
+    }),
+  );
 
   const missingMedia = await collectMissingMedia(importedQuestions);
 

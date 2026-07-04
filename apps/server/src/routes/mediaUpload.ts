@@ -38,14 +38,14 @@ mediaUpload.post('/upload', async (c) => {
     return c.json({ error: 'Unrecognized media file type' }, 415);
   }
 
-  const buffer = await file.arrayBuffer();
-  const check = validateMediaFile({ buffer, size: file.size, targetPath, mediaType });
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const check = validateMediaFile({ bytes, size: file.size, targetPath, mediaType });
   if (!check.valid) {
     const status = check.error?.includes('too large') ? 413 : 415;
     return c.json({ error: check.error }, status);
   }
 
-  await writeMediaFile(pathCheck.resolved, buffer);
+  await writeMediaFile(pathCheck.resolved, bytes);
 
   return c.json({ path: targetPath, size: file.size });
 });

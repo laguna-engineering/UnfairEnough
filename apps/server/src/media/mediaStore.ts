@@ -19,10 +19,18 @@ interface MediaRule {
   /** Accepted lowercase file extensions (with leading dot). */
   extensions: string[];
   /** Optional magic-byte content check. */
-  validateContent?: (buffer: ArrayBuffer) => boolean;
+  validateContent?: (bytes: Uint8Array) => boolean;
 }
 
 const MB = 1024 * 1024;
+
+/**
+ * Whole-archive ceiling for question-set bundle uploads. Single-sourced here so
+ * the handler's 413 check (bundleUpload.ts) and Bun's runtime `maxRequestBodySize`
+ * (index.ts) can't drift apart — the runtime cap must be ≥ this or the handler's
+ * check never runs.
+ */
+export const MAX_BUNDLE_SIZE = 300 * MB;
 
 const MEDIA_RULES: Record<MediaType, MediaRule> = {
   image: {
@@ -49,8 +57,8 @@ const IMAGE_SIGNATURES: { mime: string; bytes: number[] }[] = [
   { mime: 'image/webp', bytes: [0x52, 0x49, 0x46, 0x46] },
 ];
 
-function isValidImage(buffer: ArrayBuffer): boolean {
-  const header = new Uint8Array(buffer, 0, Math.min(12, buffer.byteLength));
+function isValidImage(bytes: Uint8Array): boolean {
+  const header = bytes.subarray(0, 12);
 
   for (const sig of IMAGE_SIGNATURES) {
     if (header.length < sig.bytes.length) continue;
@@ -66,6 +74,15 @@ function isValidImage(buffer: ArrayBuffer): boolean {
     return true;
   }
   return false;
+}
+
+/**
+ * Whether a media url points to a writable local file under `media/` (as opposed
+ * to an absolute http(s) url that lives off-server). The media-write loop and the
+ * missing-media check must agree on this notion, so it lives in one place.
+ */
+export function isLocalMediaUrl(url: string): boolean {
+  return url.startsWith('media/') && !url.startsWith('http');
 }
 
 /**
@@ -116,12 +133,12 @@ export function validateTargetPath(targetPath: string): {
  * allow-list for its declared media type.
  */
 export function validateMediaFile(params: {
-  buffer: ArrayBuffer;
+  bytes: Uint8Array;
   size: number;
   targetPath: string;
   mediaType: MediaType;
 }): { valid: boolean; error?: string } {
-  const { buffer, size, targetPath, mediaType } = params;
+  const { bytes, size, targetPath, mediaType } = params;
   const rule = MEDIA_RULES[mediaType];
   if (!rule) {
     return { valid: false, error: `Unsupported media type: ${mediaType}` };
@@ -139,7 +156,7 @@ export function validateMediaFile(params: {
     };
   }
 
-  if (rule.validateContent && !rule.validateContent(buffer)) {
+  if (rule.validateContent && !rule.validateContent(bytes)) {
     return { valid: false, error: `File content does not match a valid ${mediaType}` };
   }
 
@@ -147,9 +164,9 @@ export function validateMediaFile(params: {
 }
 
 /** Write a media file to a validated, resolved path, creating parent dirs. */
-export async function writeMediaFile(resolvedPath: string, buffer: ArrayBuffer): Promise<void> {
+export async function writeMediaFile(resolvedPath: string, bytes: Uint8Array): Promise<void> {
   await mkdir(dirname(resolvedPath), { recursive: true });
-  await Bun.write(resolvedPath, buffer);
+  await Bun.write(resolvedPath, bytes);
 }
 
 /**
@@ -162,17 +179,19 @@ export async function collectMissingMedia(
 ): Promise<string[]> {
   const localUrls = questions
     .map((q) => q.media?.url)
-    .filter((url): url is string => !!url && url.startsWith('media/') && !url.startsWith('http'));
+    .filter((url): url is string => !!url && isLocalMediaUrl(url));
 
   const uniqueUrls = [...new Set(localUrls)];
-  const missing: string[] = [];
 
-  for (const url of uniqueUrls) {
-    const check = validateTargetPath(url);
-    if (!check.valid) continue; // never probe outside the questions dir
-    const exists = await Bun.file(check.resolved).exists();
-    if (!exists) missing.push(url);
-  }
+  // Probe all files concurrently — independent stat calls on a hot upload path.
+  const results = await Promise.all(
+    uniqueUrls.map(async (url) => {
+      const check = validateTargetPath(url);
+      if (!check.valid) return null; // never probe outside the questions dir
+      const exists = await Bun.file(check.resolved).exists();
+      return exists ? null : url;
+    }),
+  );
 
-  return missing;
+  return results.filter((url): url is string => url !== null);
 }
