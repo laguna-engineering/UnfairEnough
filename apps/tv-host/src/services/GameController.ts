@@ -509,22 +509,30 @@ class GameController implements IGameController {
     this.computeRoundDifficulties(question);
 
     const media = question.media;
+    // Show MEDIA_PREVIEW first for an image and/or a listen-first audio clip.
+    const hasPreviewAudio = question.audio?.play === 'preview';
 
-    if (media) {
-      const previewDuration = media.previewDuration ?? 5;
+    if (media || hasPreviewAudio) {
+      // Prefer the preview clip's authored duration; fall back to the image
+      // preview duration, then the default.
+      const previewDuration =
+        (hasPreviewAudio ? question.audio?.duration : undefined) ?? media?.previewDuration ?? 5;
 
       const previewPayload = {
         questionId: question.id,
         questionNumber: this.currentQuestionIndex + 1,
         totalQuestions: this.totalQuestionCount,
-        media: { type: media.type as 'image' | 'audio' | 'video', url: media.url },
+        media: media
+          ? { type: media.type as 'image' | 'audio' | 'video', url: media.url }
+          : undefined,
+        audio: hasPreviewAudio ? (question.audio ?? undefined) : undefined,
         duration: previewDuration,
       };
 
       this.store.dispatch(showMediaPreview(previewPayload));
       wsServer.broadcast({ type: 'MEDIA_PREVIEW', payload: previewPayload });
 
-      // Wait for the TV to signal the image has loaded (max 10s),
+      // Wait for the TV to signal the media has loaded (max 10s),
       // then start the actual preview countdown.
       // If the image doesn't load within 10s, skip the preview entirely.
       this.waitingForMediaLoad = true;
@@ -650,6 +658,7 @@ class GameController implements IGameController {
       totalQuestions: this.totalQuestionCount,
       serverTimestamp: Date.now(),
       tags,
+      audio: question.audio ?? undefined,
     };
 
     this.questionStartTime = Date.now();

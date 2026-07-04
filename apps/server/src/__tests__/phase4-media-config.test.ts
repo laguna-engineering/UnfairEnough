@@ -104,6 +104,99 @@ beforeEach(async () => {
     () => crypto.randomUUID(),
     null,
   );
+
+  // Seed audio questions: listen-first (preview, no image), answer-while-playing,
+  // and a preview clip with an explicit duration.
+  await questionsRepo.importQuestionSet(
+    db,
+    'audio-set',
+    {
+      name: 'Audio Questions',
+      defaultTimeLimit: 10,
+      questions: [
+        {
+          id: 'audio-preview',
+          type: 'multiple_choice' as const,
+          text: 'Name that tune (listen first)',
+          audio: { url: 'https://example.com/clip.mp3', play: 'preview', role: 'subject' },
+          options: [
+            { key: 'A', text: 'Option A' },
+            { key: 'B', text: 'Option B' },
+          ],
+          correctAnswer: 'A' as const,
+        },
+        {
+          id: 'audio-question',
+          type: 'multiple_choice' as const,
+          text: 'Answer while it plays',
+          audio: { url: 'https://example.com/song.mp3', play: 'question', role: 'subject' },
+          options: [
+            { key: 'A', text: 'Option A' },
+            { key: 'B', text: 'Option B' },
+          ],
+          correctAnswer: 'B' as const,
+        },
+      ],
+    },
+    () => crypto.randomUUID(),
+    null,
+  );
+
+  // Seed a single answer-while-playing question (no preview) to assert QUESTION
+  // carries audio and no MEDIA_PREVIEW is sent.
+  await questionsRepo.importQuestionSet(
+    db,
+    'audio-answer-set',
+    {
+      name: 'Answer While Playing',
+      defaultTimeLimit: 10,
+      questions: [
+        {
+          id: 'audio-answer',
+          type: 'multiple_choice' as const,
+          text: 'Answer while it plays (solo)',
+          audio: { url: 'https://example.com/song.mp3', play: 'question', role: 'subject' },
+          options: [
+            { key: 'A', text: 'Option A' },
+            { key: 'B', text: 'Option B' },
+          ],
+          correctAnswer: 'B' as const,
+        },
+      ],
+    },
+    () => crypto.randomUUID(),
+    null,
+  );
+
+  // Seed a listen-first clip that carries an explicit preview duration.
+  await questionsRepo.importQuestionSet(
+    db,
+    'audio-duration-set',
+    {
+      name: 'Audio Duration',
+      defaultTimeLimit: 10,
+      questions: [
+        {
+          id: 'audio-dur',
+          type: 'multiple_choice' as const,
+          text: 'Listen-first with explicit duration',
+          audio: {
+            url: 'https://example.com/clip.mp3',
+            play: 'preview',
+            role: 'subject',
+            duration: 3,
+          },
+          options: [
+            { key: 'A', text: 'Option A' },
+            { key: 'B', text: 'Option B' },
+          ],
+          correctAnswer: 'A' as const,
+        },
+      ],
+    },
+    () => crypto.randomUUID(),
+    null,
+  );
 });
 
 afterAll(() => {
@@ -410,6 +503,110 @@ describe('MEDIA_PREVIEW phase', () => {
     // No MEDIA_PREVIEW should have been sent
     const mediaPreview = playerWs._messages.find((m: any) => m.type === 'MEDIA_PREVIEW');
     expect(mediaPreview).toBeUndefined();
+
+    room.cleanup();
+  }, 10000);
+});
+
+// ── Audio playback routing (U2) ───────────────────────────────
+
+describe('audio question routing', () => {
+  it('enters MEDIA_PREVIEW for listen-first audio with no image and waits for MEDIA_LOADED', async () => {
+    const room = new GameRoom('TEST', db, null);
+    const hostWs = createMockWs({ data: { role: 'host' } });
+    room.setHost(hostWs);
+
+    const playerWs = createMockWs();
+    await room.addPlayer(playerWs, 'Alice');
+
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'CONFIGURE_GAME',
+        payload: { gameType: 'configured', questionSetId: 'audio-set', totalQuestions: 1 },
+      }),
+    );
+    await wait(50);
+    room.handleHostMessage(hostWs, JSON.stringify({ type: 'START_GAME' }));
+
+    const mediaPreview = await waitForMessage(playerWs, 'MEDIA_PREVIEW');
+    // Listen-first: audio present, no image media.
+    expect(mediaPreview.payload.audio).toEqual({
+      url: 'https://example.com/clip.mp3',
+      play: 'preview',
+      role: 'subject',
+    });
+    expect(mediaPreview.payload.media).toBeUndefined();
+
+    // Server holds in MEDIA_PREVIEW until the host acks readiness.
+    await expectNoMessage(playerWs, 'QUESTION');
+
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'MEDIA_LOADED',
+        payload: { success: true, questionId: mediaPreview.payload.questionId },
+      }),
+    );
+
+    const question = await waitForMessage(playerWs, 'QUESTION');
+    expect(question.payload.text).toBe('Name that tune (listen first)');
+
+    room.cleanup();
+  }, 10000);
+
+  it('sends QUESTION directly (no preview) for answer-while-playing audio, carrying the audio', async () => {
+    const room = new GameRoom('TEST', db, null);
+    const hostWs = createMockWs({ data: { role: 'host' } });
+    room.setHost(hostWs);
+
+    const playerWs = createMockWs();
+    await room.addPlayer(playerWs, 'Bob');
+
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'CONFIGURE_GAME',
+        payload: { gameType: 'configured', questionSetId: 'audio-answer-set', totalQuestions: 1 },
+      }),
+    );
+    await wait(50);
+    room.handleHostMessage(hostWs, JSON.stringify({ type: 'START_GAME' }));
+
+    const question = await waitForMessage(playerWs, 'QUESTION');
+    expect(question.payload.audio).toEqual({
+      url: 'https://example.com/song.mp3',
+      play: 'question',
+      role: 'subject',
+    });
+
+    // No preview phase for play:question audio.
+    const mediaPreview = playerWs._messages.find((m: any) => m.type === 'MEDIA_PREVIEW');
+    expect(mediaPreview).toBeUndefined();
+
+    room.cleanup();
+  }, 10000);
+
+  it('derives the preview duration from audio.duration when present', async () => {
+    const room = new GameRoom('TEST', db, null);
+    const hostWs = createMockWs({ data: { role: 'host' } });
+    room.setHost(hostWs);
+
+    const playerWs = createMockWs();
+    await room.addPlayer(playerWs, 'Alice');
+
+    room.handleHostMessage(
+      hostWs,
+      JSON.stringify({
+        type: 'CONFIGURE_GAME',
+        payload: { gameType: 'configured', questionSetId: 'audio-duration-set', totalQuestions: 1 },
+      }),
+    );
+    await wait(50);
+    room.handleHostMessage(hostWs, JSON.stringify({ type: 'START_GAME' }));
+
+    const mediaPreview = await waitForMessage(playerWs, 'MEDIA_PREVIEW');
+    expect(mediaPreview.payload.duration).toBe(3);
 
     room.cleanup();
   }, 10000);

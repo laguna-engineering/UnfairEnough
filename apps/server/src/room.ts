@@ -601,14 +601,16 @@ export class GameRoom {
 
       case 'MEDIA_PREVIEW': {
         const q = this.getCurrentQuestion();
-        if (!q?.media) return { phase };
+        const hasPreviewAudio = q?.audio?.play === 'preview';
+        if (!q || (!q.media && !hasPreviewAudio)) return { phase };
         return {
           phase,
           mediaPreview: {
             questionId: q.id,
             questionNumber: this.currentQuestionIndex + 1,
             totalQuestions: this.totalQuestionCount,
-            media: { type: q.media.type, url: q.media.url },
+            media: q.media ? { type: q.media.type, url: q.media.url } : undefined,
+            audio: hasPreviewAudio ? (q.audio ?? undefined) : undefined,
             duration: this.getMediaPreviewRemainingSeconds(),
           },
         };
@@ -674,6 +676,7 @@ export class GameRoom {
       media: q.media
         ? { type: q.media.type, url: q.media.url, previewDuration: q.media.previewDuration }
         : undefined,
+      audio: q.audio ?? undefined,
     };
   }
 
@@ -996,10 +999,14 @@ export class GameRoom {
     // Compute per-player difficulties for this question
     this.computeRoundDifficulties(q);
 
-    // If question has media, show MEDIA_PREVIEW first
-    if (q.media) {
+    // Show MEDIA_PREVIEW first for an image and/or a listen-first audio clip.
+    const hasPreviewAudio = q.audio?.play === 'preview';
+    if (q.media || hasPreviewAudio) {
       this.phase = 'MEDIA_PREVIEW';
-      const previewDuration = q.media.previewDuration ?? 5;
+      // Prefer the preview clip's authored duration; fall back to the image
+      // preview duration, then the default.
+      const previewDuration =
+        (hasPreviewAudio ? q.audio?.duration : undefined) ?? q.media?.previewDuration ?? 5;
 
       this.broadcast({
         type: 'MEDIA_PREVIEW',
@@ -1007,7 +1014,8 @@ export class GameRoom {
           questionId: q.id,
           questionNumber: this.currentQuestionIndex + 1,
           totalQuestions: this.totalQuestionCount,
-          media: { type: q.media.type, url: q.media.url },
+          media: q.media ? { type: q.media.type, url: q.media.url } : undefined,
+          audio: hasPreviewAudio ? (q.audio ?? undefined) : undefined,
           duration: previewDuration,
         },
       });
@@ -1098,6 +1106,7 @@ export class GameRoom {
       media: q.media
         ? { type: q.media.type, url: q.media.url, previewDuration: q.media.previewDuration }
         : undefined,
+      audio: q.audio ?? undefined,
     };
 
     this.broadcast({ type: 'QUESTION', payload });
