@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "hono": "^4.7.0",
+    "fflate": "^0.8.2",
     "@unfairenough/db": "*",
     "@unfairenough/ws-protocol": "*"
   },

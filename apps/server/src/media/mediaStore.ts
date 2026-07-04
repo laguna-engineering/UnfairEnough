@@ -151,3 +151,28 @@ export async function writeMediaFile(resolvedPath: string, buffer: ArrayBuffer):
   await mkdir(dirname(resolvedPath), { recursive: true });
   await Bun.write(resolvedPath, buffer);
 }
+
+/**
+ * Given a set of imported questions, return the unique local `media/` urls whose
+ * files are not present on disk. Absolute http(s) urls are ignored. Shared by
+ * the YAML-only and bundle upload endpoints.
+ */
+export async function collectMissingMedia(
+  questions: { media: { url: string } | null }[],
+): Promise<string[]> {
+  const localUrls = questions
+    .map((q) => q.media?.url)
+    .filter((url): url is string => !!url && url.startsWith('media/') && !url.startsWith('http'));
+
+  const uniqueUrls = [...new Set(localUrls)];
+  const missing: string[] = [];
+
+  for (const url of uniqueUrls) {
+    const check = validateTargetPath(url);
+    if (!check.valid) continue; // never probe outside the questions dir
+    const exists = await Bun.file(check.resolved).exists();
+    if (!exists) missing.push(url);
+  }
+
+  return missing;
+}

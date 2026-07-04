@@ -12,6 +12,7 @@ import { getDb, initDatabase } from './db';
 import { resolveGuestSession } from './room';
 import { createRoom, destroyRoom, findRoomByHostId, getRoom, setDbAdapter } from './roomManager';
 import authRoutes from './routes/auth';
+import bundleUploadRoutes from './routes/bundleUpload';
 import eventsRoutes from './routes/events';
 import gamesRoutes from './routes/games';
 import mediaUploadRoutes from './routes/mediaUpload';
@@ -55,6 +56,9 @@ app.use('/api/*', scopedAuth);
 app.route('/auth', authRoutes);
 
 // ── REST API routes (scoped auth when tenancy enabled) ────────
+// Bundle route registered before the /api/question-sets mount so it isn't
+// shadowed by that router's path matching.
+app.route('/api/question-sets/bundle', bundleUploadRoutes);
 app.route('/api/question-sets', questionSetsRoutes);
 app.route('/api/media', mediaUploadRoutes);
 app.route('/api/meta-sets', metaSetsRoutes);
@@ -487,6 +491,9 @@ export default {
   port,
   fetch: app.fetch,
   websocket,
+  // Allow question-set bundles up to 300 MB (default is 128 MB, which would
+  // abort large bundle uploads before the handler's size check runs).
+  maxRequestBodySize: 300 * 1024 * 1024,
 };
 
 console.log(`Server listening on http://localhost:${port}`);

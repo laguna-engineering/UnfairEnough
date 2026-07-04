@@ -1,11 +1,8 @@
-import { resolve } from 'node:path';
 import { parseQuestionSetYaml, questionsRepo } from '@unfairenough/db';
 import { Hono } from 'hono';
 import type { AuthVariables } from '../auth/middleware';
 import { getDb } from '../db';
-
-/** Root directory for question media (relative to server CWD apps/server/) */
-const QUESTIONS_DIR = resolve('../../questions');
+import { collectMissingMedia } from '../media/mediaStore';
 
 const MAX_YAML_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -83,20 +80,7 @@ questionSets.post('/', async (c) => {
   const questions = await questionsRepo.getQuestionsBySet(db, setId);
 
   // Check which local media files are missing from disk
-  const mediaUrls = questions
-    .map((q) => q.media?.url)
-    .filter((url): url is string => !!url && url.startsWith('media/') && !url.startsWith('http'));
-
-  const uniqueUrls = [...new Set(mediaUrls)];
-  const missingMedia: string[] = [];
-
-  for (const url of uniqueUrls) {
-    const filePath = resolve(QUESTIONS_DIR, url);
-    // Safety: only check within questions dir
-    if (!filePath.startsWith(QUESTIONS_DIR + '/')) continue;
-    const exists = await Bun.file(filePath).exists();
-    if (!exists) missingMedia.push(url);
-  }
+  const missingMedia = await collectMissingMedia(questions);
 
   return c.json(
     {
