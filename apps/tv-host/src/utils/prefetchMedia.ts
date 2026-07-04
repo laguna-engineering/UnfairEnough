@@ -6,6 +6,14 @@ import { resolveMediaUrl } from './mediaUrl';
 // Cap how long we wait for an audio file to buffer before treating the warm as
 // done — best-effort, since the at-preview MEDIA_LOADED handshake is the backstop.
 const AUDIO_WARM_TIMEOUT_MS = 6000;
+// Image.prefetch has no built-in timeout; bound it so a hung request settles the
+// warm attempt (and releases its closure) instead of leaking a pending promise.
+const IMAGE_PREFETCH_TIMEOUT_MS = 6000;
+
+/** Resolve (never reject) after the given delay so a warm task can't hang forever. */
+function settleAfter(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /** Buffer an audio file in a short-lived player so the real playback starts warm. */
 function warmAudio(url: string): Promise<void> {
@@ -54,7 +62,14 @@ export async function prefetchMedia(
   const audioUrl = resolveMediaUrl(media.audio, mode, serverUrl);
 
   const tasks: Promise<unknown>[] = [];
-  if (imageUrl) tasks.push(Image.prefetch(imageUrl).catch(() => false));
+  if (imageUrl) {
+    tasks.push(
+      Promise.race([
+        Image.prefetch(imageUrl).catch(() => false),
+        settleAfter(IMAGE_PREFETCH_TIMEOUT_MS),
+      ]),
+    );
+  }
   if (audioUrl) tasks.push(warmAudio(audioUrl));
   await Promise.all(tasks);
   return true;

@@ -92,6 +92,9 @@ class GameController implements IGameController {
   private preloadReady = false;
   private awaitingPreloadAdvance = false;
   private preloadHoldTimeout: ReturnType<typeof setTimeout> | null = null;
+  // Monotonic id correlating a prefetch with the request that started it, so a
+  // stale in-flight prefetch can't release a later question's hold.
+  private preloadToken = 0;
 
   // Question state — keep full QuestionWithMeta for tags, difficulty, etc.
   private questionPool: QuestionWithMeta[] = [];
@@ -904,15 +907,19 @@ class GameController implements IGameController {
     const audio = next.audio?.url;
     if (!image && !audio) return;
 
+    // Correlate the resolution with this specific request (mirrors room.ts's
+    // questionId ack guard): a slow prefetch for question N that resolves after
+    // the advance already moved on must not release the hold for question N+1.
+    const token = ++this.preloadToken;
     this.preloadPending = true;
     this.preloadReady = false;
     prefetchMedia({ image, audio }, 'local', null)
-      .then(() => this.onPreloadReady())
-      .catch(() => this.onPreloadReady());
+      .then(() => this.onPreloadReady(token))
+      .catch(() => this.onPreloadReady(token));
   }
 
-  private onPreloadReady(): void {
-    if (!this.preloadPending) return;
+  private onPreloadReady(token: number): void {
+    if (!this.preloadPending || token !== this.preloadToken) return;
     this.preloadReady = true;
     if (this.awaitingPreloadAdvance) this.advanceToNextQuestion();
   }

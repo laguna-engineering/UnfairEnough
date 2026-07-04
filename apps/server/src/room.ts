@@ -577,7 +577,7 @@ export class GameRoom {
         this.onMediaLoaded(message.payload?.success ?? true, message.payload?.questionId);
         break;
       case 'MEDIA_PRELOADED':
-        this.onMediaPreloaded(message.payload.success, message.payload.questionId);
+        this.onMediaPreloaded(message.payload?.success ?? false, message.payload?.questionId);
         break;
     }
   }
@@ -1549,8 +1549,8 @@ export class GameRoom {
   }
 
   /** Host TV signals it has warmed (or failed to warm) the next question's media. */
-  private onMediaPreloaded(success: boolean, questionId: string): void {
-    // Ignore stale acks from an earlier preload request.
+  private onMediaPreloaded(success: boolean, questionId?: string): void {
+    // Ignore stale acks from an earlier preload request (and payload-less messages).
     if (!this.preloadQuestionId || questionId !== this.preloadQuestionId) return;
     // Any ack (success or failure) releases the hold — a failed prefetch still
     // gets a second chance via the at-preview MEDIA_LOADED handshake.

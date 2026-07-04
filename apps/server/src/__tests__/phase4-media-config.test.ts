@@ -783,6 +783,20 @@ describe('media preloading', () => {
     room.cleanup();
   });
 
+  it('tolerates a malformed MEDIA_PRELOADED message with no payload', () => {
+    const room = new GameRoom('TEST', db, null);
+    const hostWs = createMockWs({ data: { role: 'host' } });
+    room.setHost(hostWs);
+
+    // handleHostMessage's try/catch only wraps JSON.parse, so a payload-less
+    // ack must not throw during dispatch.
+    expect(() =>
+      room.handleHostMessage(hostWs, JSON.stringify({ type: 'MEDIA_PRELOADED' })),
+    ).not.toThrow();
+
+    room.cleanup();
+  });
+
   it('advances immediately when no preload is pending', () => {
     const room = new GameRoom('TEST', db, null) as any;
     let advanced = 0;
