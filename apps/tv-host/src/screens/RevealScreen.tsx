@@ -1,10 +1,19 @@
 import { useTranslation } from '@unfairenough/i18n';
-import { colors, ScreenBackground, spacing, typography } from '@unfairenough/ui';
+import {
+  ScreenBackground,
+  spacing,
+  type ThemeTokens,
+  typography,
+  useTheme,
+} from '@unfairenough/ui';
 import type React from 'react';
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 export const RevealScreen: React.FC = () => {
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   return (
     <ScreenBackground style={styles.container}>
@@ -18,22 +27,23 @@ export const RevealScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  text: {
-    ...typography.displayLarge,
-    color: colors.primary,
-    marginBottom: spacing.lg,
-  },
-  dots: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  dot: {
-    fontSize: 80,
-    color: colors.secondary,
-  },
-});
+const makeStyles = (t: ThemeTokens) =>
+  StyleSheet.create({
+    container: {
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    text: {
+      ...typography.displayLarge,
+      color: t.title,
+      marginBottom: spacing.lg,
+    },
+    dots: {
+      flexDirection: 'row',
+      gap: spacing.md,
+    },
+    dot: {
+      fontSize: 80,
+      color: t.accent,
+    },
+  });

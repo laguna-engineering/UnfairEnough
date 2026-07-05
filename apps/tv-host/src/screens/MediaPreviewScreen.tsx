@@ -1,8 +1,14 @@
 import { useTranslation } from '@unfairenough/i18n';
-import { colors, ScreenBackground, spacing, typography } from '@unfairenough/ui';
+import {
+  ScreenBackground,
+  spacing,
+  type ThemeTokens,
+  typography,
+  useTheme,
+} from '@unfairenough/ui';
 import { type AudioPlayer, createAudioPlayer } from 'expo-audio';
 import type React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { useBgMusicContext } from '../hooks/BgMusicContext';
 import { useGameController } from '../hooks/useGameController';
@@ -19,6 +25,8 @@ export const MediaPreviewScreen: React.FC = () => {
   const { state, countdown, mediaPreview, serverUrl, mode, notifyMediaLoaded } =
     useGameController();
   const { pause, resume } = useBgMusicContext();
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const [imageError, setImageError] = useState(false);
   const [imageReady, setImageReady] = useState(false);
   const [audioReady, setAudioReady] = useState(false);
@@ -143,40 +151,41 @@ export const MediaPreviewScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    padding: spacing.xl,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  progress: {
-    ...typography.h2,
-    color: colors.textSecondary,
-  },
-  countdown: {
-    ...typography.h2,
-    color: colors.accentYellow,
-  },
-  mediaContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  image: {
-    width: '80%',
-    height: '100%',
-    borderRadius: 16,
-  },
-  fallback: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fallbackText: {
-    ...typography.h2,
-    color: colors.textSecondary,
-  },
-});
+const makeStyles = (t: ThemeTokens) =>
+  StyleSheet.create({
+    container: {
+      padding: spacing.xl,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.lg,
+    },
+    progress: {
+      ...typography.h2,
+      color: t.inkSoft,
+    },
+    countdown: {
+      ...typography.h2,
+      color: t.accent,
+    },
+    mediaContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    image: {
+      width: '80%',
+      height: '100%',
+      borderRadius: 16,
+    },
+    fallback: {
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    fallbackText: {
+      ...typography.h2,
+      color: t.inkSoft,
+    },
+  });

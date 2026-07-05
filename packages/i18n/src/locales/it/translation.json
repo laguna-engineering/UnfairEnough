@@ -89,6 +89,7 @@
     "secondsPerQuestion": "Secondi",
     "adaptiveMode": "Adattivo",
     "selectTags": "Seleziona almeno un tag",
+    "resetTags": "Azzera",
     "selectedTags_one": "{{count}} tag selezionato",
     "selectedTags_other": "{{count}} tag selezionati"
   },

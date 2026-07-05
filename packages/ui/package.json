@@ -7,6 +7,7 @@
     "build": "echo 'No build needed - TypeScript source consumed directly'"
   },
   "peerDependencies": {
+    "@react-native-async-storage/async-storage": "*",
     "expo-linear-gradient": "*",
     "react": "*",
     "react-native": "*",

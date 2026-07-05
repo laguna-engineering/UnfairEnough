@@ -3,15 +3,17 @@ import { useTranslation } from '@unfairenough/i18n';
 import {
   Button,
   Card,
-  colors,
   PlayerAvatar,
   PositionChart,
   type PositionChartPlayer,
   ScreenBackground,
   spacing,
+  type ThemeTokens,
   typography,
+  useTheme,
 } from '@unfairenough/ui';
 import type React from 'react';
+import { useMemo } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useGameController } from '../hooks/useGameController';
 
@@ -19,6 +21,8 @@ export const GameOverScreen: React.FC = () => {
   const { t } = useTranslation();
   const { state, resetGame, positionHistory } = useGameController();
   const { width: windowWidth } = useWindowDimensions();
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   const players = playersSelectors.selectAll(state.players);
   const emojiById = new Map(players.map((p) => [p.id, p.emoji]));
@@ -30,13 +34,13 @@ export const GameOverScreen: React.FC = () => {
   const getRankColor = (rank: number) => {
     switch (rank) {
       case 1:
-        return colors.accentYellow;
+        return theme.accent;
       case 2:
-        return colors.textSecondary;
+        return theme.inkSoft;
       case 3:
         return '#CD7F32'; // Bronze
       default:
-        return colors.textSecondary;
+        return theme.inkSoft;
     }
   };
 
@@ -78,7 +82,7 @@ export const GameOverScreen: React.FC = () => {
         <View style={styles.leftColumn}>
           {/* Winner Celebration */}
           {winner && (
-            <Card style={styles.winnerCard} variant="glow" glowColor={colors.accentYellow}>
+            <Card style={styles.winnerCard} variant="glow" glowColor={theme.accent}>
               <Text style={styles.winnerLabel}>{t('results.winner')}</Text>
               <Text style={styles.winnerName}>{winner.name}</Text>
               <Text style={styles.winnerScore}>
@@ -100,7 +104,7 @@ export const GameOverScreen: React.FC = () => {
                   showScore
                   score={podium[1].score}
                 />
-                <Text style={[styles.rankText, { color: getRankColor(2) }]}>{getOrdinal(2)}</Text>
+                <Text style={[styles.rankText, { color: theme.title }]}>{getOrdinal(2)}</Text>
               </View>
             )}
 
@@ -115,7 +119,7 @@ export const GameOverScreen: React.FC = () => {
                   showScore
                   score={podium[0].score}
                 />
-                <Text style={[styles.rankText, { color: getRankColor(1) }]}>{getOrdinal(1)}</Text>
+                <Text style={[styles.rankText, { color: theme.title }]}>{getOrdinal(1)}</Text>
               </View>
             )}
 
@@ -130,7 +134,7 @@ export const GameOverScreen: React.FC = () => {
                   showScore
                   score={podium[2].score}
                 />
-                <Text style={[styles.rankText, { color: getRankColor(3) }]}>{getOrdinal(3)}</Text>
+                <Text style={[styles.rankText, { color: theme.title }]}>{getOrdinal(3)}</Text>
               </View>
             )}
           </View>
@@ -156,6 +160,7 @@ export const GameOverScreen: React.FC = () => {
             onPress={resetGame}
             size="large"
             style={styles.playAgainButton}
+            hasTVPreferredFocus
           />
         </View>
       </View>
@@ -163,81 +168,82 @@ export const GameOverScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    padding: spacing.xl,
-    alignItems: 'center',
-  },
-  title: {
-    ...typography.displayLarge,
-    color: colors.primary,
-    marginBottom: spacing.lg,
-  },
-  mainContent: {
-    flex: 1,
-    flexDirection: 'row',
-    gap: spacing.xl,
-    width: '100%',
-  },
-  leftColumn: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  rightColumn: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chartTitle: {
-    ...typography.h2,
-    color: colors.textPrimary,
-    marginBottom: spacing.md,
-  },
-  winnerCard: {
-    paddingHorizontal: spacing.xxl,
-    paddingVertical: spacing.lg,
-    alignItems: 'center',
-    marginBottom: spacing.xl,
-  },
-  winnerLabel: {
-    ...typography.h2,
-    color: colors.accentYellow,
-    marginBottom: spacing.sm,
-  },
-  winnerName: {
-    ...typography.displayMedium,
-    color: colors.textPrimary,
-    marginBottom: spacing.sm,
-  },
-  winnerScore: {
-    ...typography.h2,
-    color: colors.accentYellow,
-  },
-  podium: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  podiumSpot: {
-    alignItems: 'center',
-  },
-  firstPlace: {
-    marginBottom: spacing.lg,
-  },
-  secondPlace: {
-    marginBottom: spacing.md,
-  },
-  thirdPlace: {
-    marginBottom: 0,
-  },
-  rankText: {
-    ...typography.h2,
-    marginTop: spacing.sm,
-  },
-  playAgainButton: {
-    minWidth: 200,
-    marginTop: spacing.lg,
-  },
-});
+const makeStyles = (t: ThemeTokens) =>
+  StyleSheet.create({
+    container: {
+      padding: spacing.xl,
+      alignItems: 'center',
+    },
+    title: {
+      ...typography.displayLarge,
+      color: t.title,
+      marginBottom: spacing.lg,
+    },
+    mainContent: {
+      flex: 1,
+      flexDirection: 'row',
+      gap: spacing.xl,
+      width: '100%',
+    },
+    leftColumn: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    rightColumn: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    chartTitle: {
+      ...typography.h2,
+      color: t.ink,
+      marginBottom: spacing.md,
+    },
+    winnerCard: {
+      paddingHorizontal: spacing.xxl,
+      paddingVertical: spacing.lg,
+      alignItems: 'center',
+      marginBottom: spacing.xl,
+    },
+    winnerLabel: {
+      ...typography.h2,
+      color: t.accent,
+      marginBottom: spacing.sm,
+    },
+    winnerName: {
+      ...typography.displayMedium,
+      color: t.ink,
+      marginBottom: spacing.sm,
+    },
+    winnerScore: {
+      ...typography.h2,
+      color: t.accent,
+    },
+    podium: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+      gap: spacing.md,
+      marginBottom: spacing.md,
+    },
+    podiumSpot: {
+      alignItems: 'center',
+    },
+    firstPlace: {
+      marginBottom: spacing.lg,
+    },
+    secondPlace: {
+      marginBottom: spacing.md,
+    },
+    thirdPlace: {
+      marginBottom: 0,
+    },
+    rankText: {
+      ...typography.h2,
+      marginTop: spacing.sm,
+    },
+    playAgainButton: {
+      minWidth: 200,
+      marginTop: spacing.lg,
+    },
+  });

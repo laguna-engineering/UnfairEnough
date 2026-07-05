@@ -1,12 +1,21 @@
 import { useTranslation } from '@unfairenough/i18n';
-import { colors, ScreenBackground, spacing, typography } from '@unfairenough/ui';
+import {
+  ScreenBackground,
+  spacing,
+  type ThemeTokens,
+  typography,
+  useTheme,
+} from '@unfairenough/ui';
 import type React from 'react';
+import { useMemo } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { useGameController } from '../hooks/useGameController';
 
 export const CountdownScreen: React.FC = () => {
   const { t } = useTranslation();
   const { countdown } = useGameController();
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   return (
     <ScreenBackground style={styles.container}>
@@ -17,28 +26,26 @@ export const CountdownScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.xxl,
-  },
-  label: {
-    ...typography.displayMedium,
-    color: colors.textPrimary,
-    marginBottom: spacing.xl,
-  },
-  countdown: {
-    fontSize: 200,
-    fontWeight: '800',
-    color: colors.primary,
-    textShadowColor: colors.primary,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 30,
-  },
-  hint: {
-    ...typography.h2,
-    color: colors.textSecondary,
-    marginTop: spacing.xl,
-  },
-});
+const makeStyles = (t: ThemeTokens) =>
+  StyleSheet.create({
+    container: {
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: spacing.xxl,
+    },
+    label: {
+      ...typography.displayMedium,
+      color: t.ink,
+      marginBottom: spacing.xl,
+    },
+    countdown: {
+      fontSize: 200,
+      fontWeight: '800',
+      color: t.title,
+    },
+    hint: {
+      ...typography.h2,
+      color: t.inkSoft,
+      marginTop: spacing.xl,
+    },
+  });

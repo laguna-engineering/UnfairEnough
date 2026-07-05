@@ -1,6 +1,8 @@
 import type React from 'react';
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { ThemeTokens } from '../theme/themes';
 import { typography } from '../theme/typography';
 
 export interface RankChangeIndicatorProps {
@@ -8,6 +10,9 @@ export interface RankChangeIndicatorProps {
 }
 
 export const RankChangeIndicator: React.FC<RankChangeIndicatorProps> = ({ change }) => {
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
+
   if (change > 0) {
     return (
       <View style={styles.container}>
@@ -31,21 +36,22 @@ export const RankChangeIndicator: React.FC<RankChangeIndicatorProps> = ({ change
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    minWidth: 40,
-    alignItems: 'center',
-  },
-  up: {
-    ...typography.label,
-    color: colors.success,
-  },
-  down: {
-    ...typography.label,
-    color: colors.error,
-  },
-  same: {
-    ...typography.label,
-    color: colors.textSecondary,
-  },
-});
+const makeStyles = (t: ThemeTokens) =>
+  StyleSheet.create({
+    container: {
+      minWidth: 40,
+      alignItems: 'center',
+    },
+    up: {
+      ...typography.label,
+      color: t.success,
+    },
+    down: {
+      ...typography.label,
+      color: t.error,
+    },
+    same: {
+      ...typography.label,
+      color: t.inkSoft,
+    },
+  });

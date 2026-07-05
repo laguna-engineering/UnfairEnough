@@ -1,7 +1,16 @@
 import { useTranslation } from '@unfairenough/i18n';
-import { Card, colors, ScreenBackground, spacing, tvSafeArea, typography } from '@unfairenough/ui';
+import {
+  borderRadius,
+  Card,
+  ScreenBackground,
+  spacing,
+  type ThemeTokens,
+  tvSafeArea,
+  typography,
+  useTheme,
+} from '@unfairenough/ui';
 import type React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import type { AuthChallenge } from '../services/HostedGameController';
@@ -18,6 +27,8 @@ interface Props {
 
 export const AccountLoginScreen: React.FC<Props> = ({ challenge, loginState, onCancel }) => {
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const [countdown, setCountdown] = useState(0);
 
   useEffect(() => {
@@ -54,14 +65,14 @@ export const AccountLoginScreen: React.FC<Props> = ({ challenge, loginState, onC
     <ScreenBackground style={styles.container}>
       <Text style={styles.title}>{t('accountLogin.title')}</Text>
 
-      <Card style={styles.qrCard} variant="glow" glowColor="#10b981">
+      <Card style={styles.qrCard}>
         {challenge?.verificationUrl ? (
           <View style={styles.qrContainer}>
             <QRCode
               value={challenge.verificationUrl}
               size={QR_SIZE}
               backgroundColor="white"
-              color={colors.background}
+              color="#0d0f1a"
             />
           </View>
         ) : (
@@ -91,76 +102,78 @@ export const AccountLoginScreen: React.FC<Props> = ({ challenge, loginState, onC
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: tvSafeArea.horizontal,
-    paddingVertical: tvSafeArea.vertical,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
-    ...typography.displayMedium,
-    color: colors.primary,
-    marginBottom: spacing.xl,
-  },
-  qrCard: {
-    padding: spacing.lg,
-    alignItems: 'center',
-  },
-  qrContainer: {
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  qrPlaceholder: {
-    width: QR_SIZE,
-    height: QR_SIZE,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-  placeholderText: {
-    ...typography.h2,
-    color: colors.textSecondary,
-  },
-  codeText: {
-    ...typography.h1,
-    color: colors.textPrimary,
-    letterSpacing: 8,
-    marginTop: spacing.lg,
-    fontFamily: 'Nunito_700Bold',
-  },
-  instruction: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginTop: spacing.md,
-    textAlign: 'center',
-  },
-  urlText: {
-    ...typography.bodySmall,
-    color: colors.primary,
-    marginTop: spacing.sm,
-    textAlign: 'center',
-    maxWidth: 600,
-  },
-  statusText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
-  },
-  cancelButton: {
-    marginTop: spacing.xl,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.textSecondary,
-  },
-  cancelFocused: {
-    borderColor: colors.primary,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-  },
-  cancelText: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-});
+const makeStyles = (t: ThemeTokens) =>
+  StyleSheet.create({
+    container: {
+      paddingHorizontal: tvSafeArea.horizontal,
+      paddingVertical: spacing.lg,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    title: {
+      ...typography.h1,
+      color: t.title,
+      marginBottom: spacing.md,
+      textAlign: 'center',
+    },
+    qrCard: {
+      padding: spacing.md,
+      alignItems: 'center',
+    },
+    qrContainer: {
+      borderRadius: 12,
+      overflow: 'hidden',
+    },
+    qrPlaceholder: {
+      width: QR_SIZE,
+      height: QR_SIZE,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: t.segTrack,
+    },
+    placeholderText: {
+      ...typography.h2,
+      color: t.inkSoft,
+    },
+    codeText: {
+      ...typography.h2,
+      color: t.ink,
+      letterSpacing: 8,
+      marginTop: spacing.md,
+      fontFamily: 'Nunito_700Bold',
+    },
+    instruction: {
+      ...typography.body,
+      color: t.inkSoft,
+      marginTop: spacing.sm,
+      textAlign: 'center',
+      maxWidth: 900,
+    },
+    urlText: {
+      ...typography.bodySmall,
+      color: t.accent,
+      marginTop: spacing.xs,
+      textAlign: 'center',
+      maxWidth: 900,
+    },
+    statusText: {
+      ...typography.bodySmall,
+      color: t.inkSoft,
+      marginTop: spacing.sm,
+    },
+    cancelButton: {
+      marginTop: spacing.lg,
+      paddingHorizontal: spacing.xl,
+      paddingVertical: spacing.sm,
+      borderRadius: borderRadius.md,
+      borderWidth: 2,
+      borderColor: t.cardBorder,
+    },
+    cancelFocused: {
+      borderColor: t.accent,
+    },
+    cancelText: {
+      ...typography.body,
+      color: t.inkSoft,
+    },
+  });

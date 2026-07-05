@@ -121,6 +121,12 @@ export class HostedGameController implements IGameController {
       adaptiveMode?: boolean;
     },
   ): void {
+    // GAME_CONFIGURED (server ack) echoes back tags/adaptiveMode/questionCount but
+    // NOT the time limit, so persist the requested value locally — otherwise the
+    // lobby can't restore it as the "previous game" setting after a game ends.
+    if (options?.questionTimeLimit != null) {
+      this.store.dispatch(updateConfig({ questionTimeLimit: options.questionTimeLimit }));
+    }
     this.send({
       type: 'CONFIGURE_GAME',
       payload: {

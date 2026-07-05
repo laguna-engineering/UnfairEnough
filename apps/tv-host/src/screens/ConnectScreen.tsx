@@ -3,15 +3,15 @@ import { debugLog } from '@unfairenough/shared';
 import {
   Button,
   borderRadius,
-  Card,
-  colors,
   ScreenBackground,
   spacing,
+  type ThemeTokens,
   tvSafeArea,
   typography,
+  useTheme,
 } from '@unfairenough/ui';
 import type React from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { addRecentServer, getRecentServers, initRecentServers } from '../services/recentServers';
 
@@ -24,6 +24,8 @@ interface Props {
 
 export const ConnectScreen: React.FC<Props> = ({ onConnected, onBack }) => {
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const [serverUrl, setServerUrl] = useState('');
   const [status, setStatus] = useState<ConnectionStatus>('idle');
   const [recentServers, setRecentServers] = useState<string[]>([]);
@@ -81,11 +83,7 @@ export const ConnectScreen: React.FC<Props> = ({ onConnected, onBack }) => {
   }, [serverUrl, onConnected]);
 
   const statusColor =
-    status === 'connected'
-      ? colors.success
-      : status === 'failed'
-        ? colors.error
-        : colors.textSecondary;
+    status === 'connected' ? theme.success : status === 'failed' ? theme.error : theme.inkSoft;
 
   const statusText =
     status === 'connecting'
@@ -98,7 +96,7 @@ export const ConnectScreen: React.FC<Props> = ({ onConnected, onBack }) => {
 
   return (
     <ScreenBackground style={styles.container}>
-      <Card style={styles.card} variant="glow" glowColor={colors.primary}>
+      <View style={styles.card}>
         <Text style={styles.title}>{t('connect.title')}</Text>
 
         <Text style={styles.label}>{t('connect.serverUrl')}</Text>
@@ -107,7 +105,7 @@ export const ConnectScreen: React.FC<Props> = ({ onConnected, onBack }) => {
           value={serverUrl}
           onChangeText={setServerUrl}
           placeholder={t('connect.urlPlaceholder')}
-          placeholderTextColor={colors.textSecondary}
+          placeholderTextColor={theme.inkSoft}
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="url"
@@ -157,93 +155,99 @@ export const ConnectScreen: React.FC<Props> = ({ onConnected, onBack }) => {
             <Text style={styles.backText}>{t('connect.back')}</Text>
           </Pressable>
         </View>
-      </Card>
+      </View>
     </ScreenBackground>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: tvSafeArea.horizontal,
-    paddingVertical: tvSafeArea.vertical,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  card: {
-    padding: spacing.xl,
-    width: '100%',
-    maxWidth: 500,
-  },
-  title: {
-    ...typography.h2,
-    color: colors.textPrimary,
-    marginBottom: spacing.lg,
-    textAlign: 'center',
-  },
-  label: {
-    ...typography.label,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  input: {
-    ...typography.body,
-    color: colors.textPrimary,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderWidth: 1,
-    borderColor: colors.textSecondary,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  recentContainer: {
-    marginBottom: spacing.md,
-  },
-  recentLabel: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  recentRow: {
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: borderRadius.sm,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    marginBottom: spacing.xs,
-  },
-  recentRowText: {
-    ...typography.body,
-    color: colors.primary,
-  },
-  statusText: {
-    ...typography.bodySmall,
-    marginBottom: spacing.md,
-    textAlign: 'center',
-  },
-  buttons: {
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  connectButton: {
-    minWidth: 200,
-  },
-  backButton: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.sm,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  backText: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-  focused: {
-    borderColor: colors.primary,
-  },
-  pressed: {
-    opacity: 0.8,
-  },
-});
+const makeStyles = (t: ThemeTokens) =>
+  StyleSheet.create({
+    container: {
+      paddingHorizontal: tvSafeArea.horizontal,
+      paddingVertical: tvSafeArea.vertical,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    // Flat modal card: one translucent fill, one subtle border, no shadow/glow.
+    card: {
+      backgroundColor: t.card,
+      borderWidth: 1.5,
+      borderColor: t.cardBorder,
+      borderRadius: borderRadius.xl,
+      padding: spacing.xl,
+      width: '100%',
+      maxWidth: 560,
+    },
+    title: {
+      ...typography.h2,
+      color: t.ink,
+      marginBottom: spacing.lg,
+      textAlign: 'center',
+    },
+    label: {
+      ...typography.label,
+      color: t.inkSoft,
+      marginBottom: spacing.xs,
+    },
+    input: {
+      ...typography.body,
+      color: t.ink,
+      backgroundColor: t.segTrack,
+      borderWidth: 1.5,
+      borderColor: t.cardBorder,
+      borderRadius: borderRadius.md,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      marginBottom: spacing.md,
+    },
+    recentContainer: {
+      marginBottom: spacing.md,
+    },
+    recentLabel: {
+      ...typography.bodySmall,
+      color: t.inkSoft,
+      marginBottom: spacing.xs,
+    },
+    recentRow: {
+      paddingVertical: spacing.xs,
+      paddingHorizontal: spacing.sm,
+      borderRadius: borderRadius.md,
+      borderWidth: 2,
+      borderColor: 'transparent',
+      backgroundColor: t.card,
+      marginBottom: spacing.xs,
+    },
+    recentRowText: {
+      ...typography.body,
+      color: t.accent,
+    },
+    statusText: {
+      ...typography.bodySmall,
+      marginBottom: spacing.md,
+      textAlign: 'center',
+    },
+    buttons: {
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    connectButton: {
+      minWidth: 200,
+    },
+    backButton: {
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: borderRadius.md,
+      borderWidth: 2,
+      borderColor: 'transparent',
+    },
+    backText: {
+      ...typography.body,
+      color: t.inkSoft,
+    },
+    focused: {
+      borderColor: t.accent,
+    },
+    pressed: {
+      opacity: 0.8,
+    },
+  });

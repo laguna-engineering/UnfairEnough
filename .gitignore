@@ -38,6 +38,7 @@ test-results/
 # Questions (ignore all except the example)
 questions/*
 !questions/example.yaml
+*.zip
 
 # Background music (bundled into the TV app at build time, kept out of git)
 apps/tv-host/assets/music/*

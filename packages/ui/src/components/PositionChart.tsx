@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 export interface PositionChartPlayer {
   playerId: string;
@@ -34,6 +34,8 @@ export const PositionChart: React.FC<PositionChartProps> = ({
   width = 600,
   height = 300,
 }) => {
+  const { theme } = useTheme();
+
   if (positionHistory.length === 0 || players.length === 0) return null;
 
   const totalRounds = positionHistory.length;
@@ -93,7 +95,7 @@ export const PositionChart: React.FC<PositionChartProps> = ({
               y1={y}
               x2={PADDING_LEFT + chartWidth}
               y2={y}
-              stroke="rgba(255,255,255,0.1)"
+              stroke={theme.track}
               strokeWidth={1}
             />
           );
@@ -109,7 +111,7 @@ export const PositionChart: React.FC<PositionChartProps> = ({
               y1={PADDING_TOP}
               x2={x}
               y2={PADDING_TOP + chartHeight}
-              stroke="rgba(255,255,255,0.1)"
+              stroke={theme.track}
               strokeWidth={1}
             />
           );
@@ -121,7 +123,7 @@ export const PositionChart: React.FC<PositionChartProps> = ({
             key={`rank-label-${i}`}
             x={PADDING_LEFT - 10}
             y={yForRank(i + 1) + 5}
-            fill={colors.textSecondary}
+            fill={theme.inkSoft}
             fontSize={14}
             textAnchor="end"
           >
@@ -135,7 +137,7 @@ export const PositionChart: React.FC<PositionChartProps> = ({
             key={`round-label-${i}`}
             x={xForRound(i + 1)}
             y={height - 6}
-            fill={colors.textSecondary}
+            fill={theme.inkSoft}
             fontSize={14}
             textAnchor="middle"
           >

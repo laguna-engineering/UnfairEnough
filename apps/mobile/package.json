@@ -12,8 +12,8 @@
     "prebuild": "expo prebuild --clean"
   },
   "dependencies": {
+    "@expo-google-fonts/fredoka": "^0.4.1",
     "@expo-google-fonts/nunito": "^0.4.2",
-    "@expo-google-fonts/sniglet": "^0.4.1",
     "@expo/metro-runtime": "~6.1.1",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-navigation/native": "^7.0.0",

@@ -1,7 +1,9 @@
 import type React from 'react';
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors } from '../theme/colors';
 import { borderRadius, spacing } from '../theme/spacing';
+import { useTheme } from '../theme/ThemeContext';
+import type { ThemeTokens } from '../theme/themes';
 import { typography } from '../theme/typography';
 import { RankChangeIndicator } from './RankChangeIndicator';
 
@@ -24,16 +26,16 @@ export interface LeaderboardProps {
   showPoints?: boolean;
 }
 
-const getRankColor = (rank: number) => {
+const getRankColor = (rank: number, t: ThemeTokens) => {
   switch (rank) {
     case 1:
-      return colors.accentYellow;
+      return t.title;
     case 2:
-      return colors.textSecondary;
+      return t.inkSoft;
     case 3:
       return '#CD7F32';
     default:
-      return colors.textSecondary;
+      return t.inkSoft;
   }
 };
 
@@ -43,6 +45,9 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
   showRankChange = false,
   showPoints = false,
 }) => {
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
+
   return (
     <View style={styles.container}>
       {entries.map((entry) => {
@@ -57,7 +62,9 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
             ]}
           >
             {/* Rank */}
-            <Text style={[styles.rank, { color: getRankColor(entry.rank) }]}>#{entry.rank}</Text>
+            <Text style={[styles.rank, { color: getRankColor(entry.rank, theme) }]}>
+              #{entry.rank}
+            </Text>
 
             {/* Color dot */}
             {entry.color && <View style={[styles.colorDot, { backgroundColor: entry.color }]} />}
@@ -93,53 +100,58 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    gap: spacing.xs,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-  },
-  highlightedRow: {
-    backgroundColor: colors.card,
-  },
-  correctRow: {
-    borderLeftWidth: 3,
-    borderLeftColor: colors.success,
-  },
-  rank: {
-    ...typography.h3,
-    width: 48,
-    textAlign: 'center',
-  },
-  colorDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: spacing.sm,
-  },
-  name: {
-    ...typography.body,
-    color: colors.textPrimary,
-    flex: 1,
-  },
-  highlightedName: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  pointsEarned: {
-    ...typography.label,
-    color: colors.success,
-    marginRight: spacing.md,
-  },
-  score: {
-    ...typography.h3,
-    color: colors.accentYellow,
-    minWidth: 60,
-    textAlign: 'right',
-  },
-});
+const makeStyles = (t: ThemeTokens) =>
+  StyleSheet.create({
+    container: {
+      gap: spacing.sm,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: borderRadius.lg,
+      backgroundColor: t.card,
+      borderWidth: 1.5,
+      borderColor: t.cardBorder,
+    },
+    highlightedRow: {
+      backgroundColor: t.accentSoft,
+      borderColor: 'transparent',
+    },
+    correctRow: {
+      borderLeftWidth: 3,
+      borderLeftColor: t.success,
+    },
+    rank: {
+      ...typography.h3,
+      width: 48,
+      textAlign: 'center',
+    },
+    colorDot: {
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      marginRight: spacing.sm,
+    },
+    name: {
+      ...typography.body,
+      color: t.ink,
+      flex: 1,
+    },
+    highlightedName: {
+      color: t.accentInk,
+      fontWeight: '600',
+    },
+    pointsEarned: {
+      ...typography.label,
+      color: t.success,
+      marginRight: spacing.md,
+    },
+    score: {
+      ...typography.h3,
+      color: t.accent,
+      minWidth: 60,
+      textAlign: 'right',
+    },
+  });

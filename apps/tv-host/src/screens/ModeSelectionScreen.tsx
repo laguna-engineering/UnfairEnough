@@ -1,6 +1,15 @@
 import { useTranslation } from '@unfairenough/i18n';
-import { Card, colors, ScreenBackground, spacing, tvSafeArea, typography } from '@unfairenough/ui';
+import {
+  borderRadius,
+  ScreenBackground,
+  spacing,
+  type ThemeTokens,
+  tvSafeArea,
+  typography,
+  useTheme,
+} from '@unfairenough/ui';
 import type React from 'react';
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 interface Props {
@@ -15,103 +24,132 @@ export const ModeSelectionScreen: React.FC<Props> = ({
   onSelectHosted,
 }) => {
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
+
+  // One card per mode. `tint` colors the circular icon badge with a Palette 1
+  // answer-tile hue so the three options read as distinct but on-brand.
+  const options = [
+    {
+      key: 'account',
+      emoji: '🔑',
+      tint: theme.answerTiles.A.bg,
+      title: t('mode.account'),
+      description: t('mode.accountDescription'),
+      onPress: onSelectAccount,
+      preferred: true,
+    },
+    {
+      key: 'local',
+      emoji: '📺',
+      tint: theme.answerTiles.B.bg,
+      title: t('mode.local'),
+      description: t('mode.localDescription'),
+      onPress: onSelectLocal,
+      preferred: false,
+    },
+    {
+      key: 'hosted',
+      emoji: '🛜',
+      tint: theme.answerTiles.D.bg,
+      title: t('mode.hosted'),
+      description: t('mode.hostedDescription'),
+      onPress: onSelectHosted,
+      preferred: false,
+    },
+  ];
 
   return (
     <ScreenBackground style={styles.container}>
       <Text style={styles.title}>{t('mode.title')}</Text>
 
       <View style={styles.cardsRow}>
-        <Pressable
-          hasTVPreferredFocus
-          style={(state) => [
-            styles.cardWrapper,
-            (state as any).focused && styles.focused,
-            state.pressed && styles.pressed,
-          ]}
-          onPress={onSelectAccount}
-        >
-          <Card style={styles.card} variant="glow" glowColor="#10b981">
-            <Text style={styles.cardTitle}>{t('mode.account')}</Text>
-            <Text style={styles.cardDescription}>{t('mode.accountDescription')}</Text>
-          </Card>
-        </Pressable>
-
-        <Pressable
-          style={(state) => [
-            styles.cardWrapper,
-            (state as any).focused && styles.focused,
-            state.pressed && styles.pressed,
-          ]}
-          onPress={onSelectLocal}
-        >
-          <Card style={styles.card} variant="glow" glowColor={colors.secondary}>
-            <Text style={styles.cardTitle}>{t('mode.local')}</Text>
-            <Text style={styles.cardDescription}>{t('mode.localDescription')}</Text>
-          </Card>
-        </Pressable>
-
-        <Pressable
-          style={(state) => [
-            styles.cardWrapper,
-            (state as any).focused && styles.focused,
-            state.pressed && styles.pressed,
-          ]}
-          onPress={onSelectHosted}
-        >
-          <Card style={styles.card} variant="glow" glowColor={colors.primary}>
-            <Text style={styles.cardTitle}>{t('mode.hosted')}</Text>
-            <Text style={styles.cardDescription}>{t('mode.hostedDescription')}</Text>
-          </Card>
-        </Pressable>
+        {options.map((option) => (
+          <Pressable
+            key={option.key}
+            hasTVPreferredFocus={option.preferred}
+            onPress={option.onPress}
+            style={(state) => [
+              styles.card,
+              (state as any).focused && styles.focused,
+              (state as any).focused && styles.focusedScale,
+              state.pressed && styles.pressed,
+            ]}
+          >
+            <View style={[styles.iconBadge, { backgroundColor: option.tint }]}>
+              <Text style={styles.iconEmoji}>{option.emoji}</Text>
+            </View>
+            <Text style={styles.cardTitle}>{option.title}</Text>
+            <Text style={styles.cardDescription}>{option.description}</Text>
+          </Pressable>
+        ))}
       </View>
     </ScreenBackground>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: tvSafeArea.horizontal,
-    paddingVertical: tvSafeArea.vertical,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
-    ...typography.displayMedium,
-    color: colors.primary,
-    marginBottom: spacing.xxl,
-  },
-  cardsRow: {
-    flexDirection: 'row',
-    gap: spacing.xxl,
-  },
-  cardWrapper: {
-    flex: 1,
-    maxWidth: 360,
-    borderRadius: 20,
-    borderWidth: 3,
-    borderColor: 'transparent',
-  },
-  card: {
-    padding: spacing.xl,
-    alignItems: 'center',
-    minHeight: 220,
-    justifyContent: 'flex-start',
-  },
-  cardTitle: {
-    ...typography.h2,
-    color: colors.textPrimary,
-    marginBottom: spacing.md,
-    textAlign: 'center',
-  },
-  cardDescription: {
-    ...typography.body,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  focused: {
-    borderColor: colors.primary,
-  },
-  pressed: {
-    opacity: 0.8,
-  },
-});
+const makeStyles = (t: ThemeTokens) =>
+  StyleSheet.create({
+    container: {
+      paddingHorizontal: spacing.xxl,
+      paddingVertical: tvSafeArea.vertical,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    title: {
+      ...typography.displayLarge,
+      color: t.title,
+      marginBottom: spacing.xxl,
+    },
+    cardsRow: {
+      flexDirection: 'row',
+      alignItems: 'stretch', // stretch every card to the tallest → equal height
+      gap: spacing.xl,
+      alignSelf: 'stretch',
+      justifyContent: 'center',
+    },
+    // The Pressable IS the card: one flat translucent fill, one border, no shadow.
+    card: {
+      flex: 1,
+      maxWidth: 480,
+      backgroundColor: t.card,
+      borderWidth: 2,
+      borderColor: t.cardBorder,
+      borderRadius: borderRadius.xl,
+      paddingVertical: spacing.xxl,
+      paddingHorizontal: spacing.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    iconBadge: {
+      width: 96,
+      height: 96,
+      borderRadius: borderRadius.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: spacing.lg,
+    },
+    iconEmoji: {
+      fontSize: 48,
+    },
+    cardTitle: {
+      ...typography.h1,
+      color: t.ink,
+      marginBottom: spacing.md,
+      textAlign: 'center',
+    },
+    cardDescription: {
+      ...typography.bodyLarge,
+      color: t.inkSoft,
+      textAlign: 'center',
+    },
+    focused: {
+      borderColor: t.accent,
+    },
+    focusedScale: {
+      transform: [{ scale: 1.04 }],
+    },
+    pressed: {
+      opacity: 0.85,
+    },
+  });

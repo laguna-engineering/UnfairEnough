@@ -1,3 +1,4 @@
+import { ThemeProvider } from '@unfairenough/ui';
 import type React from 'react';
 import { BgMusicProvider, useBgMusicContext } from '../hooks/BgMusicContext';
 import { useGameController } from '../hooks/useGameController';
@@ -34,7 +35,9 @@ const GameScreenInner: React.FC = () => {
 };
 
 export const GameScreen: React.FC = () => (
-  <BgMusicProvider>
-    <GameScreenInner />
-  </BgMusicProvider>
+  <ThemeProvider>
+    <BgMusicProvider>
+      <GameScreenInner />
+    </BgMusicProvider>
+  </ThemeProvider>
 );

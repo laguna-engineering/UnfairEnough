@@ -5,15 +5,16 @@ import {
   Button,
   borderRadius,
   Card,
-  colors,
   PlayerAvatar,
   ScreenBackground,
   spacing,
+  type ThemeTokens,
   tvSafeArea,
   typography,
+  useTheme,
 } from '@unfairenough/ui';
 import type React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { findNodeHandle, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useGameController } from '../hooks/useGameController';
@@ -153,6 +154,8 @@ interface TagWithCount {
 
 export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
   const { t, i18n } = useTranslation();
+  const { theme, mode: themeMode, toggle: toggleTheme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const {
     state,
     startGame,
@@ -360,6 +363,10 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
     [availableTags, customTotalQuestions, customTimeLimit, adaptiveEnabled, sendPersonalizedConfig],
   );
 
+  const handleResetTags = useCallback(() => {
+    setSelectedTags([]);
+  }, []);
+
   const handleTotalQuestionsChange = useCallback(
     (delta: number) => {
       setCustomTotalQuestions((prev) => {
@@ -396,11 +403,13 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
   const startRef = useRef<View>(null);
   const enRef = useRef<View>(null);
   const muteRef = useRef<View>(null);
+  const themeRef = useRef<View>(null);
   const [focusTags, setFocusTags] = useState<{
     personalized?: number;
     start?: number;
     en?: number;
     mute?: number;
+    theme?: number;
   }>({});
 
   const players = playersSelectors.selectAll(state.players);
@@ -420,6 +429,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
         start: findNodeHandle(startRef.current) ?? undefined,
         en: findNodeHandle(enRef.current) ?? undefined,
         mute: findNodeHandle(muteRef.current) ?? undefined,
+        theme: findNodeHandle(themeRef.current) ?? undefined,
       });
     }, 100);
     return () => clearTimeout(timer);
@@ -431,11 +441,24 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
       <View style={styles.header}>
         <Text style={styles.title}>{t('lobby.title')}</Text>
         <View style={styles.headerControls}>
+          <Pressable
+            ref={themeRef}
+            onPress={toggleTheme}
+            nextFocusDown={focusTags.start}
+            nextFocusRight={focusTags.mute ?? focusTags.en}
+            style={(state) => [
+              styles.muteButton,
+              (state as any).focused && styles.focused,
+              state.pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.muteButtonText}>{themeMode === 'dark' ? '☀️' : '\u{1F319}'}</Text>
+          </Pressable>
           {bgMusic?.hasTracks && (
             <Pressable
               ref={muteRef}
               onPress={bgMusic.toggleMute}
-              nextFocusLeft={focusTags.start}
+              nextFocusLeft={focusTags.theme ?? focusTags.start}
               nextFocusRight={focusTags.en}
               style={(state) => [
                 styles.muteButton,
@@ -536,7 +559,9 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
             <View style={styles.gameModeHeader}>
               <Text style={styles.gameModeLabel}>{t('gameConfig.gameMode')}</Text>
               <Text style={styles.questionCount}>
-                {t('gameConfig.totalQuestions', { count: totalQuestions })}
+                {t('gameConfig.totalQuestions', {
+                  count: selectedMode === 'personalized' ? maxCustomQuestions : totalQuestions,
+                })}
               </Text>
             </View>
             <View style={styles.gameModeButtons}>
@@ -603,19 +628,19 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                   {t('gameConfig.personalized')}
                 </Text>
               </Pressable>
-              {mode === 'local' && (
-                <Pressable
-                  onPress={() => setShowImportModal(true)}
-                  style={(state) => [
-                    styles.importButton,
-                    (state as any).focused && styles.focused,
-                    state.pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.importButtonText}>{t('gameConfig.importQuestions')}</Text>
-                </Pressable>
-              )}
             </View>
+            {mode === 'local' && (
+              <Pressable
+                onPress={() => setShowImportModal(true)}
+                style={(state) => [
+                  styles.importButton,
+                  (state as any).focused && styles.focused,
+                  state.pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.importButtonText}>{t('gameConfig.importQuestions')}</Text>
+              </Pressable>
+            )}
 
             {/* Question Set Picker (configured mode) */}
             {selectedMode === 'configured' && (
@@ -674,14 +699,14 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                   {availableTags.length === 0 ? (
                     <Text style={styles.noSetsText}>{t('gameConfig.noTags')}</Text>
                   ) : (
-                    availableTags.map((tagRow) => (
+                    <>
                       <Pressable
-                        key={tagRow.tag}
-                        onPress={() => handleToggleTag(tagRow.tag)}
-                        nextFocusRight={focusTags.start}
+                        disabled={selectedTags.length === 0}
+                        onPress={handleResetTags}
                         style={(pressState) => [
                           styles.setCard,
-                          selectedTags.includes(tagRow.tag) && styles.setCardActive,
+                          styles.resetCard,
+                          selectedTags.length === 0 && styles.resetCardDisabled,
                           (pressState as any).focused && styles.focused,
                           pressState.pressed && styles.pressed,
                         ]}
@@ -689,17 +714,40 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                         <Text
                           style={[
                             styles.setCardName,
-                            selectedTags.includes(tagRow.tag) && styles.setCardNameActive,
+                            selectedTags.length === 0 && styles.resetCardTextDisabled,
                           ]}
                           numberOfLines={1}
                         >
-                          {tagRow.tag}
-                        </Text>
-                        <Text style={styles.setCardCount}>
-                          {t('gameConfig.questionsCount', { count: tagRow.questionCount })}
+                          {t('gameConfig.resetTags')}
                         </Text>
                       </Pressable>
-                    ))
+                      {availableTags.map((tagRow) => (
+                        <Pressable
+                          key={tagRow.tag}
+                          onPress={() => handleToggleTag(tagRow.tag)}
+                          nextFocusRight={focusTags.start}
+                          style={(pressState) => [
+                            styles.setCard,
+                            selectedTags.includes(tagRow.tag) && styles.setCardActive,
+                            (pressState as any).focused && styles.focused,
+                            pressState.pressed && styles.pressed,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.setCardName,
+                              selectedTags.includes(tagRow.tag) && styles.setCardNameActive,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {tagRow.tag}
+                          </Text>
+                          <Text style={styles.setCardCount}>
+                            {t('gameConfig.questionsCount', { count: tagRow.questionCount })}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </>
                   )}
                 </ScrollView>
 
@@ -794,15 +842,10 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
 
         {/* QR Code Section */}
         <View style={styles.qrSection}>
-          <Card style={styles.qrCard} variant="glow" glowColor={colors.primary}>
+          <Card style={styles.qrCard} variant="glow" glowColor={theme.accent}>
             {qrUrl ? (
               <View style={styles.qrContainer}>
-                <QRCode
-                  value={qrUrl}
-                  size={QR_SIZE}
-                  backgroundColor="white"
-                  color={colors.background}
-                />
+                <QRCode value={qrUrl} size={QR_SIZE} backgroundColor="white" color="#0d0f1a" />
               </View>
             ) : (
               <View style={styles.loadingContainer}>
@@ -833,336 +876,373 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: tvSafeArea.horizontal,
-    paddingTop: spacing.md,
-    paddingBottom: tvSafeArea.vertical,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  title: {
-    ...typography.displayMedium,
-    color: colors.primary,
-  },
-  headerControls: {
-    position: 'absolute',
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  muteButton: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
-    borderWidth: 2,
-    borderColor: colors.textSecondary,
-  },
-  muteButtonText: {
-    fontSize: 20,
-  },
-  languageSwitcher: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  languageButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
-    borderWidth: 2,
-    borderColor: colors.textSecondary,
-  },
-  languageButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  languageButtonText: {
-    ...typography.label,
-    color: colors.textSecondary,
-  },
-  languageButtonTextActive: {
-    color: colors.textPrimary,
-    fontWeight: '700',
-  },
-  content: {
-    flex: 1,
-    flexDirection: 'row',
-    gap: spacing.xl,
-  },
-  qrSection: {
-    flex: 0.35,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-  },
-  qrCard: {
-    padding: spacing.md,
-    alignItems: 'center',
-  },
-  qrContainer: {
-    padding: spacing.sm,
-    backgroundColor: 'white',
-    borderRadius: borderRadius.md,
-  },
-  loadingContainer: {
-    width: QR_SIZE,
-    height: QR_SIZE,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    ...typography.h3,
-    color: colors.textSecondary,
-  },
-  qrCaption: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
-    textAlign: 'center',
-    maxWidth: 280,
-  },
-  manualJoin: {
-    marginTop: spacing.sm,
-    alignItems: 'center',
-  },
-  manualJoinCode: {
-    ...typography.h2,
-    color: colors.primary,
-    fontWeight: '700',
-    letterSpacing: 4,
-    marginTop: spacing.xs,
-  },
-  playersSection: {
-    flex: 0.65,
-  },
-  playersCard: {
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    minHeight: 100,
-  },
-  playersHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: spacing.lg,
-    marginBottom: spacing.xs,
-  },
-  playersTitle: {
-    ...typography.h2,
-    color: colors.textPrimary,
-  },
-  playersList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
-    minHeight: 48,
-    alignItems: 'center',
-  },
-  overflowBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  overflowText: {
-    ...typography.label,
-    color: colors.textSecondary,
-  },
-  waitingText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    fontStyle: 'italic',
-  },
-  gameModeContainer: {
-    marginBottom: spacing.sm,
-  },
-  gameModeHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  gameModeLabel: {
-    ...typography.label,
-    color: colors.textSecondary,
-  },
-  questionCount: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-  },
-  gameModeButtons: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    flexWrap: 'wrap',
-  },
-  importButton: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    borderWidth: 2,
-    borderColor: colors.accentYellow,
-    borderStyle: 'dashed',
-  },
-  importButtonText: {
-    ...typography.body,
-    color: colors.accentYellow,
-  },
-  setPickerContainer: {
-    marginTop: spacing.xs,
-  },
-  setPickerContent: {
-    gap: spacing.sm,
-    paddingRight: spacing.sm,
-  },
-  setCard: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
-    borderWidth: 2,
-    borderColor: colors.textSecondary,
-    minWidth: 120,
-  },
-  setCardMeta: {
-    borderStyle: 'dashed',
-  },
-  setCardActive: {
-    backgroundColor: colors.secondary,
-    borderColor: colors.secondary,
-  },
-  setCardName: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  setCardNameActive: {
-    color: colors.textPrimary,
-  },
-  setCardCount: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    fontSize: 11,
-  },
-  noSetsText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    fontStyle: 'italic',
-    paddingVertical: spacing.sm,
-  },
-  gameModeButton: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    borderWidth: 2,
-    borderColor: colors.textSecondary,
-  },
-  gameModeButtonActive: {
-    backgroundColor: colors.secondary,
-    borderColor: colors.secondary,
-  },
-  gameModeButtonText: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-  gameModeButtonTextActive: {
-    color: colors.textPrimary,
-    fontWeight: '700',
-  },
-  // Custom mode controls
-  customControls: {
-    marginTop: spacing.xs,
-  },
-  selectSetsHint: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    fontStyle: 'italic',
-    marginTop: spacing.sm,
-  },
-  customSettingsRow: {
-    flexDirection: 'row',
-    gap: spacing.lg,
-    marginTop: spacing.xs,
-    alignItems: 'flex-start',
-  },
-  stepperGroup: {
-    alignItems: 'center',
-  },
-  stepperLabel: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  stepperButton: {
-    width: 32,
-    height: 32,
-    borderRadius: borderRadius.md,
-    borderWidth: 2,
-    borderColor: colors.textSecondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stepperButtonText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    fontWeight: '700',
-  },
-  stepperValue: {
-    ...typography.body,
-    color: colors.textPrimary,
-    fontWeight: '700',
-    minWidth: 32,
-    textAlign: 'center',
-  },
-  toggleButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
-    borderWidth: 2,
-    borderColor: colors.textSecondary,
-    minWidth: 56,
-    alignItems: 'center',
-  },
-  toggleButtonActive: {
-    backgroundColor: colors.secondary,
-    borderColor: colors.secondary,
-  },
-  toggleButtonText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    fontWeight: '700',
-  },
-  toggleButtonTextActive: {
-    color: colors.textPrimary,
-  },
-  startButtonContainer: {
-    alignItems: 'flex-end',
-  },
-  startButton: {
-    minWidth: 160,
-  },
-  hintText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
-  },
-  focused: {
-    borderColor: colors.primary,
-  },
-  focusedScale: {
-    transform: [{ scale: 1.1 }],
-  },
-  pressed: {
-    opacity: 0.8,
-  },
-});
+const makeStyles = (t: ThemeTokens) =>
+  StyleSheet.create({
+    container: {
+      paddingHorizontal: spacing.xxl,
+      paddingTop: spacing.md,
+      paddingBottom: tvSafeArea.vertical,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'flex-start',
+      alignItems: 'center',
+      marginBottom: spacing.md,
+    },
+    title: {
+      ...typography.displayLarge,
+      fontSize: 48,
+      lineHeight: 56,
+      color: t.title,
+    },
+    headerControls: {
+      position: 'absolute',
+      right: 0,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    muteButton: {
+      width: 56,
+      height: 56,
+      borderRadius: borderRadius.md,
+      borderWidth: 2,
+      borderColor: t.cardBorder,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    muteButtonText: {
+      fontSize: 24,
+    },
+    languageSwitcher: {
+      flexDirection: 'row',
+      gap: spacing.xs,
+    },
+    languageButton: {
+      minWidth: 56,
+      height: 56,
+      paddingHorizontal: spacing.md,
+      borderRadius: borderRadius.md,
+      borderWidth: 2,
+      borderColor: t.cardBorder,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    languageButtonActive: {
+      backgroundColor: t.cta,
+      borderColor: t.cta,
+    },
+    languageButtonText: {
+      ...typography.label,
+      color: t.inkSoft,
+    },
+    languageButtonTextActive: {
+      color: t.ctaInk,
+      fontWeight: '700',
+    },
+    content: {
+      flex: 1,
+      flexDirection: 'row',
+      gap: spacing.xl,
+    },
+    qrSection: {
+      flex: 0.35,
+      justifyContent: 'flex-start',
+      alignItems: 'center',
+    },
+    qrCard: {
+      padding: spacing.md,
+      alignItems: 'center',
+    },
+    qrContainer: {
+      padding: spacing.sm,
+      backgroundColor: 'white',
+      borderRadius: borderRadius.md,
+    },
+    loadingContainer: {
+      width: QR_SIZE,
+      height: QR_SIZE,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    loadingText: {
+      ...typography.h3,
+      color: t.inkSoft,
+    },
+    qrCaption: {
+      ...typography.body,
+      color: t.inkSoft,
+      marginTop: spacing.sm,
+      textAlign: 'center',
+      maxWidth: 280,
+    },
+    manualJoin: {
+      marginTop: spacing.sm,
+      alignItems: 'center',
+    },
+    manualJoinCode: {
+      ...typography.h2,
+      color: t.title,
+      fontWeight: '700',
+      letterSpacing: 4,
+      marginTop: spacing.xs,
+    },
+    playersSection: {
+      flex: 0.65,
+    },
+    playersCard: {
+      padding: spacing.md,
+      marginBottom: spacing.xl,
+      height: 150,
+    },
+    playersHeaderRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: spacing.lg,
+      marginBottom: spacing.xs,
+    },
+    playersTitle: {
+      ...typography.h2,
+      color: t.ink,
+    },
+    playersList: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+      marginTop: -spacing.sm,
+      paddingVertical: spacing.xs,
+      minHeight: 48,
+      alignItems: 'center',
+    },
+    overflowBadge: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: t.card,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    overflowText: {
+      ...typography.label,
+      color: t.inkSoft,
+    },
+    waitingText: {
+      ...typography.body,
+      color: t.inkSoft,
+      fontStyle: 'italic',
+    },
+    gameModeContainer: {
+      marginBottom: spacing.sm,
+    },
+    gameModeHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.xs,
+    },
+    gameModeLabel: {
+      ...typography.label,
+      color: t.inkSoft,
+    },
+    questionCount: {
+      ...typography.bodySmall,
+      color: t.inkSoft,
+    },
+    gameModeButtons: {
+      flexDirection: 'row',
+      backgroundColor: t.segTrack,
+      borderRadius: borderRadius.lg,
+      padding: spacing.xs,
+    },
+    importButton: {
+      alignSelf: 'flex-start',
+      marginTop: spacing.sm,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      borderRadius: borderRadius.md,
+      borderWidth: 2,
+      borderColor: t.accent,
+      borderStyle: 'dashed',
+    },
+    importButtonText: {
+      ...typography.body,
+      color: t.accent,
+    },
+    setPickerContainer: {
+      marginTop: spacing.xs,
+    },
+    setPickerContent: {
+      gap: spacing.sm,
+      paddingRight: spacing.sm,
+    },
+    setCard: {
+      backgroundColor: t.card,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: borderRadius.lg,
+      borderWidth: 1.5,
+      borderColor: t.cardBorder,
+      minWidth: 150,
+    },
+    setCardMeta: {
+      borderStyle: 'dashed',
+    },
+    setCardActive: {
+      backgroundColor: t.accentSoft,
+      borderColor: 'transparent',
+    },
+    resetCard: {
+      minWidth: 90,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    resetCardDisabled: {
+      opacity: 0.4,
+    },
+    resetCardTextDisabled: {
+      color: t.inkSoft,
+    },
+    setCardName: {
+      ...typography.body,
+      color: t.ink,
+      fontWeight: '700',
+    },
+    setCardNameActive: {
+      color: t.accentInk,
+    },
+    setCardCount: {
+      ...typography.bodySmall,
+      color: t.inkSoft,
+    },
+    noSetsText: {
+      ...typography.bodySmall,
+      color: t.inkSoft,
+      fontStyle: 'italic',
+      paddingVertical: spacing.sm,
+    },
+    gameModeButton: {
+      flex: 1,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: borderRadius.md,
+      borderWidth: 2,
+      borderColor: 'transparent',
+      alignItems: 'center',
+    },
+    gameModeButtonActive: {
+      backgroundColor: t.cta,
+    },
+    gameModeButtonText: {
+      ...typography.body,
+      color: t.inkSoft,
+      fontWeight: '700',
+    },
+    gameModeButtonTextActive: {
+      color: t.ctaInk,
+      fontWeight: '700',
+    },
+    // Custom mode controls
+    customControls: {
+      marginTop: spacing.xs,
+    },
+    selectSetsHint: {
+      ...typography.bodySmall,
+      color: t.inkSoft,
+      fontStyle: 'italic',
+      marginTop: spacing.sm,
+    },
+    customSettingsRow: {
+      flexDirection: 'row',
+      gap: spacing.lg,
+      marginTop: spacing.xs,
+      alignItems: 'flex-start',
+    },
+    stepperGroup: {
+      alignItems: 'center',
+    },
+    stepperLabel: {
+      ...typography.bodySmall,
+      color: t.inkSoft,
+      fontWeight: '700',
+      textAlign: 'left',
+      alignSelf: 'flex-start',
+      marginTop: spacing.sm,
+      marginBottom: spacing.xs,
+    },
+    stepper: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    stepperButton: {
+      width: 46,
+      height: 46,
+      borderRadius: borderRadius.md,
+      borderWidth: 2,
+      borderColor: t.cardBorder,
+      backgroundColor: t.card,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    stepperButtonText: {
+      ...typography.h3,
+      color: t.inkSoft,
+      fontWeight: '700',
+    },
+    stepperValue: {
+      ...typography.h3,
+      color: t.ink,
+      fontWeight: '700',
+      minWidth: 44,
+      textAlign: 'center',
+    },
+    toggleButton: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      borderRadius: borderRadius.md,
+      borderWidth: 2,
+      borderColor: t.cardBorder,
+      backgroundColor: t.card,
+      minWidth: 76,
+      height: 46,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    toggleButtonActive: {
+      backgroundColor: t.accent,
+      borderColor: t.accent,
+    },
+    toggleButtonText: {
+      ...typography.bodySmall,
+      color: t.inkSoft,
+      fontWeight: '700',
+    },
+    toggleButtonTextActive: {
+      color: t.accentOn,
+    },
+    startButtonContainer: {
+      position: 'relative',
+      alignItems: 'flex-end',
+    },
+    startButton: {
+      minWidth: 160,
+    },
+    hintText: {
+      ...typography.bodySmall,
+      color: t.inkSoft,
+      position: 'absolute',
+      top: '100%',
+      right: 0,
+      marginTop: spacing.sm,
+    },
+    focused: {
+      borderColor: t.accent,
+    },
+    focusedScale: {
+      transform: [{ scale: 1.1 }],
+    },
+    pressed: {
+      opacity: 0.8,
+    },
+  });

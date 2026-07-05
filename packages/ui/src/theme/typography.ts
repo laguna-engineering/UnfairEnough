@@ -1,9 +1,9 @@
 import type { TextStyle } from 'react-native';
 
-// Typography scale following Neon Sakura theme
-// Sniglet for titles/headings, Nunito for body text
+// Typography scale following Palette 1 theme
+// Fredoka for titles/headings, Nunito for body text
 
-const titleFont = 'Sniglet_400Regular';
+const titleFont = 'Fredoka_600SemiBold';
 const bodyFont = 'Nunito_400Regular';
 const bodyFontSemiBold = 'Nunito_600SemiBold';
 const bodyFontBold = 'Nunito_700Bold';

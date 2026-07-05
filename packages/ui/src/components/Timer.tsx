@@ -1,8 +1,7 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import type React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, gradients } from '../theme/colors';
-import { typography } from '../theme/typography';
+import Svg, { Circle } from 'react-native-svg';
+import { useTheme } from '../theme/ThemeContext';
 
 export interface TimerProps {
   seconds: number;
@@ -10,34 +9,62 @@ export interface TimerProps {
   size?: 'small' | 'large';
 }
 
+const DIMENSIONS = {
+  large: { diameter: 168, stroke: 14, fontSize: 62 },
+  small: { diameter: 104, stroke: 10, fontSize: 40 },
+} as const;
+
 export const Timer: React.FC<TimerProps> = ({ seconds, totalSeconds, size = 'large' }) => {
-  const progress = seconds / totalSeconds;
+  const { theme } = useTheme();
+  const progress = Math.max(0, Math.min(1, totalSeconds > 0 ? seconds / totalSeconds : 0));
   const isLow = seconds <= 3;
 
-  const getColor = () => {
-    if (isLow) return colors.error;
-    if (progress < 0.5) return colors.accentYellow;
-    return colors.secondary;
-  };
+  // Ring + number share a color so "running out of time" reads at a glance,
+  // while staying inside Palette 1.
+  const color = isLow ? theme.error : progress < 0.5 ? theme.answerTiles.C.bg : theme.accent;
 
-  const getGradientColors = () => {
-    if (isLow) return gradients.timerDanger;
-    if (progress < 0.5) return gradients.timerWarning;
-    return gradients.timerHealthy;
-  };
-
-  const textStyle = size === 'large' ? typography.timer : typography.displayMedium;
+  const { diameter, stroke, fontSize } = DIMENSIONS[size];
+  const r = (diameter - stroke) / 2;
+  const circumference = 2 * Math.PI * r;
+  const dashoffset = circumference * (1 - progress);
+  const center = diameter / 2;
 
   return (
-    <View style={styles.container}>
-      <Text style={[textStyle, { color: getColor() }]}>{seconds}</Text>
-      <View style={styles.progressContainer}>
-        <LinearGradient
-          colors={getGradientColors()}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={[styles.progressBar, { width: `${progress * 100}%` }]}
+    <View style={[styles.container, { width: diameter, height: diameter }]}>
+      <Svg width={diameter} height={diameter}>
+        {/* Filled hole so the ring reads as a disc on the card */}
+        <Circle cx={center} cy={center} r={r - stroke / 2} fill={theme.ringHole} />
+        {/* Track */}
+        <Circle
+          cx={center}
+          cy={center}
+          r={r}
+          stroke={theme.track}
+          strokeWidth={stroke}
+          fill="none"
         />
+        {/* Progress arc, starting at 12 o'clock */}
+        <Circle
+          cx={center}
+          cy={center}
+          r={r}
+          stroke={color}
+          strokeWidth={stroke}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={dashoffset}
+          transform={`rotate(-90 ${center} ${center})`}
+        />
+      </Svg>
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <View style={styles.numberWrap}>
+          <Text
+            style={{ fontFamily: 'Fredoka_600SemiBold', fontSize, color, lineHeight: fontSize }}
+          >
+            {seconds}
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -46,17 +73,11 @@ export const Timer: React.FC<TimerProps> = ({ seconds, totalSeconds, size = 'lar
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  progressContainer: {
-    width: 200,
-    height: 8,
-    backgroundColor: colors.card,
-    borderRadius: 4,
-    marginTop: 8,
-    overflow: 'hidden',
-  },
-  progressBar: {
-    height: '100%',
-    borderRadius: 4,
+  numberWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

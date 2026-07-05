@@ -1,8 +1,8 @@
+import { Fredoka_600SemiBold } from '@expo-google-fonts/fredoka/600SemiBold';
+import { useFonts } from '@expo-google-fonts/fredoka/useFonts';
 import { Nunito_400Regular } from '@expo-google-fonts/nunito/400Regular';
 import { Nunito_600SemiBold } from '@expo-google-fonts/nunito/600SemiBold';
 import { Nunito_700Bold } from '@expo-google-fonts/nunito/700Bold';
-import { Sniglet_400Regular } from '@expo-google-fonts/sniglet/400Regular';
-import { useFonts } from '@expo-google-fonts/sniglet/useFonts';
 import { changeLanguage, type SupportedLanguage } from '@unfairenough/i18n';
 import { setDebugEnabled } from '@unfairenough/shared';
 import { colors } from '@unfairenough/ui';
@@ -20,7 +20,7 @@ setDebugEnabled(__DEV__ || process.env.EXPO_PUBLIC_UE_DEBUG === '1');
 
 export default function App() {
   const [fontsLoaded] = useFonts({
-    Sniglet_400Regular,
+    Fredoka_600SemiBold,
     Nunito_400Regular,
     Nunito_600SemiBold,
     Nunito_700Bold,

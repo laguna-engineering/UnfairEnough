@@ -1,5 +1,4 @@
-import { LinearGradient } from 'expo-linear-gradient';
-import { forwardRef } from 'react';
+import { forwardRef, useMemo } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -9,8 +8,9 @@ import {
   type View,
   type ViewStyle,
 } from 'react-native';
-import { colors, gradients } from '../theme/colors';
 import { borderRadius, spacing } from '../theme/spacing';
+import { useTheme } from '../theme/ThemeContext';
+import type { ThemeTokens } from '../theme/themes';
 import { typography } from '../theme/typography';
 
 export interface ButtonProps {
@@ -48,22 +48,21 @@ export const Button = forwardRef<View, ButtonProps>(
     },
     ref,
   ) => {
-    const getGradientColors = () => {
-      if (variant === 'primary') return gradients.primary;
-      if (variant === 'secondary') return gradients.secondary;
-      return null;
-    };
+    const { theme } = useTheme();
+    const styles = useMemo(() => makeStyles(theme), [theme]);
 
     const getBackgroundColor = () => {
-      if (disabled) return colors.card;
+      if (disabled) return theme.card;
       if (variant === 'outline') return 'transparent';
-      return colors.primary;
+      if (variant === 'secondary') return theme.accent;
+      return theme.cta;
     };
 
     const getTextColor = () => {
-      if (disabled) return colors.textSecondary;
-      if (variant === 'outline') return colors.primary;
-      return colors.textPrimary;
+      if (disabled) return theme.inkSoft;
+      if (variant === 'outline') return theme.accent;
+      if (variant === 'secondary') return theme.accentOn;
+      return theme.ctaInk;
     };
 
     const getSizeStyles = (): ViewStyle => {
@@ -83,6 +82,8 @@ export const Button = forwardRef<View, ButtonProps>(
       <Text style={[typography.button, { color: getTextColor() }, textStyle]}>{title}</Text>
     );
 
+    // Spread the TV focus props so RN's base Pressable types (which don't declare
+    // them) don't trip excess-property checks.
     const tvProps = {
       hasTVPreferredFocus,
       nextFocusUp,
@@ -90,33 +91,6 @@ export const Button = forwardRef<View, ButtonProps>(
       nextFocusLeft,
       nextFocusRight,
     };
-    const gradientColors = !disabled ? getGradientColors() : null;
-
-    if (gradientColors) {
-      return (
-        <Pressable
-          ref={ref}
-          onPress={onPress}
-          disabled={disabled || loading}
-          {...tvProps}
-          style={(state) => [
-            styles.gradientWrapper,
-            style,
-            (state as any).focused && styles.focused,
-            state.pressed && styles.pressed,
-          ]}
-        >
-          <LinearGradient
-            colors={gradientColors}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={[styles.gradientInner, getSizeStyles()]}
-          >
-            {content}
-          </LinearGradient>
-        </Pressable>
-      );
-    }
 
     return (
       <Pressable
@@ -140,34 +114,24 @@ export const Button = forwardRef<View, ButtonProps>(
   },
 );
 
-const styles = StyleSheet.create({
-  button: {
-    borderRadius: borderRadius.lg,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 120,
-    overflow: 'hidden',
-  },
-  gradientWrapper: {
-    borderRadius: borderRadius.lg,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    overflow: 'hidden',
-  },
-  gradientInner: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 120,
-  },
-  outline: {
-    borderColor: colors.primary,
-  },
-  focused: {
-    borderColor: colors.primary,
-  },
-  pressed: {
-    opacity: 0.8,
-  },
-});
+const makeStyles = (t: ThemeTokens) =>
+  StyleSheet.create({
+    button: {
+      borderRadius: borderRadius.lg,
+      borderWidth: 2,
+      borderColor: 'transparent',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minWidth: 120,
+      overflow: 'hidden',
+    },
+    outline: {
+      borderColor: t.accent,
+    },
+    focused: {
+      borderColor: t.accent,
+    },
+    pressed: {
+      opacity: 0.85,
+    },
+  });

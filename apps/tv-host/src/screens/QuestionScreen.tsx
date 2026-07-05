@@ -3,29 +3,25 @@ import { useTranslation } from '@unfairenough/i18n';
 import {
   borderRadius,
   Card,
-  colors,
   ScreenBackground,
   spacing,
+  type ThemeTokens,
   Timer,
   typography,
+  useTheme,
 } from '@unfairenough/ui';
 import { type AudioPlayer, createAudioPlayer } from 'expo-audio';
 import type React from 'react';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useBgMusicContext } from '../hooks/BgMusicContext';
 import { useGameController } from '../hooks/useGameController';
 import { resolveMediaUrl } from '../utils/mediaUrl';
 
-const answerColors = {
-  A: colors.primary,
-  B: colors.secondary,
-  C: colors.accentYellow,
-  D: colors.accentPurple,
-};
-
 export const QuestionScreen: React.FC = () => {
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const { state, currentQuestion, countdown, mode, serverUrl } = useGameController();
   const { pause, resume } = useBgMusicContext();
 
@@ -102,12 +98,21 @@ export const QuestionScreen: React.FC = () => {
           {currentQuestion.options.slice(0, 2).map((option) => (
             <View
               key={option.key}
-              style={[styles.optionCard, { borderLeftColor: answerColors[option.key] }]}
+              style={[styles.optionCard, { backgroundColor: theme.answerTiles[option.key].bg }]}
             >
-              <Text style={[styles.optionKey, { color: answerColors[option.key] }]}>
-                {option.key}
+              <View
+                style={[
+                  styles.optionBadge,
+                  { backgroundColor: theme.answerTiles[option.key].badgeBg },
+                ]}
+              >
+                <Text style={[styles.optionKey, { color: theme.answerTiles[option.key].badgeInk }]}>
+                  {option.key}
+                </Text>
+              </View>
+              <Text style={[styles.optionText, { color: theme.answerTiles[option.key].ink }]}>
+                {option.text}
               </Text>
-              <Text style={styles.optionText}>{option.text}</Text>
             </View>
           ))}
         </View>
@@ -115,12 +120,21 @@ export const QuestionScreen: React.FC = () => {
           {currentQuestion.options.slice(2, 4).map((option) => (
             <View
               key={option.key}
-              style={[styles.optionCard, { borderLeftColor: answerColors[option.key] }]}
+              style={[styles.optionCard, { backgroundColor: theme.answerTiles[option.key].bg }]}
             >
-              <Text style={[styles.optionKey, { color: answerColors[option.key] }]}>
-                {option.key}
+              <View
+                style={[
+                  styles.optionBadge,
+                  { backgroundColor: theme.answerTiles[option.key].badgeBg },
+                ]}
+              >
+                <Text style={[styles.optionKey, { color: theme.answerTiles[option.key].badgeInk }]}>
+                  {option.key}
+                </Text>
+              </View>
+              <Text style={[styles.optionText, { color: theme.answerTiles[option.key].ink }]}>
+                {option.text}
               </Text>
-              <Text style={styles.optionText}>{option.text}</Text>
             </View>
           ))}
         </View>
@@ -129,76 +143,81 @@ export const QuestionScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    padding: spacing.xl,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  progress: {
-    ...typography.h2,
-    color: colors.textSecondary,
-  },
-  answeredCount: {
-    ...typography.h3,
-    color: colors.textSecondary,
-  },
-  questionCard: {
-    padding: spacing.lg,
-    marginBottom: spacing.sm,
-    alignItems: 'center',
-  },
-  questionText: {
-    ...typography.h1,
-    color: colors.textPrimary,
-    textAlign: 'center',
-  },
-  tagsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  tagPill: {
-    backgroundColor: `${colors.accentPurple}33`,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs / 2,
-  },
-  tagText: {
-    ...typography.label,
-    color: colors.textSecondary,
-  },
-  optionsGrid: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: spacing.md,
-  },
-  optionsRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  optionCard: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    borderLeftWidth: 6,
-    padding: spacing.md,
-  },
-  optionKey: {
-    ...typography.h1,
-    marginRight: spacing.md,
-  },
-  optionText: {
-    ...typography.h3,
-    color: colors.textPrimary,
-    flex: 1,
-  },
-});
+const makeStyles = (t: ThemeTokens) =>
+  StyleSheet.create({
+    container: {
+      padding: spacing.xl,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.md,
+    },
+    progress: {
+      ...typography.h2,
+      color: t.inkSoft,
+    },
+    answeredCount: {
+      ...typography.h3,
+      color: t.inkSoft,
+    },
+    questionCard: {
+      padding: spacing.lg,
+      marginBottom: spacing.sm,
+      alignItems: 'center',
+    },
+    questionText: {
+      ...typography.h1,
+      color: t.ink,
+      textAlign: 'center',
+    },
+    tagsRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      flexWrap: 'wrap',
+      gap: spacing.xs,
+      marginBottom: spacing.sm,
+    },
+    tagPill: {
+      backgroundColor: t.chipBg,
+      borderRadius: borderRadius.full,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs / 2,
+    },
+    tagText: {
+      ...typography.label,
+      color: t.chipInk,
+    },
+    optionsGrid: {
+      flex: 1,
+      justifyContent: 'center',
+      gap: spacing.md,
+    },
+    optionsRow: {
+      flexDirection: 'row',
+      gap: spacing.md,
+    },
+    optionCard: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderRadius: borderRadius.full,
+      padding: spacing.md,
+    },
+    optionBadge: {
+      width: 56,
+      height: 56,
+      borderRadius: borderRadius.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: spacing.md,
+    },
+    optionKey: {
+      ...typography.h1,
+    },
+    optionText: {
+      ...typography.h3,
+      flex: 1,
+    },
+  });

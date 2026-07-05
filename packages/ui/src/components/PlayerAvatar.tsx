@@ -1,8 +1,10 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import type React from 'react';
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors } from '../theme/colors';
 import { borderRadius, spacing } from '../theme/spacing';
+import { useTheme } from '../theme/ThemeContext';
+import type { ThemeTokens } from '../theme/themes';
 import { typography } from '../theme/typography';
 
 export interface PlayerAvatarProps {
@@ -30,6 +32,9 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
   size = 'medium',
   showScore = false,
 }) => {
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
+
   const getSizeStyles = () => {
     switch (size) {
       case 'small':
@@ -75,31 +80,32 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    padding: spacing.sm,
-  },
-  avatar: {
-    borderRadius: borderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  initials: {
-    color: colors.textPrimary,
-    fontWeight: '700',
-  },
-  name: {
-    ...typography.bodySmall,
-    color: colors.textPrimary,
-    marginTop: spacing.xs,
-    maxWidth: 80,
-    textAlign: 'center',
-  },
-  score: {
-    ...typography.label,
-    color: colors.accentYellow,
-    marginTop: spacing.xs,
-  },
-});
+const makeStyles = (t: ThemeTokens) =>
+  StyleSheet.create({
+    container: {
+      alignItems: 'center',
+      padding: spacing.sm,
+    },
+    avatar: {
+      borderRadius: borderRadius.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    initials: {
+      color: '#ffffff',
+      fontWeight: '700',
+    },
+    name: {
+      ...typography.bodySmall,
+      color: t.ink,
+      marginTop: spacing.xs,
+      maxWidth: 80,
+      textAlign: 'center',
+    },
+    score: {
+      ...typography.label,
+      color: t.accent,
+      marginTop: spacing.xs,
+    },
+  });

@@ -2,12 +2,13 @@ import { playersSelectors } from '@unfairenough/game-logic';
 import { useTranslation } from '@unfairenough/i18n';
 import {
   Card,
-  colors,
   Leaderboard,
   type LeaderboardEntry,
   ScreenBackground,
   spacing,
+  type ThemeTokens,
   typography,
+  useTheme,
 } from '@unfairenough/ui';
 import type React from 'react';
 import { useMemo } from 'react';
@@ -18,15 +19,10 @@ import { useGameController } from '../hooks/useGameController';
 // (auto-advancing, non-scrollable) results screen, so we split into two columns.
 const TWO_COLUMN_THRESHOLD = 8;
 
-const answerColors = {
-  A: colors.primary,
-  B: colors.secondary,
-  C: colors.accentYellow,
-  D: colors.accentPurple,
-};
-
 export const ResultsScreen: React.FC = () => {
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const { state, currentQuestion, roundResults, roundTags, rankings, positionHistory } =
     useGameController();
 
@@ -72,17 +68,12 @@ export const ResultsScreen: React.FC = () => {
     <ScreenBackground style={styles.container}>
       <View style={styles.content}>
         {/* Correct Answer Display */}
-        <Card style={styles.correctAnswerCard} variant="glow" glowColor={colors.success}>
+        <Card style={styles.correctAnswerCard} variant="glow" glowColor={theme.success}>
           <Text style={styles.correctLabel}>{t('game.correctAnswerLabel')}</Text>
           <View style={styles.correctAnswerRow}>
-            <Text
-              style={[
-                styles.answerKey,
-                { color: answerColors[correctAnswer as keyof typeof answerColors] },
-              ]}
-            >
-              {correctAnswer}
-            </Text>
+            <View style={styles.answerBadge}>
+              <Text style={styles.answerKey}>{correctAnswer}</Text>
+            </View>
             <Text style={styles.answerText}>
               {currentQuestion.options.find((o) => o.key === correctAnswer)?.text}
             </Text>
@@ -120,69 +111,79 @@ export const ResultsScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    paddingTop: spacing.xl,
-    paddingHorizontal: spacing.xl,
-  },
-  content: {
-    flex: 1,
-    gap: spacing.lg,
-  },
-  correctAnswerCard: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
-    alignItems: 'center',
-  },
-  correctLabel: {
-    ...typography.h3,
-    color: colors.success,
-    marginBottom: spacing.md,
-  },
-  correctAnswerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  answerKey: {
-    ...typography.displayMedium,
-    marginRight: spacing.lg,
-  },
-  answerText: {
-    ...typography.h1,
-    color: colors.textPrimary,
-    flexShrink: 1,
-  },
-  tagsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginTop: spacing.md,
-    justifyContent: 'center',
-  },
-  tagBadge: {
-    backgroundColor: colors.card,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: 12,
-  },
-  tagText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-  },
-  leaderboardSection: {
-    flex: 1,
-  },
-  leaderboardColumns: {
-    flexDirection: 'row',
-    gap: spacing.xl,
-  },
-  leaderboardColumn: {
-    flex: 1,
-  },
-  leaderboardTitle: {
-    ...typography.h2,
-    color: colors.textPrimary,
-    marginBottom: spacing.md,
-    textAlign: 'center',
-  },
-});
+const makeStyles = (t: ThemeTokens) =>
+  StyleSheet.create({
+    container: {
+      paddingTop: spacing.xl,
+      paddingHorizontal: spacing.xl,
+    },
+    content: {
+      flex: 1,
+      gap: spacing.lg,
+    },
+    correctAnswerCard: {
+      paddingHorizontal: spacing.xl,
+      paddingVertical: spacing.lg,
+      alignItems: 'center',
+    },
+    correctLabel: {
+      ...typography.h3,
+      color: t.success,
+      marginBottom: spacing.md,
+    },
+    correctAnswerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    answerBadge: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: t.accentSoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: spacing.lg,
+    },
+    answerKey: {
+      ...typography.displayMedium,
+      color: t.accentInk,
+    },
+    answerText: {
+      ...typography.h1,
+      color: t.ink,
+      flexShrink: 1,
+    },
+    tagsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.xs,
+      marginTop: spacing.md,
+      justifyContent: 'center',
+    },
+    tagBadge: {
+      backgroundColor: t.chipBg,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      borderRadius: 12,
+    },
+    tagText: {
+      ...typography.bodySmall,
+      color: t.chipInk,
+    },
+    leaderboardSection: {
+      flex: 1,
+    },
+    leaderboardColumns: {
+      flexDirection: 'row',
+      gap: spacing.xl,
+    },
+    leaderboardColumn: {
+      flex: 1,
+    },
+    leaderboardTitle: {
+      ...typography.h2,
+      color: t.ink,
+      marginBottom: spacing.md,
+      textAlign: 'center',
+    },
+  });

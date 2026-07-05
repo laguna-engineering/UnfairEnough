@@ -19,8 +19,8 @@
     "preview:gameover": "adb -s ${ADB_SERIAL:-emulator-5554} shell am force-stop com.unfairenough.tvhost && adb -s ${ADB_SERIAL:-emulator-5554} shell am start -a android.intent.action.VIEW -d 'unfairenough-tv://preview?phase=GAME_OVER'"
   },
   "dependencies": {
+    "@expo-google-fonts/fredoka": "^0.4.1",
     "@expo-google-fonts/nunito": "^0.4.2",
-    "@expo-google-fonts/sniglet": "^0.4.1",
     "@expo/metro-runtime": "~6.1.1",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@reduxjs/toolkit": "^2.3.0",
