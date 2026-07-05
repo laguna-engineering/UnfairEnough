@@ -73,6 +73,7 @@ export interface GameRow {
   host_id: string | null;
   question_set_id: string | null;
   question_set_ids: string | null;
+  tags: string | null; // JSON array — selected tags for 'personalized' games
   room_code: string;
   game_type: GameType;
   player_count: number;
@@ -115,7 +116,10 @@ export interface PlayerTagScoreRow {
 
 export type QuestionType = 'multiple_choice' | 'true_false';
 export type MediaType = 'image' | 'audio' | 'video';
-export type GameType = 'casual' | 'configured' | 'custom';
+// Historical rows may carry the legacy 'custom' game_type (multi-set mode, replaced
+// by 'personalized'). It is analytics-only and never fed through an exhaustive switch,
+// so it is intentionally omitted from the active union.
+export type GameType = 'casual' | 'configured' | 'personalized';
 
 export interface QuestionWithMeta {
   id: string;
@@ -178,6 +182,7 @@ export interface GameSession {
   id: string;
   questionSetId: string | null;
   questionSetIds: string[] | null;
+  tags: string[] | null; // selected tags for 'personalized' games
   roomCode: string;
   gameType: GameType;
   playerCount: number;

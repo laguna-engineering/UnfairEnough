@@ -304,6 +304,79 @@ export async function getQuestionsByTag(
   return rows.map(rowToQuestionWithMeta);
 }
 
+/**
+ * Load all non-deleted, casual-available questions for the host/language that carry
+ * AT LEAST ONE of the given tags (union matching). Shares its scoping predicate with
+ * `getTagsWithCounts` so the picker's per-tag counts match the pool this returns.
+ * Empty `tags` returns `[]` without hitting the DB.
+ */
+export async function getQuestionsByTags(
+  db: DbAdapter,
+  tags: string[],
+  opts: { hostId: string | null; language?: string },
+): Promise<QuestionWithMeta[]> {
+  if (tags.length === 0) return [];
+
+  const { clause: hostClause, params: hostParams } = hostScope(opts.hostId);
+  const tagPlaceholders = tags.map(() => '?').join(',');
+
+  let sql = `SELECT * FROM questions WHERE (set_id IS NULL OR set_id NOT IN (
+    SELECT id FROM question_sets WHERE deleted_at IS NOT NULL
+  )) AND (set_id IS NULL OR set_id NOT IN (
+    SELECT id FROM question_sets WHERE available_in_casual = 0
+  )) AND (set_id IS NULL OR set_id IN (
+    SELECT id FROM question_sets WHERE ${hostClause}
+  )) AND EXISTS (
+    SELECT 1 FROM json_each(tags) WHERE json_each.value IN (${tagPlaceholders})
+  )`;
+  const params: SqlValue[] = [...hostParams, ...tags];
+
+  if (opts.language) {
+    sql += ' AND language = ?';
+    params.push(opts.language);
+  }
+
+  sql += ' ORDER BY rowid';
+
+  const rows = await db.all<QuestionRow>(sql, params);
+  return rows.map(rowToQuestionWithMeta);
+}
+
+/**
+ * Distinct tags across the host's non-deleted, casual-available questions for the
+ * given language, each with the count of questions carrying it. Shares its predicate
+ * with `getQuestionsByTags` (R9) so a tag's displayed count equals the pool size a
+ * single-tag selection would load.
+ */
+export async function getTagsWithCounts(
+  db: DbAdapter,
+  hostId: string | null,
+  language?: string,
+): Promise<{ tag: string; questionCount: number }[]> {
+  const { clause: hostClause, params: hostParams } = hostScope(hostId);
+
+  let sql = `SELECT json_each.value AS tag, COUNT(*) AS question_count
+    FROM questions, json_each(questions.tags)
+    WHERE (questions.set_id IS NULL OR questions.set_id NOT IN (
+      SELECT id FROM question_sets WHERE deleted_at IS NOT NULL
+    )) AND (questions.set_id IS NULL OR questions.set_id NOT IN (
+      SELECT id FROM question_sets WHERE available_in_casual = 0
+    )) AND (questions.set_id IS NULL OR questions.set_id IN (
+      SELECT id FROM question_sets WHERE ${hostClause}
+    ))`;
+  const params: SqlValue[] = [...hostParams];
+
+  if (language) {
+    sql += ' AND questions.language = ?';
+    params.push(language);
+  }
+
+  sql += ' GROUP BY json_each.value ORDER BY question_count DESC, tag ASC';
+
+  const rows = await db.all<{ tag: string; question_count: number }>(sql, params);
+  return rows.map((r) => ({ tag: r.tag, questionCount: r.question_count }));
+}
+
 export async function markQuestionAsked(db: DbAdapter, questionId: string): Promise<void> {
   await db.run(
     `UPDATE questions SET times_asked = times_asked + 1, last_asked_at = datetime('now') WHERE id = ?`,

@@ -310,6 +310,15 @@ ALTER TABLE questions ADD COLUMN audio_role TEXT;
 ALTER TABLE questions ADD COLUMN audio_duration INTEGER;
 `;
 
+/**
+ * V18: Personalized (tag-based) game mode. `games.tags` stores the JSON array of
+ * tags the host selected for a 'personalized' game, mirroring how V12 added
+ * `question_set_ids` for the (now replaced) multi-set 'custom' mode.
+ */
+const MIGRATION_V18 = `
+ALTER TABLE games ADD COLUMN tags TEXT;
+`;
+
 interface Migration {
   version: number;
   sql: string;
@@ -335,6 +344,7 @@ const migrations: Migration[] = [
   { version: 15, sql: MIGRATION_V15_FK_OFF, needsFkOff: true },
   { version: 16, sql: MIGRATION_V16 },
   { version: 17, sql: MIGRATION_V17 },
+  { version: 18, sql: MIGRATION_V18 },
 ];
 
 /**

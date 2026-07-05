@@ -7,6 +7,7 @@ function rowToGameSession(row: GameRow): GameSession {
     id: row.id,
     questionSetId: row.question_set_id,
     questionSetIds: row.question_set_ids ? JSON.parse(row.question_set_ids) : null,
+    tags: row.tags ? JSON.parse(row.tags) : null,
     roomCode: row.room_code,
     gameType: row.game_type,
     playerCount: row.player_count,
@@ -46,10 +47,11 @@ export async function createGame(
   hostId: string | null,
   questionSetId?: string,
   questionSetIds?: string[],
+  tags?: string[],
 ): Promise<GameSession> {
   await db.run(
-    `INSERT INTO games (id, room_code, game_type, player_count, question_count, question_set_id, question_set_ids, host_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO games (id, room_code, game_type, player_count, question_count, question_set_id, question_set_ids, tags, host_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       roomCode,
@@ -58,6 +60,7 @@ export async function createGame(
       questionCount,
       questionSetId ?? null,
       questionSetIds ? JSON.stringify(questionSetIds) : null,
+      tags ? JSON.stringify(tags) : null,
       hostId,
     ],
   );
