@@ -10,7 +10,7 @@ export interface Player {
 }
 
 const playersAdapter = createEntityAdapter<Player>({
-  selectId: (player) => player.id,
+  // `id` is the default entity key, so selectId is inferred automatically.
   sortComparer: (a, b) => b.score - a.score, // Sort by score descending
 });
 

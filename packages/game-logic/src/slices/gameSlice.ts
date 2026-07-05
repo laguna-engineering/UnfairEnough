@@ -73,6 +73,9 @@ interface GameState {
   roomCode: string | null;
   serverPort: number | null;
   localIp: string | null;
+  // Last game-configuration error (e.g. no questions for the selected tags),
+  // surfaced in the lobby so a rejected config fails visibly instead of silently.
+  configError: string | null;
 }
 
 const initialState: GameState = {
@@ -95,6 +98,7 @@ const initialState: GameState = {
   roomCode: null,
   serverPort: null,
   localIp: null,
+  configError: null,
 };
 
 const gameSlice = createSlice({
@@ -230,6 +234,12 @@ const gameSlice = createSlice({
 
     updateConfig(state, action: PayloadAction<Partial<GameConfig>>) {
       state.config = { ...state.config, ...action.payload };
+      // A successful (re)configuration clears any prior config error.
+      state.configError = null;
+    },
+
+    setConfigError(state, action: PayloadAction<string | null>) {
+      state.configError = action.payload;
     },
   },
 });
@@ -250,6 +260,7 @@ export const {
   resetGame,
   cancelGame,
   updateConfig,
+  setConfigError,
 } = gameSlice.actions;
 
 export default gameSlice.reducer;

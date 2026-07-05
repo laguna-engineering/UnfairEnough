@@ -28,6 +28,11 @@ function makeQuestion(id: string, tags: string[] = [], difficulty = 3): Question
     playerDifficulty: null,
     difficulty,
     explanation: null,
+    audio: null,
+    hideTags: false,
+    language: 'en',
+    timesAsked: 0,
+    lastAskedAt: null,
   };
 }
 

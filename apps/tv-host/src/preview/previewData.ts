@@ -136,6 +136,7 @@ export function buildPreviewState(phase: GamePhase): RootState {
     roomCode: 'PREV',
     serverPort: null,
     localIp: null,
+    configError: null,
   };
 
   switch (phase) {

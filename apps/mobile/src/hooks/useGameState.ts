@@ -16,6 +16,7 @@ import { Platform } from 'react-native';
 import type { GuestSession } from '../services/authStorage';
 import { clearGuestSession, getGuestSession, saveGuestSession } from '../services/authStorage';
 import { getDeviceId, initDeviceId } from '../services/deviceId';
+import { initLanguagePreference, saveLanguagePreference } from '../services/languagePreference';
 import { wsClient } from '../services/WebSocketClient';
 
 export type MobileGamePhase =
@@ -70,6 +71,17 @@ export function useGameState() {
       debugLog('[game-state] device id initialization failed', err);
       return null;
     }
+  }, []);
+
+  // Restore the user's persisted language choice. A stored choice is an explicit
+  // preference, so it also suppresses the host-pushed language on onWelcome.
+  useEffect(() => {
+    initLanguagePreference().then((lang) => {
+      if (lang) {
+        languageOverridden.current = true;
+        changeLanguage(lang);
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -419,6 +431,7 @@ export function useGameState() {
   const setLanguageOverride = useCallback((lang: SupportedLanguage) => {
     languageOverridden.current = true;
     changeLanguage(lang);
+    saveLanguagePreference(lang);
   }, []);
 
   /** Check for stored session on mount. Call after initDeviceId. */

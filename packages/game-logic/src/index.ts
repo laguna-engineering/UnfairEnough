@@ -18,6 +18,7 @@ export {
   nextQuestion,
   receiveAnswer,
   resetGame,
+  setConfigError,
   setCountdown,
   setServerReady,
   showMediaPreview,

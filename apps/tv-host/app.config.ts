@@ -10,6 +10,7 @@ import {
   withAndroidStyles,
   withDangerousMod,
   withMainActivity,
+  withPlugins,
 } from 'expo/config-plugins';
 
 function loadRootEnv(): Record<string, string> {
@@ -140,44 +141,48 @@ const withTvSplashScreen: ConfigPlugin<void> = (cfg) => {
   return cfg;
 };
 
-export default ({ config }: ConfigContext): ExpoConfig => ({
-  ...config,
-  name: 'Unfair Enough!',
-  slug: 'unfairenough-tv',
-  scheme: 'unfairenough-tv',
-  version: '1.0.0',
-  orientation: 'landscape',
-  icon: './assets/images/icon-800x480.png',
-  userInterfaceStyle: 'dark',
-  newArchEnabled: true,
-  plugins: [
-    [withCleartextTraffic],
-    [withTvSplashScreen],
-    [
-      '@react-native-tvos/config-tv',
-      {
-        androidTVBanner: './assets/images/icon-1920x720.png',
-        appleTVImages: {
-          icon: './assets/images/icon-1280x768.png',
-          iconSmall: './assets/images/icon-400x240.png',
-          iconSmall2x: './assets/images/icon-800x480.png',
-          topShelf: './assets/images/icon-1920x720.png',
-          topShelf2x: './assets/images/icon-3840x1440.png',
-          topShelfWide: './assets/images/icon-2320x720.png',
-          topShelfWide2x: './assets/images/icon-4640x1440.png',
+export default ({ config }: ConfigContext): ExpoConfig => {
+  // String-based plugins go in `plugins`; function ConfigPlugins are applied via
+  // withPlugins (the `plugins` array type doesn't accept plugin functions).
+  const base: ExpoConfig = {
+    ...config,
+    name: 'Unfair Enough!',
+    slug: 'unfairenough-tv',
+    scheme: 'unfairenough-tv',
+    version: '1.0.0',
+    orientation: 'landscape',
+    icon: './assets/images/icon-800x480.png',
+    userInterfaceStyle: 'dark',
+    newArchEnabled: true,
+    plugins: [
+      [
+        '@react-native-tvos/config-tv',
+        {
+          androidTVBanner: './assets/images/icon-1920x720.png',
+          appleTVImages: {
+            icon: './assets/images/icon-1280x768.png',
+            iconSmall: './assets/images/icon-400x240.png',
+            iconSmall2x: './assets/images/icon-800x480.png',
+            topShelf: './assets/images/icon-1920x720.png',
+            topShelf2x: './assets/images/icon-3840x1440.png',
+            topShelfWide: './assets/images/icon-2320x720.png',
+            topShelfWide2x: './assets/images/icon-4640x1440.png',
+          },
         },
-      },
+      ],
     ],
-  ],
-  android: {
-    package: 'com.unfairenough.tvhost',
-    edgeToEdgeEnabled: true,
-  },
-  ios: {
-    bundleIdentifier: 'com.unfairenough.tvhost',
-  },
-  extra: {
-    defaultLang: env.DEFAULT_LANG || 'en',
-    serverUrl: env.SERVER_URL || '',
-  },
-});
+    android: {
+      package: 'com.unfairenough.tvhost',
+      edgeToEdgeEnabled: true,
+    },
+    ios: {
+      bundleIdentifier: 'com.unfairenough.tvhost',
+    },
+    extra: {
+      defaultLang: env.DEFAULT_LANG || 'en',
+      serverUrl: env.SERVER_URL || '',
+    },
+  };
+
+  return withPlugins(base, [withCleartextTraffic, withTvSplashScreen]);
+};

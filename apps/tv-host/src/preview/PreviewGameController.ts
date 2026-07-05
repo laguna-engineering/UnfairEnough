@@ -4,7 +4,7 @@ import {
   type RootState,
   updateConfig,
 } from '@unfairenough/game-logic';
-import { changeLanguage } from '@unfairenough/i18n';
+import { changeLanguage, type SupportedLanguage } from '@unfairenough/i18n';
 import type { IGameController } from '../services/IGameController';
 import { buildPreviewState } from './previewData';
 
@@ -40,7 +40,7 @@ export class PreviewGameController implements IGameController {
   }
 
   setLanguage(language: string): void {
-    changeLanguage(language);
+    changeLanguage(language as SupportedLanguage);
   }
 
   notifyMediaLoaded(_success?: boolean, _questionId?: string): void {

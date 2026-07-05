@@ -9,6 +9,7 @@ export const MAX_NAME_LENGTH = 20;
 export const ROOM_CODE_LENGTH = 4;
 export const MAX_RECENT_SERVERS = 5;
 export const RECENT_SERVERS_STORAGE_KEY = 'unfairenough_recent_servers';
+export const LANGUAGE_STORAGE_KEY = 'unfairenough_language';
 
 export const AVATAR_EMOJIS = [
   '🐱',

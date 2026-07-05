@@ -185,7 +185,16 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
   };
 
   const handleIpConnect = () => {
-    const input = manualIp.trim() || 'localhost:3000';
+    const input = manualIp.trim();
+    if (!input) {
+      if (Platform.OS === 'web') {
+        alert(t('scan.missingServerMessage'));
+      } else {
+        const { Alert } = require('react-native');
+        Alert.alert(t('scan.missingServer'), t('scan.missingServerMessage'));
+      }
+      return;
+    }
     const code = manualCode.toUpperCase().trim();
     const host = normalizeHost(input);
     const scheme = getWsScheme(input, host);

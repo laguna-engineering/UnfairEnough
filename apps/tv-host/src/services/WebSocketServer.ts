@@ -202,8 +202,10 @@ class WebSocketServerService {
       });
     });
 
-    this.server.listen({ port: 0, host: '0.0.0.0' }, async () => {
-      const assignedPort = this.server.address()?.port;
+    const server = this.server;
+    server.listen({ port: 0, host: '0.0.0.0' }, async () => {
+      const address = server.address();
+      const assignedPort = address && typeof address !== 'string' ? address.port : undefined;
       if (!assignedPort) {
         console.error('Failed to get assigned port');
         return;

@@ -155,6 +155,11 @@ export class GameRoom {
   // Serialization — prevent startGame from racing with configureGame
   private configurePromise: Promise<void> | null = null;
 
+  // Set when the most recent CONFIGURE_GAME was rejected (e.g. no questions for
+  // the selected tags). startGame refuses to run while this is set, so a rejected
+  // config can't silently fall back to a casual game the host never asked for.
+  private lastConfigError: { code: string; message: string } | null = null;
+
   // Timers
   private countdownTimer: ReturnType<typeof setInterval> | null = null;
   private questionTimer: ReturnType<typeof setInterval> | null = null;
@@ -722,13 +727,11 @@ export class GameRoom {
       });
 
       if (pool.length === 0) {
-        this.sendToHost({
-          type: 'ERROR',
-          payload: {
-            code: 'NO_QUESTIONS_FOR_TAGS',
-            message: 'No questions match the selected tags',
-          },
-        });
+        this.lastConfigError = {
+          code: 'NO_QUESTIONS_FOR_TAGS',
+          message: 'No questions match the selected tags',
+        };
+        this.sendToHost({ type: 'ERROR', payload: this.lastConfigError });
         return;
       }
 
@@ -739,6 +742,7 @@ export class GameRoom {
         ? Math.max(1, payload.questionTimeLimit)
         : null;
 
+      this.lastConfigError = null;
       this.gameType = 'personalized';
       this.questionSetId = null;
       this.selectedTags = tags;
@@ -760,10 +764,8 @@ export class GameRoom {
       // Validate the set exists and has questions
       const set = await questionsRepo.getQuestionSet(this.db, payload.questionSetId);
       if (!set) {
-        this.sendToHost({
-          type: 'ERROR',
-          payload: { code: 'SET_NOT_FOUND', message: 'Question set not found' },
-        });
+        this.lastConfigError = { code: 'SET_NOT_FOUND', message: 'Question set not found' };
+        this.sendToHost({ type: 'ERROR', payload: this.lastConfigError });
         return;
       }
 
@@ -772,13 +774,12 @@ export class GameRoom {
         : (await questionsRepo.getQuestionsBySet(this.db, payload.questionSetId)).length;
 
       if (questionCount === 0) {
-        this.sendToHost({
-          type: 'ERROR',
-          payload: { code: 'SET_EMPTY', message: 'Question set has no questions' },
-        });
+        this.lastConfigError = { code: 'SET_EMPTY', message: 'Question set has no questions' };
+        this.sendToHost({ type: 'ERROR', payload: this.lastConfigError });
         return;
       }
 
+      this.lastConfigError = null;
       this.gameType = 'configured';
       this.questionSetId = payload.questionSetId;
       this.selectedTags = [];
@@ -792,6 +793,7 @@ export class GameRoom {
         payload: { gameType: 'configured', questionCount, questionSetId: payload.questionSetId },
       });
     } else {
+      this.lastConfigError = null;
       this.gameType = 'casual';
       this.questionSetId = null;
       this.selectedTags = [];
@@ -819,6 +821,13 @@ export class GameRoom {
     if (this.configurePromise) {
       await this.configurePromise;
       this.configurePromise = null;
+    }
+
+    // Refuse to start on a rejected config rather than silently running whatever
+    // gameType survived (which would be a casual game the host never chose).
+    if (this.lastConfigError) {
+      this.sendToHost({ type: 'ERROR', payload: this.lastConfigError });
+      return;
     }
 
     // Load tag scores early — needed for both pool building and per-round selection

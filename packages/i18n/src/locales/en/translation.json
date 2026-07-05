@@ -27,7 +27,9 @@
     "scanQrOnTv": "Scan the QR code on the TV",
     "orEnterRoomCode": "Or enter room code:",
     "loadingCamera": "Loading camera...",
-    "recentServers": "Recent servers"
+    "recentServers": "Recent servers",
+    "missingServer": "No Server Address",
+    "missingServerMessage": "Please enter the server address shown on the TV."
   },
   "lobby": {
     "title": "Unfair Enough!",

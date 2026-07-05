@@ -14,6 +14,7 @@ import {
   removePlayer,
   resetGame,
   resetScores,
+  setConfigError,
   setCountdown,
   setPlayerConnected,
   setServerReady,
@@ -388,6 +389,14 @@ export class HostedGameController implements IGameController {
           message.payload.code === 'SESSION_EXPIRED'
         ) {
           this.onSessionInvalid?.();
+        } else if (
+          message.payload.code === 'NO_QUESTIONS_FOR_TAGS' ||
+          message.payload.code === 'SET_EMPTY' ||
+          message.payload.code === 'SET_NOT_FOUND'
+        ) {
+          // Config rejected — surface it in the lobby instead of silently
+          // falling back to a casual game the host never chose.
+          this.store.dispatch(setConfigError(message.payload.message));
         }
         break;
 

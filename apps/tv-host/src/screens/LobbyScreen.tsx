@@ -274,6 +274,19 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
     loadTags();
   }, [loadTags]);
 
+  // Sync the server room's language to the app language once connected.
+  // The room (hosted) and local WS server both default to 'en' and were only
+  // told the real language on a *manual* toggle. A host running the app in
+  // another language (e.g. Italian) would therefore have their personalized
+  // tag config validated against 'en', match zero questions, and silently fall
+  // back to a 10-question casual game. `roomCode` gates on a live connection so
+  // the message isn't dropped before the socket is open.
+  useEffect(() => {
+    if (roomCode) {
+      setLanguage(currentLanguage);
+    }
+  }, [roomCode, currentLanguage, setLanguage]);
+
   // Clear personalized tag selection on language change
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional trigger on language change
   useEffect(() => {
@@ -400,7 +413,10 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
   // TV focus refs
   const casualRef = useRef<View>(null);
   const personalizedRef = useRef<View>(null);
-  const startRef = useRef<View>(null);
+  // Typed off Button (not bare View): tv-host resolves `react-native` to its
+  // nested tvOS copy while packages/ui uses the root copy, so a bare useRef<View>
+  // is nominally incompatible with Button's ref.
+  const startRef = useRef<React.ComponentRef<typeof Button>>(null);
   const enRef = useRef<View>(null);
   const muteRef = useRef<View>(null);
   const themeRef = useRef<View>(null);
@@ -529,6 +545,9 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                 )}
                 {selectedMode === 'personalized' && selectedTags.length === 0 && (
                   <Text style={styles.hintText}>{t('gameConfig.selectTags')}</Text>
+                )}
+                {state.game.configError && (
+                  <Text style={styles.configErrorText}>{state.game.configError}</Text>
                 )}
               </View>
             </View>
@@ -1235,6 +1254,16 @@ const makeStyles = (t: ThemeTokens) =>
       top: '100%',
       right: 0,
       marginTop: spacing.sm,
+    },
+    configErrorText: {
+      ...typography.bodySmall,
+      color: t.error,
+      position: 'absolute',
+      top: '100%',
+      right: 0,
+      marginTop: spacing.sm,
+      textAlign: 'right',
+      maxWidth: 320,
     },
     focused: {
       borderColor: t.accent,

@@ -12,8 +12,14 @@ import {
 } from '@unfairenough/ui';
 import { type AudioPlayer, createAudioPlayer } from 'expo-audio';
 import type React from 'react';
-import { useEffect, useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  type NativeSyntheticEvent,
+  StyleSheet,
+  Text,
+  type TextLayoutEventData,
+  View,
+} from 'react-native';
 import { useBgMusicContext } from '../hooks/BgMusicContext';
 import { useGameController } from '../hooks/useGameController';
 import { resolveMediaUrl } from '../utils/mediaUrl';
@@ -24,6 +30,19 @@ export const QuestionScreen: React.FC = () => {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const { state, currentQuestion, countdown, mode, serverUrl } = useGameController();
   const { pause, resume } = useBgMusicContext();
+
+  // Long questions wrap to 3+ lines at the default h1 size, which grows the card
+  // enough to cover the tags below. Measure the rendered line count and shrink the
+  // font once the text spills past two lines. Reset whenever the question changes.
+  const questionText = currentQuestion?.text;
+  const [shrinkQuestion, setShrinkQuestion] = useState(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: questionText is an intentional reset trigger
+  useEffect(() => {
+    setShrinkQuestion(false);
+  }, [questionText]);
+  const handleQuestionLayout = (e: NativeSyntheticEvent<TextLayoutEventData>) => {
+    if (e.nativeEvent.lines.length > 2) setShrinkQuestion(true);
+  };
 
   // Answer-slot audio: play `play: question` clips during the QUESTION phase.
   // Subject clips play once (then silence until reveal); background music loops.
@@ -78,7 +97,12 @@ export const QuestionScreen: React.FC = () => {
 
       {/* Question */}
       <Card style={styles.questionCard} variant="elevated">
-        <Text style={styles.questionText}>{currentQuestion.text}</Text>
+        <Text
+          style={[styles.questionText, shrinkQuestion && styles.questionTextShrunk]}
+          onTextLayout={handleQuestionLayout}
+        >
+          {currentQuestion.text}
+        </Text>
       </Card>
 
       {/* Tags */}
@@ -171,6 +195,10 @@ const makeStyles = (t: ThemeTokens) =>
       ...typography.h1,
       color: t.ink,
       textAlign: 'center',
+    },
+    questionTextShrunk: {
+      fontSize: typography.h2.fontSize,
+      lineHeight: typography.h2.lineHeight,
     },
     tagsRow: {
       flexDirection: 'row',

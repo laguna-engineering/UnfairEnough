@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
   },
   profileCard: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     alignItems: 'center',

@@ -27,7 +27,9 @@
     "scanQrOnTv": "Scansiona il codice QR sulla TV",
     "orEnterRoomCode": "Oppure inserisci il codice:",
     "loadingCamera": "Caricamento fotocamera...",
-    "recentServers": "Server recenti"
+    "recentServers": "Server recenti",
+    "missingServer": "Nessun indirizzo server",
+    "missingServerMessage": "Inserisci l'indirizzo del server mostrato sulla TV."
   },
   "lobby": {
     "title": "Unfair Enough!",
