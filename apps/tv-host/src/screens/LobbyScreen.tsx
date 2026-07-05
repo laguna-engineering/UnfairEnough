@@ -248,11 +248,17 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
         );
         if (res.ok) {
           const data = await res.json();
+          // /api/tags unions in player-score tags that may have no questions
+          // (questionCount 0). Drop them: a 0-question chip would be selectable
+          // and enable Start, but the server rejects the config (NO_QUESTIONS_FOR_TAGS),
+          // silently falling back to a casual game. The local picker can't produce these.
           setAvailableTags(
-            (data.tags || []).map((tRow: { tag: string; questionCount: number }) => ({
-              tag: tRow.tag,
-              questionCount: tRow.questionCount,
-            })),
+            (data.tags || [])
+              .map((tRow: { tag: string; questionCount: number }) => ({
+                tag: tRow.tag,
+                questionCount: tRow.questionCount,
+              }))
+              .filter((tRow: TagWithCount) => tRow.questionCount > 0),
           );
         }
       }
