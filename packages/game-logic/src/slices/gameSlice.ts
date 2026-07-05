@@ -44,9 +44,9 @@ export interface GameConfig {
   questionTimeLimit: number;
   totalQuestions: number;
   minPlayers: number;
-  gameType?: 'casual' | 'configured' | 'custom';
+  gameType?: 'casual' | 'configured' | 'personalized';
   questionSetId?: string;
-  questionSetIds?: string[];
+  tags?: string[];
   adaptiveMode?: boolean;
 }
 

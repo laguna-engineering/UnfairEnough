@@ -5,23 +5,22 @@ import { getDb } from '../db';
 
 const tags = new Hono<{ Variables: AuthVariables }>();
 
-// GET /api/tags — all known tags with question counts
+// GET /api/tags — all known tags with question counts (optional ?language=)
 tags.get('/', async (c) => {
   const db = getDb();
   const hostId = c.get('hostId');
-  const [playerTags, questions, allPlayers] = await Promise.all([
+  const language = c.req.query('language') || undefined;
+  const [playerTags, tagCounts, allPlayers] = await Promise.all([
     playerTagScoresRepo.getAllTags(db, hostId),
-    questionsRepo.getRandomQuestions(db, 10000, hostId), // Get all questions to count tags
+    questionsRepo.getTagsWithCounts(db, hostId, language),
     playersRepo.listPlayers(db, hostId),
   ]);
 
-  // Count questions per tag
+  // Count questions per tag (already scoped to host/language, and to the same
+  // predicate the personalized game pool uses, so counts match what a game loads).
   const tagQuestionCounts = new Map<string, number>();
-  for (const q of questions) {
-    for (const tag of q.tags) {
-      const normalized = tag.toLowerCase().trim();
-      tagQuestionCounts.set(normalized, (tagQuestionCounts.get(normalized) ?? 0) + 1);
-    }
+  for (const { tag, questionCount } of tagCounts) {
+    tagQuestionCounts.set(tag, questionCount);
   }
 
   // Merge player tag data with question counts

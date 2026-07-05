@@ -40,7 +40,7 @@ export type ServerMessage =
         gameType: string;
         questionCount: number;
         questionSetId?: string;
-        questionSetIds?: string[];
+        tags?: string[];
         adaptiveMode?: boolean;
       };
     }
@@ -239,9 +239,9 @@ export type HostMessage =
   | { type: 'PING' };
 
 export interface ConfigureGamePayload {
-  gameType: 'casual' | 'configured' | 'custom';
-  questionSetId?: string;
-  questionSetIds?: string[];
+  gameType: 'casual' | 'configured' | 'personalized';
+  questionSetId?: string; // configured mode (single set)
+  tags?: string[]; // personalized mode (union tag selection)
   totalQuestions?: number;
   questionTimeLimit?: number;
   adaptiveMode?: boolean;
