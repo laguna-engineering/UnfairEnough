@@ -44,8 +44,11 @@
   },
   "version": "1.0.0",
   "dependencies": {
+    "@types/react": "19.2.17",
+    "esbuild": "0.28.1",
     "expo": "54.0.33",
     "react": "19.1.0",
-    "react-native": "0.81.5"
+    "react-native": "0.81.5",
+    "ts-morph": "28.0.0"
   }
 }

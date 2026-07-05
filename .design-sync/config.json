@@ -1,0 +1,15 @@
+{
+  "pkg": "@unfairenough/ui",
+  "globalName": "UnfairEnoughUI",
+  "projectId": "5fbc4701-6cf2-49c2-a10f-9ca9bfd909cb",
+  "shape": "package",
+  "readmeHeader": ".design-sync/conventions.md",
+  "extraFonts": "../../../.design-sync/fonts.css",
+  "overrides": {
+    "Leaderboard": { "cardMode": "column" }
+  },
+  "libOverrides": {
+    "bundle.mjs": "react-native-web resolution for RN components: alias react-native->react-native-web, .web.* extensions, .js-as-jsx loader, browser conditions",
+    "previews.mjs": "preview-only banner renaming RNW's #react-native-stylesheet so validate's [id^=r] root selector doesn't false-flag [RENDER] root empty"
+  }
+}
