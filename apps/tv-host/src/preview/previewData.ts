@@ -3,7 +3,12 @@ import { sampleQuestions } from '@unfairenough/game-logic';
 import type { AnswerKey } from '@unfairenough/ws-protocol';
 import { Image } from 'react-native';
 
-const PREVIEW_IMAGE_URI = Image.resolveAssetSource(require('../../assets/preview-media.jpg')).uri;
+// react-native-web's Image has no static resolveAssetSource; guard so the web
+// preview harness (used for layout QA) doesn't crash at module load.
+const PREVIEW_IMAGE_URI =
+  typeof Image.resolveAssetSource === 'function'
+    ? Image.resolveAssetSource(require('../../assets/preview-media.jpg')).uri
+    : '';
 
 const MOCK_PLAYERS = [
   { id: 'p1', name: 'Alice', color: '#FF6B9D', emoji: '🦊', score: 2450 },

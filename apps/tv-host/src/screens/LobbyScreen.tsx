@@ -836,14 +836,14 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: tvSafeArea.horizontal,
-    paddingTop: spacing.xl,
+    paddingTop: spacing.md,
     paddingBottom: tvSafeArea.vertical,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.sm,
   },
   title: {
     ...typography.displayMedium,
@@ -940,16 +940,16 @@ const styles = StyleSheet.create({
     flex: 0.65,
   },
   playersCard: {
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    minHeight: 120,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    minHeight: 100,
   },
   playersHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: spacing.lg,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   playersTitle: {
     ...typography.h2,
@@ -981,13 +981,13 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   gameModeContainer: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   gameModeHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   gameModeLabel: {
     ...typography.label,
@@ -1015,8 +1015,7 @@ const styles = StyleSheet.create({
     color: colors.accentYellow,
   },
   setPickerContainer: {
-    marginTop: spacing.sm,
-    maxHeight: 70,
+    marginTop: spacing.xs,
   },
   setPickerContent: {
     gap: spacing.sm,
@@ -1024,7 +1023,7 @@ const styles = StyleSheet.create({
   },
   setCard: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
     borderRadius: borderRadius.md,
     borderWidth: 2,
     borderColor: colors.textSecondary,
@@ -1088,7 +1087,7 @@ const styles = StyleSheet.create({
   customSettingsRow: {
     flexDirection: 'row',
     gap: spacing.lg,
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
     alignItems: 'flex-start',
   },
   stepperGroup: {

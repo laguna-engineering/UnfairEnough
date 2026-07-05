@@ -11,8 +11,12 @@ import {
 } from '@unfairenough/ui';
 import type React from 'react';
 import { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useGameController } from '../hooks/useGameController';
+
+// Past this many players a single column risks running off the bottom of the
+// (auto-advancing, non-scrollable) results screen, so we split into two columns.
+const TWO_COLUMN_THRESHOLD = 8;
 
 const answerColors = {
   A: colors.primary,
@@ -58,6 +62,12 @@ export const ResultsScreen: React.FC = () => {
 
   const correctAnswer = state.game.correctAnswer ?? currentQuestion.options[0]?.key;
 
+  const showRankChange = positionHistory.length > 1;
+  const twoColumns = leaderboardEntries.length > TWO_COLUMN_THRESHOLD;
+  const splitIndex = Math.ceil(leaderboardEntries.length / 2);
+  const firstColumn = twoColumns ? leaderboardEntries.slice(0, splitIndex) : leaderboardEntries;
+  const secondColumn = twoColumns ? leaderboardEntries.slice(splitIndex) : [];
+
   return (
     <ScreenBackground style={styles.container}>
       <View style={styles.content}>
@@ -88,16 +98,22 @@ export const ResultsScreen: React.FC = () => {
           )}
         </Card>
 
-        {/* Leaderboard */}
+        {/* Leaderboard — split into two columns when many players so the whole
+            board always fits on the auto-advancing (non-scrollable) screen. */}
         <View style={styles.leaderboardSection}>
           <Text style={styles.leaderboardTitle}>{t('results.leaderboard')}</Text>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            <Leaderboard
-              entries={leaderboardEntries}
-              showRankChange={positionHistory.length > 1}
-              showPoints
-            />
-          </ScrollView>
+          {twoColumns ? (
+            <View style={styles.leaderboardColumns}>
+              <View style={styles.leaderboardColumn}>
+                <Leaderboard entries={firstColumn} showRankChange={showRankChange} showPoints />
+              </View>
+              <View style={styles.leaderboardColumn}>
+                <Leaderboard entries={secondColumn} showRankChange={showRankChange} showPoints />
+              </View>
+            </View>
+          ) : (
+            <Leaderboard entries={leaderboardEntries} showRankChange={showRankChange} showPoints />
+          )}
         </View>
       </View>
     </ScreenBackground>
@@ -154,6 +170,13 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   leaderboardSection: {
+    flex: 1,
+  },
+  leaderboardColumns: {
+    flexDirection: 'row',
+    gap: spacing.xl,
+  },
+  leaderboardColumn: {
     flex: 1,
   },
   leaderboardTitle: {
