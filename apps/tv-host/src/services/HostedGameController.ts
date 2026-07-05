@@ -112,10 +112,10 @@ export class HostedGameController implements IGameController {
   }
 
   configureGame(
-    gameType: 'casual' | 'configured' | 'custom',
+    gameType: 'casual' | 'configured' | 'personalized',
     questionSetId?: string,
     options?: {
-      questionSetIds?: string[];
+      tags?: string[];
       totalQuestions?: number;
       questionTimeLimit?: number;
       adaptiveMode?: boolean;
@@ -126,7 +126,7 @@ export class HostedGameController implements IGameController {
       payload: {
         gameType,
         questionSetId,
-        questionSetIds: options?.questionSetIds,
+        tags: options?.tags,
         totalQuestions: options?.totalQuestions,
         questionTimeLimit: options?.questionTimeLimit,
         adaptiveMode: options?.adaptiveMode,
@@ -345,9 +345,9 @@ export class HostedGameController implements IGameController {
       case 'GAME_CONFIGURED':
         this.store.dispatch(
           updateConfig({
-            gameType: message.payload.gameType as 'casual' | 'configured' | 'custom',
+            gameType: message.payload.gameType as 'casual' | 'configured' | 'personalized',
             questionSetId: message.payload.questionSetId,
-            questionSetIds: message.payload.questionSetIds,
+            tags: message.payload.tags,
             adaptiveMode: message.payload.adaptiveMode,
             totalQuestions: message.payload.questionCount,
           }),

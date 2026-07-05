@@ -7,10 +7,10 @@ export interface IGameController {
   startGame(): void;
   reset(): void;
   configureGame(
-    gameType: 'casual' | 'configured' | 'custom',
+    gameType: 'casual' | 'configured' | 'personalized',
     questionSetId?: string,
     options?: {
-      questionSetIds?: string[];
+      tags?: string[];
       totalQuestions?: number;
       questionTimeLimit?: number;
       adaptiveMode?: boolean;

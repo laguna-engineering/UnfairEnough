@@ -73,6 +73,7 @@
     "configured": "Set di Domande",
     "selectSet": "Seleziona Set di Domande",
     "noSets": "Nessun set di domande disponibile",
+    "noTags": "Nessun tag disponibile",
     "questionsCount": "{{count}} domande",
     "configuring": "Configurazione...",
     "configuredSuccess": "Partita configurata!",
@@ -83,13 +84,13 @@
     "importSuccess": "Importate {{count}} domande!",
     "importError": "Importazione fallita: {{error}}",
     "totalQuestions": "{{count}} domande nel pool",
-    "custom": "Personalizzato",
+    "personalized": "Personalizzato",
     "totalQuestionsLabel": "Domande",
     "secondsPerQuestion": "Secondi",
     "adaptiveMode": "Adattivo",
-    "selectSets": "Seleziona almeno un set",
-    "selectedSets_one": "{{count}} set selezionato",
-    "selectedSets_other": "{{count}} set selezionati"
+    "selectTags": "Seleziona almeno un tag",
+    "selectedTags_one": "{{count}} tag selezionato",
+    "selectedTags_other": "{{count}} tag selezionati"
   },
   "profile": {
     "welcomeBack": "Bentornato, {{name}}!",

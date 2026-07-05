@@ -233,17 +233,19 @@ class GameController implements IGameController {
   private async loadQuestionsAndStart(): Promise<void> {
     const db = getDb();
     const state = this.getState();
-    const { gameType, questionSetId, questionSetIds, adaptiveMode, totalQuestions } =
-      state.game.config;
+    const { gameType, questionSetId, tags, adaptiveMode, totalQuestions } = state.game.config;
 
-    // Load tag scores for profiled players (configured or custom adaptive)
-    if (gameType === 'configured' || (gameType === 'custom' && adaptiveMode)) {
+    // Load tag scores for profiled players (configured or personalized adaptive)
+    if (gameType === 'configured' || (gameType === 'personalized' && adaptiveMode)) {
       await this.loadPlayerTagScores();
     }
 
-    if (gameType === 'custom' && questionSetIds && questionSetIds.length > 0) {
-      // Custom mode: load from multiple sets
-      const fetched = await questionsRepo.getQuestionsBySetIds(db, questionSetIds);
+    if (gameType === 'personalized' && tags && tags.length > 0) {
+      // Personalized mode: load the union pool for the selected tags
+      const fetched = await questionsRepo.getQuestionsByTags(db, tags, {
+        hostId: null,
+        language: this.language,
+      });
       // Drop questions served in recent games so back-to-back games don't repeat
       // (relaxed automatically when the pool is too small).
       const rawPool = filterRecentlyServedQuestions(
@@ -359,7 +361,7 @@ class GameController implements IGameController {
   private get totalQuestionCount(): number {
     const state = this.getState();
     const { gameType, totalQuestions } = state.game.config;
-    if (gameType === 'custom') return Math.min(totalQuestions, this.questionPool.length);
+    if (gameType === 'personalized') return Math.min(totalQuestions, this.questionPool.length);
     if (gameType === 'configured') return this.questionPool.length;
     return Math.min(totalQuestions, this.questionPool.length);
   }
@@ -479,7 +481,7 @@ class GameController implements IGameController {
     const state = this.getState();
     const { gameType, adaptiveMode } = state.game.config;
     const usePoolSelection =
-      (this.isMetaSet || (gameType === 'custom' && adaptiveMode)) &&
+      (this.isMetaSet || (gameType === 'personalized' && adaptiveMode)) &&
       this.questionPool.length > this.currentQuestionIndex;
 
     if (usePoolSelection) {
@@ -783,7 +785,7 @@ class GameController implements IGameController {
       // Position-based time bonus multiplier (trailing players get a boost)
       // Skip catch-up for custom non-adaptive mode
       const { gameType: gt, adaptiveMode: am } = state.game.config;
-      const skipCatchUp = gt === 'custom' && !am;
+      const skipCatchUp = gt === 'personalized' && !am;
       const tbMultiplier = skipCatchUp
         ? 1.0
         : computeTimeBonusMultiplier(
@@ -868,7 +870,7 @@ class GameController implements IGameController {
 
     // Update tag scores for profiled players (skip for casual and custom non-adaptive)
     const cfg = this.getState().game.config;
-    if (cfg.gameType === 'configured' || (cfg.gameType === 'custom' && cfg.adaptiveMode)) {
+    if (cfg.gameType === 'configured' || (cfg.gameType === 'personalized' && cfg.adaptiveMode)) {
       this.updateTagScoresAfterRound(currentQuestion, playerResults).catch((err) =>
         console.error('Failed to update tag scores:', err),
       );
@@ -891,7 +893,7 @@ class GameController implements IGameController {
 
     const { gameType, adaptiveMode } = this.getState().game.config;
     const usePoolSelection =
-      (this.isMetaSet || (gameType === 'custom' && adaptiveMode)) &&
+      (this.isMetaSet || (gameType === 'personalized' && adaptiveMode)) &&
       this.questionPool.length > this.currentQuestionIndex;
     const nextIndex = this.currentQuestionIndex + 1;
     if (
@@ -1032,7 +1034,7 @@ class GameController implements IGameController {
     // Record game stats (non-casual games) and update tag decay (when adaptive)
     if (state.game.config.gameType !== 'casual') {
       this.recordGameEnd(winner).catch((err) => console.error('Failed to record game end:', err));
-      if (state.game.config.gameType !== 'custom' || state.game.config.adaptiveMode) {
+      if (state.game.config.gameType !== 'personalized' || state.game.config.adaptiveMode) {
         this.incrementTagGamesPlayed().catch((err) =>
           console.error('Failed to increment tag games played:', err),
         );
@@ -1074,21 +1076,21 @@ class GameController implements IGameController {
    * Configure game mode
    */
   configureGame(
-    gameType: 'casual' | 'configured' | 'custom',
+    gameType: 'casual' | 'configured' | 'personalized',
     questionSetId?: string,
     options?: {
-      questionSetIds?: string[];
+      tags?: string[];
       totalQuestions?: number;
       questionTimeLimit?: number;
       adaptiveMode?: boolean;
     },
   ): void {
-    if (gameType === 'custom' && options?.questionSetIds && options.questionSetIds.length > 0) {
+    if (gameType === 'personalized' && options?.tags && options.tags.length > 0) {
       this.store.dispatch(
         updateConfig({
           gameType,
           questionSetId: undefined,
-          questionSetIds: options.questionSetIds,
+          tags: options.tags,
           adaptiveMode: options.adaptiveMode ?? true,
           totalQuestions: options.totalQuestions ?? 10,
           questionTimeLimit: options.questionTimeLimit ?? 15,
@@ -1100,7 +1102,7 @@ class GameController implements IGameController {
         updateConfig({
           gameType,
           questionSetId,
-          questionSetIds: undefined,
+          tags: undefined,
           adaptiveMode: undefined,
         }),
       );
@@ -1126,7 +1128,7 @@ class GameController implements IGameController {
         updateConfig({
           gameType: 'casual',
           questionSetId: undefined,
-          questionSetIds: undefined,
+          tags: undefined,
           adaptiveMode: undefined,
         }),
       );

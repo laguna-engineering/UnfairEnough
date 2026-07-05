@@ -144,7 +144,12 @@ const MOCK_QUESTION_SETS: QuestionSetWithMeta[] = [
   },
 ];
 
-type GameModeType = 'casual' | 'configured' | 'custom';
+type GameModeType = 'casual' | 'configured' | 'personalized';
+
+interface TagWithCount {
+  tag: string;
+  questionCount: number;
+}
 
 export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
   const { t, i18n } = useTranslation();
@@ -166,13 +171,14 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
     MOCK_QUESTION_SETS.filter((s) => !s.isMeta).reduce((sum, s) => sum + s.questionCount, 0),
   );
 
-  // Custom mode local state — restore from gameConfig when returning to lobby
-  const [selectedSetIds, setSelectedSetIds] = useState<string[]>(gameConfig.questionSetIds ?? []);
+  // Personalized mode local state — restore from gameConfig when returning to lobby
+  const [availableTags, setAvailableTags] = useState<TagWithCount[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>(gameConfig.tags ?? []);
   const [customTotalQuestions, setCustomTotalQuestions] = useState(
-    gameConfig.gameType === 'custom' ? gameConfig.totalQuestions : 10,
+    gameConfig.gameType === 'personalized' ? gameConfig.totalQuestions : 10,
   );
   const [customTimeLimit, setCustomTimeLimit] = useState(
-    gameConfig.gameType === 'custom' ? gameConfig.questionTimeLimit : 15,
+    gameConfig.gameType === 'personalized' ? gameConfig.questionTimeLimit : 15,
   );
   const [adaptiveEnabled, setAdaptiveEnabled] = useState(gameConfig.adaptiveMode ?? true);
 
@@ -219,10 +225,50 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
     loadQuestionSets();
   }, [loadQuestionSets]);
 
-  // Clear custom set selection on language change
+  // Load the tag list for the personalized-mode picker. Same predicate as the game
+  // pool (host + language scoped) so displayed counts match what a game loads.
+  const loadTags = useCallback(async () => {
+    try {
+      if (mode === 'local') {
+        const db = getDb();
+        const tags = await questionsRepo.getTagsWithCounts(db, null, currentLanguage);
+        setAvailableTags(tags);
+      } else if (mode === 'hosted' && serverUrl) {
+        const isSecure = /^https:\/\/|^wss:\/\//.test(serverUrl);
+        const host = serverUrl.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '');
+        const proto = isSecure ? 'https' : 'http';
+        const auth = getCachedAuthState();
+        const headers: Record<string, string> = {};
+        if (auth?.sessionToken) {
+          headers.Authorization = `Bearer ${auth.sessionToken}`;
+        }
+        const res = await fetch(
+          `${proto}://${host}/api/tags?language=${encodeURIComponent(currentLanguage)}`,
+          { headers },
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setAvailableTags(
+            (data.tags || []).map((tRow: { tag: string; questionCount: number }) => ({
+              tag: tRow.tag,
+              questionCount: tRow.questionCount,
+            })),
+          );
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load tags:', err);
+    }
+  }, [mode, serverUrl, currentLanguage]);
+
+  useEffect(() => {
+    loadTags();
+  }, [loadTags]);
+
+  // Clear personalized tag selection on language change
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional trigger on language change
   useEffect(() => {
-    setSelectedSetIds([]);
+    setSelectedTags([]);
   }, [currentLanguage]);
 
   const handleLanguageChange = useCallback(
@@ -233,18 +279,19 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
     [setLanguage],
   );
 
-  // Compute max questions available from selected custom sets
-  const nonMetaSets = questionSets.filter((s) => !s.isMeta);
-  const maxCustomQuestions = nonMetaSets
-    .filter((s) => selectedSetIds.includes(s.id))
-    .reduce((sum, s) => sum + s.questionCount, 0);
+  // Soft upper bound: sum of selected tags' counts. The real union pool may be
+  // smaller (a question with two selected tags is counted once server-side), so
+  // the controller/server clamps totalQuestions down to the actual pool size.
+  const maxCustomQuestions = availableTags
+    .filter((tRow) => selectedTags.includes(tRow.tag))
+    .reduce((sum, tRow) => sum + tRow.questionCount, 0);
 
-  // Send custom config whenever custom settings change
-  const sendCustomConfig = useCallback(
-    (setIds: string[], total: number, timeLimit: number, adaptive: boolean) => {
-      if (setIds.length > 0) {
-        configureGame('custom', undefined, {
-          questionSetIds: setIds,
+  // Send personalized config whenever the tag selection or settings change
+  const sendPersonalizedConfig = useCallback(
+    (tags: string[], total: number, timeLimit: number, adaptive: boolean) => {
+      if (tags.length > 0) {
+        configureGame('personalized', undefined, {
+          tags,
           totalQuestions: total,
           questionTimeLimit: timeLimit,
           adaptiveMode: adaptive,
@@ -259,37 +306,42 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
       setSelectedMode(newMode);
       if (newMode === 'casual') {
         configureGame('casual');
-      } else if (newMode === 'custom' && selectedSetIds.length > 0) {
-        sendCustomConfig(selectedSetIds, customTotalQuestions, customTimeLimit, adaptiveEnabled);
+      } else if (newMode === 'personalized' && selectedTags.length > 0) {
+        sendPersonalizedConfig(
+          selectedTags,
+          customTotalQuestions,
+          customTimeLimit,
+          adaptiveEnabled,
+        );
       }
       // 'configured' mode waits for set selection
     },
     [
       configureGame,
-      selectedSetIds,
+      selectedTags,
       customTotalQuestions,
       customTimeLimit,
       adaptiveEnabled,
-      sendCustomConfig,
+      sendPersonalizedConfig,
     ],
   );
 
-  const handleToggleSet = useCallback(
-    (setId: string) => {
-      setSelectedSetIds((prev) => {
-        const next = prev.includes(setId) ? prev.filter((id) => id !== setId) : [...prev, setId];
+  const handleToggleTag = useCallback(
+    (tag: string) => {
+      setSelectedTags((prev) => {
+        const next = prev.includes(tag) ? prev.filter((tRow) => tRow !== tag) : [...prev, tag];
 
         // Recompute max from new selection
-        const newMax = nonMetaSets
-          .filter((s) => next.includes(s.id))
-          .reduce((sum, s) => sum + s.questionCount, 0);
+        const newMax = availableTags
+          .filter((tRow) => next.includes(tRow.tag))
+          .reduce((sum, tRow) => sum + tRow.questionCount, 0);
 
         // Auto-clamp totalQuestions
         const clamped = Math.min(customTotalQuestions, newMax) || newMax;
         setCustomTotalQuestions(clamped > 0 ? clamped : 1);
 
         if (next.length > 0) {
-          sendCustomConfig(
+          sendPersonalizedConfig(
             next,
             Math.min(customTotalQuestions, newMax) || newMax,
             customTimeLimit,
@@ -299,47 +351,47 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
         return next;
       });
     },
-    [nonMetaSets, customTotalQuestions, customTimeLimit, adaptiveEnabled, sendCustomConfig],
+    [availableTags, customTotalQuestions, customTimeLimit, adaptiveEnabled, sendPersonalizedConfig],
   );
 
   const handleTotalQuestionsChange = useCallback(
     (delta: number) => {
       setCustomTotalQuestions((prev) => {
         const next = Math.max(1, Math.min(prev + delta, maxCustomQuestions));
-        sendCustomConfig(selectedSetIds, next, customTimeLimit, adaptiveEnabled);
+        sendPersonalizedConfig(selectedTags, next, customTimeLimit, adaptiveEnabled);
         return next;
       });
     },
-    [maxCustomQuestions, selectedSetIds, customTimeLimit, adaptiveEnabled, sendCustomConfig],
+    [maxCustomQuestions, selectedTags, customTimeLimit, adaptiveEnabled, sendPersonalizedConfig],
   );
 
   const handleTimeLimitChange = useCallback(
     (delta: number) => {
       setCustomTimeLimit((prev) => {
         const next = Math.max(5, Math.min(prev + delta, 60));
-        sendCustomConfig(selectedSetIds, customTotalQuestions, next, adaptiveEnabled);
+        sendPersonalizedConfig(selectedTags, customTotalQuestions, next, adaptiveEnabled);
         return next;
       });
     },
-    [selectedSetIds, customTotalQuestions, adaptiveEnabled, sendCustomConfig],
+    [selectedTags, customTotalQuestions, adaptiveEnabled, sendPersonalizedConfig],
   );
 
   const handleAdaptiveToggle = useCallback(() => {
     setAdaptiveEnabled((prev) => {
       const next = !prev;
-      sendCustomConfig(selectedSetIds, customTotalQuestions, customTimeLimit, next);
+      sendPersonalizedConfig(selectedTags, customTotalQuestions, customTimeLimit, next);
       return next;
     });
-  }, [selectedSetIds, customTotalQuestions, customTimeLimit, sendCustomConfig]);
+  }, [selectedTags, customTotalQuestions, customTimeLimit, sendPersonalizedConfig]);
 
   // TV focus refs
   const casualRef = useRef<View>(null);
-  const customRef = useRef<View>(null);
+  const personalizedRef = useRef<View>(null);
   const startRef = useRef<View>(null);
   const enRef = useRef<View>(null);
   const muteRef = useRef<View>(null);
   const [focusTags, setFocusTags] = useState<{
-    custom?: number;
+    personalized?: number;
     start?: number;
     en?: number;
     mute?: number;
@@ -349,7 +401,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
   const playerCount = players.length;
   const canStart =
     playerCount >= state.game.config.minPlayers &&
-    (selectedMode !== 'custom' || selectedSetIds.length > 0);
+    (selectedMode !== 'personalized' || selectedTags.length > 0);
 
   // Capture focus-target node handles after layout. Keyed on canStart because the
   // Start button swaps native nodes between its disabled and enabled (gradient)
@@ -358,7 +410,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
   useEffect(() => {
     const timer = setTimeout(() => {
       setFocusTags({
-        custom: findNodeHandle(customRef.current) ?? undefined,
+        personalized: findNodeHandle(personalizedRef.current) ?? undefined,
         start: findNodeHandle(startRef.current) ?? undefined,
         en: findNodeHandle(enRef.current) ?? undefined,
         mute: findNodeHandle(muteRef.current) ?? undefined,
@@ -441,13 +493,13 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                   style={styles.startButton}
                   nextFocusRight={focusTags.mute ?? focusTags.en}
                 />
-                {!canStart && playerCount > 0 && selectedMode !== 'custom' && (
+                {!canStart && playerCount > 0 && selectedMode !== 'personalized' && (
                   <Text style={styles.hintText}>
                     {t('lobby.needMorePlayers', { min: state.game.config.minPlayers })}
                   </Text>
                 )}
-                {selectedMode === 'custom' && selectedSetIds.length === 0 && (
-                  <Text style={styles.hintText}>{t('gameConfig.selectSets')}</Text>
+                {selectedMode === 'personalized' && selectedTags.length === 0 && (
+                  <Text style={styles.hintText}>{t('gameConfig.selectTags')}</Text>
                 )}
               </View>
             </View>
@@ -507,7 +559,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                 hasTVPreferredFocus={selectedMode === 'configured'}
                 onPress={() => handleModeChange('configured')}
                 nextFocusUp={focusTags.start}
-                nextFocusRight={focusTags.custom}
+                nextFocusRight={focusTags.personalized}
                 style={(state) => [
                   styles.gameModeButton,
                   selectedMode === 'configured' && styles.gameModeButtonActive,
@@ -525,13 +577,13 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                 </Text>
               </Pressable>
               <Pressable
-                ref={customRef}
-                hasTVPreferredFocus={selectedMode === 'custom'}
-                onPress={() => handleModeChange('custom')}
+                ref={personalizedRef}
+                hasTVPreferredFocus={selectedMode === 'personalized'}
+                onPress={() => handleModeChange('personalized')}
                 nextFocusUp={focusTags.start}
                 style={(state) => [
                   styles.gameModeButton,
-                  selectedMode === 'custom' && styles.gameModeButtonActive,
+                  selectedMode === 'personalized' && styles.gameModeButtonActive,
                   (state as any).focused && styles.focused,
                   state.pressed && styles.pressed,
                 ]}
@@ -539,10 +591,10 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                 <Text
                   style={[
                     styles.gameModeButtonText,
-                    selectedMode === 'custom' && styles.gameModeButtonTextActive,
+                    selectedMode === 'personalized' && styles.gameModeButtonTextActive,
                   ]}
                 >
-                  {t('gameConfig.custom')}
+                  {t('gameConfig.personalized')}
                 </Text>
               </Pressable>
               {mode === 'local' && (
@@ -603,27 +655,27 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
               </ScrollView>
             )}
 
-            {/* Custom Mode Controls */}
-            {selectedMode === 'custom' && (
+            {/* Personalized Mode Controls */}
+            {selectedMode === 'personalized' && (
               <View style={styles.customControls}>
-                {/* Multi-select set picker (meta sets excluded) */}
+                {/* Multi-select tag picker */}
                 <ScrollView
                   horizontal
                   style={styles.setPickerContainer}
                   contentContainerStyle={styles.setPickerContent}
                   showsHorizontalScrollIndicator={false}
                 >
-                  {nonMetaSets.length === 0 ? (
-                    <Text style={styles.noSetsText}>{t('gameConfig.noSets')}</Text>
+                  {availableTags.length === 0 ? (
+                    <Text style={styles.noSetsText}>{t('gameConfig.noTags')}</Text>
                   ) : (
-                    nonMetaSets.map((set) => (
+                    availableTags.map((tagRow) => (
                       <Pressable
-                        key={set.id}
-                        onPress={() => handleToggleSet(set.id)}
+                        key={tagRow.tag}
+                        onPress={() => handleToggleTag(tagRow.tag)}
                         nextFocusRight={focusTags.start}
                         style={(pressState) => [
                           styles.setCard,
-                          selectedSetIds.includes(set.id) && styles.setCardActive,
+                          selectedTags.includes(tagRow.tag) && styles.setCardActive,
                           (pressState as any).focused && styles.focused,
                           pressState.pressed && styles.pressed,
                         ]}
@@ -631,22 +683,22 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                         <Text
                           style={[
                             styles.setCardName,
-                            selectedSetIds.includes(set.id) && styles.setCardNameActive,
+                            selectedTags.includes(tagRow.tag) && styles.setCardNameActive,
                           ]}
                           numberOfLines={1}
                         >
-                          {set.name}
+                          {tagRow.tag}
                         </Text>
                         <Text style={styles.setCardCount}>
-                          {t('gameConfig.questionsCount', { count: set.questionCount })}
+                          {t('gameConfig.questionsCount', { count: tagRow.questionCount })}
                         </Text>
                       </Pressable>
                     ))
                   )}
                 </ScrollView>
 
-                {selectedSetIds.length === 0 ? (
-                  <Text style={styles.selectSetsHint}>{t('gameConfig.selectSets')}</Text>
+                {selectedTags.length === 0 ? (
+                  <Text style={styles.selectSetsHint}>{t('gameConfig.selectTags')}</Text>
                 ) : (
                   <View style={styles.customSettingsRow}>
                     {/* Total questions stepper */}

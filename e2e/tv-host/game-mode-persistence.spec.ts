@@ -8,16 +8,24 @@ const MOCK_QUESTION_SETS = {
   ],
 };
 
+const MOCK_TAGS = {
+  tags: [
+    { tag: 'history', questionCount: 12, playerCount: 0 },
+    { tag: 'geography', questionCount: 9, playerCount: 0 },
+  ],
+  totalPlayers: 0,
+};
+
 const ROOM_CREATED_MSG = JSON.stringify({
   type: 'ROOM_CREATED',
   payload: { roomCode: 'TEST' },
 });
 
-const GAME_CONFIGURED_CUSTOM_MSG = JSON.stringify({
+const GAME_CONFIGURED_PERSONALIZED_MSG = JSON.stringify({
   type: 'GAME_CONFIGURED',
   payload: {
-    gameType: 'custom',
-    questionSetIds: ['set-1', 'set-2'],
+    gameType: 'personalized',
+    tags: ['history', 'geography'],
     adaptiveMode: true,
     questionCount: 10,
   },
@@ -60,8 +68,8 @@ const ROUND_END_MSG = JSON.stringify({
 const GAME_OVER_MSG = JSON.stringify({ type: 'GAME_OVER', payload: {} });
 
 /**
- * Sets up route mocks for the hosted server's health check and question sets API,
- * then intercepts the host WebSocket connection.
+ * Sets up route mocks for the hosted server's health check, question sets API,
+ * and tags API, then intercepts the host WebSocket connection.
  */
 async function setupHostedMocks(page: Page) {
   const clientMessages: Array<{ type: string; payload?: unknown }> = [];
@@ -76,12 +84,21 @@ async function setupHostedMocks(page: Page) {
     }),
   );
 
-  // Mock question sets API
+  // Mock question sets API (configured mode)
   await page.route('**/api/question-sets*', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(MOCK_QUESTION_SETS),
+    }),
+  );
+
+  // Mock tags API (personalized mode)
+  await page.route('**/api/tags*', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(MOCK_TAGS),
     }),
   );
 
@@ -140,39 +157,39 @@ test.describe('Game mode persistence', () => {
 
     // "Casual" button should have the active style (we check it's visible as baseline)
     await expect(page.getByText('Casual')).toBeVisible();
-    await expect(page.getByText('Custom')).toBeVisible();
+    await expect(page.getByText('Personalized')).toBeVisible();
     await expect(page.getByText('Question Set')).toBeVisible();
 
-    // Custom controls should NOT be visible in casual mode
-    await expect(page.getByText('Select at least one set')).not.toBeVisible();
+    // Personalized controls should NOT be visible in casual mode
+    await expect(page.getByText('Select at least one tag')).not.toBeVisible();
   });
 
-  test('switching to Custom mode shows custom controls', async ({ page }) => {
+  test('switching to Personalized mode shows the tag picker', async ({ page }) => {
     const helpers = await setupHostedMocks(page);
     await navigateToLobby(page, helpers);
 
-    // Click Custom
-    await page.getByText('Custom').click();
+    // Click Personalized
+    await page.getByText('Personalized').click();
 
-    // Custom controls should appear — "Select at least one set" hint
-    await expect(page.getByText('Select at least one set')).toBeVisible({ timeout: 5000 });
+    // Personalized controls should appear — "Select at least one tag" hint
+    await expect(page.getByText('Select at least one tag')).toBeVisible({ timeout: 5000 });
 
-    // Question set cards should be visible (non-meta only)
-    await expect(page.getByText('Geography')).toBeVisible();
-    await expect(page.getByText('Science')).toBeVisible();
+    // Tag chips should be visible
+    await expect(page.getByText('history')).toBeVisible();
+    await expect(page.getByText('geography')).toBeVisible();
   });
 
-  test('Custom mode persists after game-over and Play Again', async ({ page }) => {
+  test('Personalized mode persists after game-over and Play Again', async ({ page }) => {
     const helpers = await setupHostedMocks(page);
     await navigateToLobby(page, helpers);
 
-    // Select Custom mode
-    await page.getByText('Custom').click();
-    await expect(page.getByText('Select at least one set')).toBeVisible({ timeout: 5000 });
+    // Select Personalized mode
+    await page.getByText('Personalized').click();
+    await expect(page.getByText('Select at least one tag')).toBeVisible({ timeout: 5000 });
 
-    // Select both question sets
-    await page.getByText('Geography').click();
-    await page.getByText('Science').click();
+    // Select both tags
+    await page.getByText('history').click();
+    await page.getByText('geography').click();
 
     // Steppers should now be visible (Questions, Seconds, Adaptive)
     await expect(page.getByText('Questions')).toBeVisible({ timeout: 5000 });
@@ -180,7 +197,7 @@ test.describe('Game mode persistence', () => {
     await expect(page.getByText('Adaptive')).toBeVisible();
 
     // Server confirms the config
-    helpers.sendToHost(GAME_CONFIGURED_CUSTOM_MSG);
+    helpers.sendToHost(GAME_CONFIGURED_PERSONALIZED_MSG);
 
     // Simulate a game: GAME_STARTING → QUESTION → ROUND_END → GAME_OVER
     helpers.sendToHost(GAME_STARTING_MSG);
@@ -205,13 +222,10 @@ test.describe('Game mode persistence', () => {
     // Should be back in the lobby
     await expect(page.getByText('Game Mode')).toBeVisible({ timeout: 10_000 });
 
-    // Custom mode should still be selected — custom controls visible
-    await expect(page.getByText('Select at least one set')).toBeVisible({ timeout: 5000 });
-
-    // Question Set and Casual should NOT have active styles
-    // (they should be visible as buttons, but custom panel should be showing)
-    await expect(page.getByText('Geography')).toBeVisible();
-    await expect(page.getByText('Science')).toBeVisible();
+    // Personalized mode should still be selected — tag picker visible
+    await expect(page.getByText('Select at least one tag')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('history')).toBeVisible();
+    await expect(page.getByText('geography')).toBeVisible();
   });
 
   test('Configured (Question Set) mode persists after game-over and Play Again', async ({
@@ -241,9 +255,8 @@ test.describe('Game mode persistence', () => {
     // Back in lobby — "Question Set" mode should still be selected
     await expect(page.getByText('Game Mode')).toBeVisible({ timeout: 10_000 });
 
-    // The configured set picker should be visible (not custom controls)
-    // In configured mode, sets appear but without the custom steppers
+    // The configured set picker should be visible (not personalized controls)
     await expect(page.getByText('Geography')).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText('Select at least one set')).not.toBeVisible();
+    await expect(page.getByText('Select at least one tag')).not.toBeVisible();
   });
 });

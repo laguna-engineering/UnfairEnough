@@ -73,6 +73,7 @@
     "configured": "Question Set",
     "selectSet": "Select Question Set",
     "noSets": "No question sets available",
+    "noTags": "No tags available",
     "questionsCount": "{{count}} questions",
     "configuring": "Configuring...",
     "configuredSuccess": "Game configured!",
@@ -83,13 +84,13 @@
     "importSuccess": "Imported {{count}} questions!",
     "importError": "Import failed: {{error}}",
     "totalQuestions": "{{count}} questions in pool",
-    "custom": "Custom",
+    "personalized": "Personalized",
     "totalQuestionsLabel": "Questions",
     "secondsPerQuestion": "Seconds",
     "adaptiveMode": "Adaptive",
-    "selectSets": "Select at least one set",
-    "selectedSets_one": "{{count}} set selected",
-    "selectedSets_other": "{{count}} sets selected"
+    "selectTags": "Select at least one tag",
+    "selectedTags_one": "{{count}} tag selected",
+    "selectedTags_other": "{{count}} tags selected"
   },
   "profile": {
     "welcomeBack": "Welcome back, {{name}}!",
