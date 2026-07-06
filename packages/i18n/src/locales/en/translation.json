@@ -167,7 +167,10 @@
     "totalScore": "Total: {{score}}",
     "scoreBreakdown": "{{base}} x {{multiplier}} = {{total}}",
     "difficultyBonus": "+{{percent}}%",
-    "tags": "Tags"
+    "tags": "Tags",
+    "terminateTitle": "Terminate game?",
+    "terminateMessage": "This ends the current game for everyone and sends all players back to the lobby.",
+    "terminateConfirm": "Terminate"
   },
   "results": {
     "gameOver": "Game Over!",

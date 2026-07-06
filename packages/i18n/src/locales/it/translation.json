@@ -167,7 +167,10 @@
     "totalScore": "Totale: {{score}}",
     "scoreBreakdown": "{{base}} x {{multiplier}} = {{total}}",
     "difficultyBonus": "+{{percent}}%",
-    "tags": "Tag"
+    "tags": "Tag",
+    "terminateTitle": "Terminare la partita?",
+    "terminateMessage": "La partita in corso verrà interrotta per tutti e i giocatori torneranno alla lobby.",
+    "terminateConfirm": "Termina"
   },
   "results": {
     "gameOver": "Fine Partita!",

@@ -1154,6 +1154,10 @@ class GameController implements IGameController {
     this.mediaPreviewEndsAt = 0;
     this.playerTagScores.clear();
     this.currentRoundDifficulties.clear();
+
+    // Send connected phones back to their waiting/lobby screen (mobile maps a
+    // LOBBY snapshot to its WAITING phase).
+    wsServer.broadcast({ type: 'STATE_SNAPSHOT', payload: { phase: 'LOBBY' } });
   }
 
   private clearCountdownTimer(): void {

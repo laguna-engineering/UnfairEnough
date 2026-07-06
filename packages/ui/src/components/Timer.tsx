@@ -9,8 +9,12 @@ export interface TimerProps {
   size?: 'small' | 'large';
 }
 
+// `large` is the TV question-screen timer, `small` the mobile one. The TV renders
+// at roughly half the design canvas's logical width, so the design's absolute ring
+// size (168) came out ~2x too big on-device. These values keep the design's
+// *proportions* (ring ≈ 2.9x, number ≈ 1.1x the question text) at the TV's scale.
 const DIMENSIONS = {
-  large: { diameter: 168, stroke: 14, fontSize: 62 },
+  large: { diameter: 96, stroke: 9, fontSize: 36 },
   small: { diameter: 104, stroke: 10, fontSize: 40 },
 } as const;
 

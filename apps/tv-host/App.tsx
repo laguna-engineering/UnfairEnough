@@ -7,6 +7,7 @@ import type { GamePhase } from '@unfairenough/game-logic';
 import { changeLanguage, type SupportedLanguage } from '@unfairenough/i18n';
 import { setDebugEnabled } from '@unfairenough/shared';
 import Constants from 'expo-constants';
+import { useKeepAwake } from 'expo-keep-awake';
 import { StatusBar } from 'expo-status-bar';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -61,6 +62,10 @@ type AppScreen =
   | 'preview';
 
 export default function App() {
+  // Keep the display on so the Android TV system screensaver / daydream never
+  // kicks in while the game is running (applies FLAG_KEEP_SCREEN_ON on Android).
+  useKeepAwake();
+
   const [fontsLoaded] = useFonts({
     Fredoka_600SemiBold,
     Nunito_400Regular,

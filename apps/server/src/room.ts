@@ -1813,6 +1813,11 @@ export class GameRoom {
         player.disconnectTimer = undefined;
       }
     }
+
+    // Tell every connected client to drop back to the lobby/waiting screen.
+    // Mobile maps a LOBBY snapshot to its WAITING phase; the host ignores it
+    // (it already reset its own store when it sent RESET_GAME).
+    this.broadcast({ type: 'STATE_SNAPSHOT', payload: { phase: 'LOBBY' } });
   }
 
   // ── Messaging ────────────────────────────────────────────────

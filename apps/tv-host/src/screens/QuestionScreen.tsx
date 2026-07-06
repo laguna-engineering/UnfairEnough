@@ -193,6 +193,9 @@ const makeStyles = (t: ThemeTokens) =>
     },
     questionText: {
       ...typography.h1,
+      // Slightly below h1 (32) so a one-line question isn't oversized on the TV.
+      fontSize: 30,
+      lineHeight: 38,
       color: t.ink,
       textAlign: 'center',
     },
