@@ -10,6 +10,8 @@
     "ios": "EXPO_TV=1 expo run:ios --port 8082",
     "web": "expo start --web --port 8082",
     "prebuild": "EXPO_TV=1 expo prebuild --clean",
+    "eas:build": "EXPO_TV=1 eas build --local",
+    "eas:update": "EXPO_TV=1 eas update",
     "preview:lobby": "adb -s ${ADB_SERIAL:-emulator-5554} shell am force-stop com.unfairenough.tvhost && adb -s ${ADB_SERIAL:-emulator-5554} shell am start -a android.intent.action.VIEW -d 'unfairenough-tv://preview?phase=LOBBY'",
     "preview:countdown": "adb -s ${ADB_SERIAL:-emulator-5554} shell am force-stop com.unfairenough.tvhost && adb -s ${ADB_SERIAL:-emulator-5554} shell am start -a android.intent.action.VIEW -d 'unfairenough-tv://preview?phase=COUNTDOWN'",
     "preview:media": "adb -s ${ADB_SERIAL:-emulator-5554} shell am force-stop com.unfairenough.tvhost && adb -s ${ADB_SERIAL:-emulator-5554} shell am start -a android.intent.action.VIEW -d 'unfairenough-tv://preview?phase=MEDIA_PREVIEW'",
