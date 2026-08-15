@@ -1,0 +1,32 @@
+{
+  "cli": {
+    "version": ">= 19.0.1",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_TV": "1"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "env": {
+        "EXPO_TV": "1"
+      }
+    },
+    "production": {
+      "channel": "production",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_TV": "1"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

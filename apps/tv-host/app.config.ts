@@ -148,6 +148,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ...config,
     name: 'Unfair Enough!',
     slug: 'unfairenough-tv',
+    owner: 'laguna-engineering',
     scheme: 'unfairenough-tv',
     version: '1.0.0',
     orientation: 'landscape',
@@ -178,9 +179,18 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ios: {
       bundleIdentifier: 'com.unfairenough.tvhost',
     },
+    runtimeVersion: {
+      policy: 'fingerprint',
+    },
+    updates: {
+      url: 'https://u.expo.dev/7b7ffb0b-984f-4323-a97f-8c12f721e767',
+    },
     extra: {
       defaultLang: env.DEFAULT_LANG || 'en',
       serverUrl: env.SERVER_URL || '',
+      eas: {
+        projectId: '7b7ffb0b-984f-4323-a97f-8c12f721e767',
+      },
     },
   };
 

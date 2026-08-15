@@ -29,6 +29,7 @@
     "expo-localization": "~17.0.8",
     "expo-splash-screen": "~31.0.10",
     "expo-status-bar": "~3.0.8",
+    "expo-updates": "~29.0.19",
     "i18next": "^24.0.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",

@@ -28,6 +28,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'Unfair Enough!',
   slug: 'unfairenough-mobile',
+  owner: 'laguna-engineering',
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
@@ -57,8 +58,17 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     bundleIdentifier: 'com.unfairenough.mobile',
     supportsTablet: true,
   },
+  runtimeVersion: {
+    policy: 'fingerprint',
+  },
+  updates: {
+    url: 'https://u.expo.dev/95c3f674-3b69-4f5c-8b1a-c615b50bf336',
+  },
   extra: {
     defaultLang: env.DEFAULT_LANG || 'en',
+    eas: {
+      projectId: '95c3f674-3b69-4f5c-8b1a-c615b50bf336',
+    },
   },
   // Serve the web export under a subpath (e.g. /mobile) so assets resolve when the server
   // hosts it there. Set only for the production export via rebuild-web.sh; left unset in
