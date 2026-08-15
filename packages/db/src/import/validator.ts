@@ -16,10 +16,18 @@ export interface AudioInput {
   duration?: number;
 }
 
+export type QuestionTypeInput = 'multiple_choice' | 'true_false' | 'closest_wins' | 'predict_room';
+
+export interface RangeInput {
+  min: number;
+  max: number;
+  step?: number;
+}
+
 export interface QuestionInput {
   id?: string;
   text: string;
-  type?: 'multiple_choice' | 'true_false';
+  type?: QuestionTypeInput;
   category?: string;
   tags?: string[];
   hideTags?: boolean;
@@ -29,6 +37,10 @@ export interface QuestionInput {
   audio?: AudioInput;
   options: QuestionOptionInput[];
   correctAnswer: string;
+  /** closest_wins only: the authored correct numeric value. */
+  correctValue?: number;
+  /** closest_wins only: the guessable range for the phone's slider/number pad. */
+  range?: RangeInput;
   playerDifficulty?: Record<string, number>;
   difficulty?: number;
   explanation?: string;
@@ -48,7 +60,7 @@ export interface QuestionSetInput {
 const VALID_ANSWER_KEYS = ['A', 'B', 'C', 'D'];
 const VALID_TF_ANSWERS = ['true', 'false'];
 const VALID_MEDIA_TYPES = ['image', 'audio', 'video'];
-const VALID_QUESTION_TYPES = ['multiple_choice', 'true_false'];
+const VALID_QUESTION_TYPES = ['multiple_choice', 'true_false', 'closest_wins', 'predict_room'];
 const VALID_AUDIO_PLAY = ['preview', 'question'];
 const VALID_AUDIO_ROLE = ['subject', 'background'];
 
@@ -87,15 +99,20 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
     const qObj = q as Record<string, unknown>;
     const type =
       typeof qObj.type === 'string' && VALID_QUESTION_TYPES.includes(qObj.type)
-        ? (qObj.type as 'multiple_choice' | 'true_false')
+        ? (qObj.type as QuestionTypeInput)
         : 'multiple_choice';
 
     if (typeof qObj.text !== 'string' || qObj.text.trim().length === 0) {
       errors.push(`${prefix}.text: required non-empty string`);
     }
 
-    // Validate options
-    if (!Array.isArray(qObj.options) || qObj.options.length < 2) {
+    // Validate options. closest_wins has no options (it takes a numeric guess
+    // instead); every other type is a tap-choice with 2+ options.
+    if (type === 'closest_wins') {
+      if (Array.isArray(qObj.options) && qObj.options.length > 0) {
+        errors.push(`${prefix}.options: closest_wins must not have options`);
+      }
+    } else if (!Array.isArray(qObj.options) || qObj.options.length < 2) {
       errors.push(`${prefix}.options: required array with at least 2 entries`);
     } else {
       if (type === 'multiple_choice' && qObj.options.length > 4) {
@@ -103,6 +120,9 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
       }
       if (type === 'true_false' && qObj.options.length !== 2) {
         errors.push(`${prefix}.options: true_false requires exactly 2 options`);
+      }
+      if (type === 'predict_room' && qObj.options.length > 4) {
+        errors.push(`${prefix}.options: predict_room allows max 4 options`);
       }
       for (let j = 0; j < qObj.options.length; j++) {
         const opt = qObj.options[j] as Record<string, unknown> | undefined;
@@ -112,8 +132,35 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
       }
     }
 
-    // Validate correctAnswer
-    if (typeof qObj.correctAnswer !== 'string') {
+    // Validate correctAnswer / correctValue+range, by type.
+    if (type === 'closest_wins') {
+      // Estimation questions score by proximity to a number, not a chosen key —
+      // correctAnswer doesn't apply.
+      if (qObj.correctAnswer !== undefined) {
+        errors.push(`${prefix}.correctAnswer: closest_wins must not have correctAnswer`);
+      }
+      if (typeof qObj.correctValue !== 'number' || !Number.isFinite(qObj.correctValue)) {
+        errors.push(`${prefix}.correctValue: required number`);
+      }
+      if (!qObj.range || typeof qObj.range !== 'object') {
+        errors.push(`${prefix}.range: required object with min and max`);
+      } else {
+        const r = qObj.range as Record<string, unknown>;
+        if (typeof r.min !== 'number' || typeof r.max !== 'number') {
+          errors.push(`${prefix}.range: min and max must be numbers`);
+        } else if (r.min >= r.max) {
+          errors.push(`${prefix}.range: min must be less than max`);
+        }
+        if (r.step !== undefined && (typeof r.step !== 'number' || r.step <= 0)) {
+          errors.push(`${prefix}.range.step: must be a positive number`);
+        }
+      }
+    } else if (type === 'predict_room') {
+      // Opinion polls have no correct answer — only the prediction scores (R12).
+      if (qObj.correctAnswer !== undefined) {
+        errors.push(`${prefix}.correctAnswer: predict_room must not have correctAnswer`);
+      }
+    } else if (typeof qObj.correctAnswer !== 'string') {
       errors.push(`${prefix}.correctAnswer: required string`);
     } else if (type === 'multiple_choice') {
       if (!VALID_ANSWER_KEYS.includes(qObj.correctAnswer)) {
@@ -205,7 +252,9 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
       errors.push(`${prefix}.timeLimit: must be a number between 1 and 120`);
     }
 
-    // Validate difficulty
+    // Validate difficulty. Already optional for every type — predict_room simply
+    // never has one to validate in practice, since it has no knowledge difficulty
+    // to tune (R16); no extra relaxation needed here.
     if (
       qObj.difficulty !== undefined &&
       (typeof qObj.difficulty !== 'number' ||
@@ -215,6 +264,18 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
     ) {
       errors.push(`${prefix}.difficulty: must be an integer between 1 and 5`);
     }
+
+    const range =
+      qObj.range && typeof qObj.range === 'object'
+        ? (() => {
+            const r = qObj.range as Record<string, unknown>;
+            return {
+              min: typeof r.min === 'number' ? r.min : 0,
+              max: typeof r.max === 'number' ? r.max : 0,
+              step: typeof r.step === 'number' ? r.step : undefined,
+            };
+          })()
+        : undefined;
 
     questions.push({
       id: typeof qObj.id === 'string' ? qObj.id : undefined,
@@ -237,10 +298,19 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
       timeLimit: typeof qObj.timeLimit === 'number' ? qObj.timeLimit : undefined,
       media,
       audio,
-      options: Array.isArray(qObj.options)
-        ? qObj.options.map((o: any) => ({ key: String(o?.key ?? ''), text: String(o?.text ?? '') }))
-        : [],
-      correctAnswer: String(qObj.correctAnswer ?? ''),
+      options:
+        type === 'closest_wins'
+          ? []
+          : Array.isArray(qObj.options)
+            ? qObj.options.map((o: any) => ({
+                key: String(o?.key ?? ''),
+                text: String(o?.text ?? ''),
+              }))
+            : [],
+      correctAnswer:
+        type === 'closest_wins' || type === 'predict_room' ? '' : String(qObj.correctAnswer ?? ''),
+      correctValue: type === 'closest_wins' ? (qObj.correctValue as number) : undefined,
+      range: type === 'closest_wins' ? range : undefined,
       playerDifficulty:
         qObj.playerDifficulty && typeof qObj.playerDifficulty === 'object'
           ? (qObj.playerDifficulty as Record<string, number>)

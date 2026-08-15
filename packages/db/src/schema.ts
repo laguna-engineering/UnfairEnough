@@ -45,6 +45,9 @@ export interface QuestionRow {
   correct_answer: string;
   player_difficulty: string | null; // JSON object
   difficulty: number;
+  range_min: number | null; // closest_wins only
+  range_max: number | null; // closest_wins only
+  range_step: number | null; // closest_wins only
   explanation: string | null;
   hide_tags: number;
   language: string;
@@ -114,7 +117,7 @@ export interface PlayerTagScoreRow {
 
 // ── Domain types (parsed JSON fields) ────────────────────────
 
-export type QuestionType = 'multiple_choice' | 'true_false';
+export type QuestionType = 'multiple_choice' | 'true_false' | 'closest_wins' | 'predict_room';
 export type MediaType = 'image' | 'audio' | 'video';
 // Historical rows may carry the legacy 'custom' game_type (multi-set mode, replaced
 // by 'personalized'). It is analytics-only and never fed through an exhaustive switch,
@@ -145,6 +148,10 @@ export interface QuestionWithMeta {
   language: string;
   timesAsked: number;
   lastAskedAt: string | null;
+  /** closest_wins only: the authored correct numeric value. */
+  correctValue?: number;
+  /** closest_wins only: the guessable range, populated from range_min/max/step. */
+  range?: { min: number; max: number; step?: number };
 }
 
 export interface QuestionSetWithMeta {

@@ -113,6 +113,34 @@ export function computeLifetimeHandicap(
   return Math.min(1.1, Math.max(0.8, 1.0 - slope * deviation));
 }
 
+// ── Closest wins / predict the room scoring ─────────────────────────
+
+export const CLOSEST_MAX_POINTS = 500;
+export const CLOSEST_FLOOR_POINTS = 50;
+export const PREDICT_POINTS = 300;
+
+/**
+ * Score a closest_wins guess by proximity to the correct value only.
+ * Distance is normalized to the authored range so points don't depend on
+ * response time (KD4/R8) — equal distances MUST earn equal points regardless
+ * of who guessed first (AE2). Falls off quadratically from CLOSEST_MAX_POINTS
+ * down to a CLOSEST_FLOOR_POINTS floor for any submitted guess, however far off.
+ */
+export function calculateClosestScore(
+  guess: number,
+  correctValue: number,
+  min: number,
+  max: number,
+): { points: number; distance: number } {
+  const range = max - min;
+  const distance = range > 0 ? Math.min(1, Math.max(0, Math.abs(guess - correctValue) / range)) : 0;
+  const points = Math.max(
+    CLOSEST_FLOOR_POINTS,
+    Math.round(CLOSEST_MAX_POINTS * (1 - distance) ** 2),
+  );
+  return { points, distance };
+}
+
 // ── Ranking utilities ───────────────────────────────────────────────
 
 export interface PlayerScore {

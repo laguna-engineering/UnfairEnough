@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import {
   BASE_POINTS,
+  CLOSEST_FLOOR_POINTS,
+  CLOSEST_MAX_POINTS,
+  calculateClosestScore,
   calculateScore,
   computeCatchUpInfluence,
   computeLifetimeHandicap,
@@ -349,5 +352,43 @@ describe('integration: 5-round scoring with lifetime handicap', () => {
     const ratio = scores[1] / scores[0];
     expect(ratio).toBeGreaterThan(1.2);
     expect(ratio).toBeLessThan(1.5);
+  });
+});
+
+// ── calculateClosestScore ────────────────────────────────────────────
+
+describe('calculateClosestScore', () => {
+  test('guessing the exact correct value earns CLOSEST_MAX_POINTS', () => {
+    const { points, distance } = calculateClosestScore(25, 25, 0, 100);
+    expect(distance).toBe(0);
+    expect(points).toBe(CLOSEST_MAX_POINTS);
+  });
+
+  test('guessing at the far edge when correct sits at the other edge earns the floor', () => {
+    const { points, distance } = calculateClosestScore(100, 0, 0, 100);
+    expect(distance).toBe(1);
+    expect(points).toBe(CLOSEST_FLOOR_POINTS);
+  });
+
+  test('equal distances earn equal points regardless of direction (AE2)', () => {
+    // correct value 25, guesses of 20 and 30 are equidistant (5 away) in a 0-100 range
+    const below = calculateClosestScore(20, 25, 0, 100);
+    const above = calculateClosestScore(30, 25, 0, 100);
+    expect(below.points).toBe(above.points);
+  });
+
+  test('a guess further from correct never scores more than a closer one', () => {
+    // correct value 25, guesses of 20/30 (close) vs 100 (far) in a 0-100 range
+    const close = calculateClosestScore(20, 25, 0, 100);
+    const far = calculateClosestScore(100, 25, 0, 100);
+    expect(close.points).toBeGreaterThan(far.points);
+  });
+
+  test('score does not depend on response time — no time argument exists', () => {
+    // calculateClosestScore's signature has no time parameter (KD4/R8): calling it
+    // twice with identical guess/correct/range always yields identical points.
+    const first = calculateClosestScore(40, 25, 0, 100);
+    const second = calculateClosestScore(40, 25, 0, 100);
+    expect(first).toEqual(second);
   });
 });

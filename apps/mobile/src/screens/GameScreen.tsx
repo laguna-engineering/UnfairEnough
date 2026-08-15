@@ -80,6 +80,9 @@ export const GameScreen: React.FC = () => {
     currentQuestion,
     timeRemaining,
     confirmedAnswer,
+    confirmedGuess,
+    confirmedVote,
+    confirmedPrediction,
     roundResult,
     gameResult,
     mediaPreview,
@@ -97,6 +100,9 @@ export const GameScreen: React.FC = () => {
     rejectIdentity,
     goToJoin,
     submitAnswer,
+    submitGuess,
+    submitVote,
+    submitPrediction,
     reset,
     setLanguageOverride,
   } = useGameState();
@@ -203,7 +209,13 @@ export const GameScreen: React.FC = () => {
             question={currentQuestion}
             timeRemaining={timeRemaining}
             confirmedAnswer={confirmedAnswer}
+            confirmedGuess={confirmedGuess}
+            confirmedVote={confirmedVote}
+            confirmedPrediction={confirmedPrediction}
             onSubmitAnswer={submitAnswer}
+            onSubmitGuess={submitGuess}
+            onSubmitVote={submitVote}
+            onSubmitPrediction={submitPrediction}
           />
         );
 

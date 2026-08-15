@@ -202,12 +202,23 @@ describe('getTagsWithCounts', () => {
 });
 
 describe('migration V18', () => {
-  it('brings user_version to 18 and adds games.tags', async () => {
+  it('adds games.tags', async () => {
     const db = await freshDb();
-    const version = await db.get<{ user_version: number }>('PRAGMA user_version');
-    expect(version?.user_version).toBe(18);
-
     const cols = await db.all<{ name: string }>('PRAGMA table_info(games)');
     expect(cols.map((c) => c.name)).toContain('tags');
+  });
+});
+
+describe('migration V19', () => {
+  it('brings user_version to 19 and adds the closest_wins range columns', async () => {
+    const db = await freshDb();
+    const version = await db.get<{ user_version: number }>('PRAGMA user_version');
+    expect(version?.user_version).toBe(19);
+
+    const cols = await db.all<{ name: string }>('PRAGMA table_info(questions)');
+    const colNames = cols.map((c) => c.name);
+    expect(colNames).toContain('range_min');
+    expect(colNames).toContain('range_max');
+    expect(colNames).toContain('range_step');
   });
 });

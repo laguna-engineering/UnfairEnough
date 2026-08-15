@@ -1,4 +1,4 @@
-import type { AnswerKey, ClientMessage } from './messages';
+import type { AnswerKey, ClientMessage, QuestionType } from './messages';
 
 const MAX_NAME_LENGTH = 20;
 const MAX_TOKEN_LENGTH = 256;
@@ -25,6 +25,41 @@ export function isValidUUID(value: string): boolean {
  */
 export function isValidAnswer(answer: unknown): answer is AnswerKey {
   return typeof answer === 'string' && VALID_ANSWERS.includes(answer as AnswerKey);
+}
+
+/**
+ * Validate a closest_wins guess: any finite number (range bounds are enforced
+ * by the phone's input widget, not here).
+ */
+export function isValidGuess(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+/**
+ * Check that an ANSWER payload carries the right field for the given question
+ * type: `answer` for choice types (multiple_choice/true_false, and the
+ * undefined-type default), `guess` for closest_wins, `vote` or `prediction`
+ * for predict_room (sent as separate messages — either alone is valid).
+ */
+export function isValidAnswerPayloadForType(
+  type: QuestionType | undefined,
+  payload: unknown,
+): boolean {
+  if (!payload || typeof payload !== 'object') return false;
+  const p = payload as { answer?: unknown; guess?: unknown; vote?: unknown; prediction?: unknown };
+
+  switch (type) {
+    case 'closest_wins':
+      return isValidGuess(p.guess);
+    case 'predict_room':
+      return isValidAnswer(p.vote) || isValidAnswer(p.prediction);
+    case 'multiple_choice':
+    case 'true_false':
+    case undefined:
+      return isValidAnswer(p.answer);
+    default:
+      return false;
+  }
 }
 
 /**
@@ -128,16 +163,40 @@ export function parseClientMessage(data: unknown): ClientMessage {
       if (!payload || typeof payload !== 'object') {
         throw new Error('ANSWER requires payload');
       }
-      const p = payload as { questionId?: unknown; answer?: unknown };
+      const p = payload as {
+        questionId?: unknown;
+        answer?: unknown;
+        guess?: unknown;
+        vote?: unknown;
+        prediction?: unknown;
+      };
       if (typeof p.questionId !== 'string') {
         throw new Error('questionId is required');
       }
-      if (!isValidAnswer(p.answer)) {
-        throw new Error('Invalid answer');
+      // Structural check only: exactly one of answer/guess/vote/prediction must be
+      // set on the payload. Which field is *expected* for the active question's
+      // type is a semantic concern the room checks via isValidAnswerPayloadForType.
+      const setFields = (
+        [
+          isValidAnswer(p.answer) ? 'answer' : null,
+          isValidGuess(p.guess) ? 'guess' : null,
+          isValidAnswer(p.vote) ? 'vote' : null,
+          isValidAnswer(p.prediction) ? 'prediction' : null,
+        ] as const
+      ).filter((f): f is 'answer' | 'guess' | 'vote' | 'prediction' => f !== null);
+      if (setFields.length !== 1) {
+        throw new Error('ANSWER payload must set exactly one of answer/guess/vote/prediction');
       }
+      const field = setFields[0];
       return {
         type: 'ANSWER',
-        payload: { questionId: p.questionId, answer: p.answer },
+        payload: {
+          questionId: p.questionId,
+          answer: field === 'answer' ? (p.answer as AnswerKey) : undefined,
+          guess: field === 'guess' ? (p.guess as number) : undefined,
+          vote: field === 'vote' ? (p.vote as AnswerKey) : undefined,
+          prediction: field === 'prediction' ? (p.prediction as AnswerKey) : undefined,
+        },
       };
     }
 

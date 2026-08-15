@@ -5,6 +5,13 @@ const WELCOME_MSG = JSON.stringify({
   payload: { playerId: 'p1', playerColor: '#ff00ff', roomCode: 'TEST' },
 });
 
+// The client identifies its device before joining; a no-profile reply sends it
+// straight to the name-entry screen (no stored profile, no device claim).
+const IDENTITY_MSG = JSON.stringify({
+  type: 'IDENTITY',
+  payload: { profile: null },
+});
+
 const QUESTION_MSG = JSON.stringify({
   type: 'QUESTION',
   payload: {
@@ -67,6 +74,56 @@ const ANSWER_ACK_MSG = (questionId: string) =>
     payload: { questionId, serverReceivedAt: Date.now() },
   });
 
+const TRUE_FALSE_QUESTION_MSG = JSON.stringify({
+  type: 'QUESTION',
+  payload: {
+    id: 'q-tf',
+    text: 'Bananas are berries.',
+    type: 'true_false',
+    options: [
+      { key: 'A', text: 'True' },
+      { key: 'B', text: 'False' },
+    ],
+    timeLimit: 15,
+    questionNumber: 4,
+    totalQuestions: 12,
+    serverTimestamp: Date.now(),
+  },
+});
+
+const CLOSEST_WINS_QUESTION_MSG = JSON.stringify({
+  type: 'QUESTION',
+  payload: {
+    id: 'q-cw',
+    text: 'How many teeth does a snail have?',
+    type: 'closest_wins',
+    options: [],
+    range: { min: 0, max: 100000, step: 1000 },
+    timeLimit: 20,
+    questionNumber: 7,
+    totalQuestions: 12,
+    serverTimestamp: Date.now(),
+  },
+});
+
+const PREDICT_ROOM_QUESTION_MSG = JSON.stringify({
+  type: 'QUESTION',
+  payload: {
+    id: 'q-pr',
+    text: 'Best pizza topping?',
+    type: 'predict_room',
+    options: [
+      { key: 'A', text: 'Pineapple' },
+      { key: 'B', text: 'Pepperoni' },
+      { key: 'C', text: 'Mushroom' },
+    ],
+    timeLimit: 20,
+    questionNumber: 9,
+    totalQuestions: 12,
+    serverTimestamp: Date.now(),
+  },
+});
+
 /**
  * Sets up a mock WebSocket server that intercepts the app's WS connection.
  * Returns helpers to inspect client messages and push server messages.
@@ -75,7 +132,10 @@ async function setupMockWs(page: Page) {
   const clientMessages: Array<{ type: string; payload?: unknown }> = [];
   let wsRoute: WebSocketRoute | null = null;
 
-  await page.routeWebSocket(/ws:\/\/localhost(:\d+)?/, (ws) => {
+  // Scoped to the app's game socket path — a bare `ws://localhost` regex also
+  // catches Metro's own dev-server sockets (HMR, remote logging), which speak
+  // an unrelated protocol and would otherwise pollute clientMessages.
+  await page.routeWebSocket(/ws:\/\/localhost(:\d+)?\/ws\?role=player/, (ws) => {
     wsRoute = ws;
     ws.onMessage((raw) => {
       const msg = JSON.parse(raw as string);
@@ -99,8 +159,9 @@ async function setupMockWs(page: Page) {
 }
 
 /**
- * Navigate from ScanScreen → enter code → enter IP → connect.
- * Then join with the given name and wait for the WaitingScreen.
+ * Navigate from ScanScreen → enter code → connect (web connects to this origin
+ * directly, no IP-address step) → device IDENTIFY/IDENTITY handshake → join
+ * with the given name and wait for the WaitingScreen.
  */
 async function joinGame(
   page: Page,
@@ -109,13 +170,21 @@ async function joinGame(
 ) {
   await page.goto('/');
 
-  // ScanScreen: enter room code and advance
+  // Force English regardless of the test machine's default locale, so this
+  // suite is deterministic across environments (the app defaults to the
+  // browser's detected language, which isn't English everywhere).
+  await page.getByText('EN', { exact: true }).click();
+
+  // ScanScreen: enter room code and connect. On web this connects straight to
+  // this origin (see ScanScreen.tsx's handleManualConnect) — there's no
+  // separate IP-address step.
   await page.getByPlaceholder('XXXX').fill('TEST');
   await page.getByText('Next').click();
 
-  // IP screen: leave blank (localhost), click Connect
-  await expect(page.getByPlaceholder('localhost or 192.168.x.x')).toBeVisible();
-  await page.getByText('Connect').click();
+  // The client identifies its device before joining.
+  await helpers.waitForMessages(1);
+  expect(helpers.clientMessages[0]).toEqual(expect.objectContaining({ type: 'IDENTIFY' }));
+  helpers.sendToClient(IDENTITY_MSG);
 
   // JoinScreen: enter name, click the Join Game *button* (not the title).
   // "Join Game" appears twice: once as the screen title, once as the button text.
@@ -124,9 +193,9 @@ async function joinGame(
   await page.getByPlaceholder('Your name').fill(playerName);
   await page.getByText('Join Game').last().click();
 
-  // Verify JOIN was sent
-  await helpers.waitForMessages(1);
-  expect(helpers.clientMessages[0]).toEqual(
+  // Verify JOIN was sent (message 0 was IDENTIFY, so JOIN is message 1)
+  await helpers.waitForMessages(2);
+  expect(helpers.clientMessages[1]).toEqual(
     expect.objectContaining({
       type: 'JOIN',
       payload: expect.objectContaining({ name: playerName }),
@@ -207,7 +276,7 @@ test.describe('Question submission flow', () => {
 
     // Submit Tokyo (A)
     await page.getByText('Tokyo').click();
-    await waitForMessages(2); // JOIN + ANSWER
+    await waitForMessages(3); // IDENTIFY + JOIN + ANSWER
 
     sendToClient(ANSWER_ACK_MSG('q1'));
     await expect(page.getByText('Answer submitted!')).toBeVisible({ timeout: 5000 });
@@ -255,5 +324,103 @@ test.describe('Question submission flow', () => {
     // Old options from round 1 should not be visible
     await expect(page.getByText('Tokyo')).not.toBeVisible();
     await expect(page.getByText('Osaka')).not.toBeVisible();
+  });
+});
+
+test.describe('New question types', () => {
+  test('true_false renders TRUE/FALSE tiles and submits answer A on TRUE tap', async ({ page }) => {
+    const helpers = await setupMockWs(page);
+    const { clientMessages, sendToClient, waitForMessages } = helpers;
+
+    await joinGame(page, helpers, 'PlayerTF');
+
+    sendToClient(TRUE_FALSE_QUESTION_MSG);
+
+    await expect(page.getByText('TRUE', { exact: true })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('FALSE', { exact: true })).toBeVisible();
+
+    const msgCountBefore = clientMessages.length;
+    await page.getByText('TRUE', { exact: true }).click();
+
+    await waitForMessages(msgCountBefore + 1);
+    const answerMsg = clientMessages[clientMessages.length - 1];
+    expect(answerMsg).toEqual({
+      type: 'ANSWER',
+      payload: { questionId: 'q-tf', answer: 'A' },
+    });
+  });
+
+  test('closest_wins renders the guess UI and locks in a numeric guess (no answer field)', async ({
+    page,
+  }) => {
+    const helpers = await setupMockWs(page);
+    const { clientMessages, sendToClient, waitForMessages } = helpers;
+
+    await joinGame(page, helpers, 'PlayerCW');
+
+    sendToClient(CLOSEST_WINS_QUESTION_MSG);
+
+    await expect(page.getByText('How many teeth does a snail have?')).toBeVisible({
+      timeout: 5000,
+    });
+    await expect(page.getByText('Lock it in', { exact: true })).toBeVisible();
+
+    const msgCountBefore = clientMessages.length;
+    await page.getByText('Lock it in', { exact: true }).click();
+
+    await waitForMessages(msgCountBefore + 1);
+    const guessMsg = clientMessages[clientMessages.length - 1] as {
+      type: string;
+      payload: { questionId: string; guess?: number; answer?: unknown };
+    };
+    expect(guessMsg.type).toBe('ANSWER');
+    expect(guessMsg.payload.questionId).toBe('q-cw');
+    expect(typeof guessMsg.payload.guess).toBe('number');
+    expect(guessMsg.payload.answer).toBeUndefined();
+
+    await expect(page.getByText('Locked in', { exact: true })).toBeVisible({ timeout: 5000 });
+  });
+
+  test('predict_room sends vote then prediction, never a third message on re-tap', async ({
+    page,
+  }) => {
+    const helpers = await setupMockWs(page);
+    const { clientMessages, sendToClient, waitForMessages } = helpers;
+
+    await joinGame(page, helpers, 'PlayerPR');
+
+    sendToClient(PREDICT_ROOM_QUESTION_MSG);
+
+    await expect(page.getByText('What do YOU pick?')).toBeVisible({ timeout: 5000 });
+
+    // Step 1: vote — flips to step 2 without needing a server ack.
+    const msgCountBeforeVote = clientMessages.length;
+    await page.getByText('Pepperoni', { exact: true }).click();
+
+    await waitForMessages(msgCountBeforeVote + 1);
+    const voteMsg = clientMessages[clientMessages.length - 1];
+    expect(voteMsg).toEqual({
+      type: 'ANSWER',
+      payload: { questionId: 'q-pr', vote: 'B' },
+    });
+
+    await expect(page.getByText('What will the ROOM pick?')).toBeVisible({ timeout: 5000 });
+
+    // Step 2: predict.
+    const msgCountBeforePrediction = clientMessages.length;
+    await page.getByText('Pepperoni', { exact: true }).click();
+
+    await waitForMessages(msgCountBeforePrediction + 1);
+    const predictionMsg = clientMessages[clientMessages.length - 1];
+    expect(predictionMsg).toEqual({
+      type: 'ANSWER',
+      payload: { questionId: 'q-pr', prediction: 'B' },
+    });
+
+    // Re-tapping after the one-shot prediction must not send a third message.
+    const msgCountAfterPrediction = clientMessages.length;
+    await page.getByText('Pineapple', { exact: true }).click();
+    await page.waitForTimeout(500);
+    expect(clientMessages.length).toBe(msgCountAfterPrediction);
   });
 });

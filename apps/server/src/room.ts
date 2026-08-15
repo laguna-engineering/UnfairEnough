@@ -11,6 +11,7 @@ import {
 import { debugLog } from '@unfairenough/shared';
 import type {
   AnswerKey,
+  AnswerPayload,
   ClientMessage,
   IdentityPayload,
   MediaPreviewPayload,
@@ -23,7 +24,11 @@ import type {
   StateSnapshotPayload,
   WelcomePayload,
 } from '@unfairenough/ws-protocol';
-import { generatePlayerId, parseClientMessage } from '@unfairenough/ws-protocol';
+import {
+  generatePlayerId,
+  isValidAnswerPayloadForType,
+  parseClientMessage,
+} from '@unfairenough/ws-protocol';
 import type { ServerWebSocket } from 'bun';
 import {
   buildQuestionPool,
@@ -32,11 +37,14 @@ import {
   limitPicturesPerAnswerYear,
   selectNextQuestion,
 } from '../../../packages/game-logic/src/utils/questionSelection';
+import { resolvePollWinners } from '../../../packages/game-logic/src/utils/questionTypes';
 import {
+  calculateClosestScore,
   calculateScore,
   computeLifetimeHandicap,
   computeSpeedBonusMultiplier,
   computeTimeBonusMultiplier,
+  PREDICT_POINTS,
   rankPlayers,
 } from '../../../packages/game-logic/src/utils/scoring';
 import {
@@ -100,6 +108,18 @@ interface PlayerAnswer {
   serverReceivedAt: number;
 }
 
+/** closest_wins: one player's locked-in numeric guess. */
+interface PlayerGuess {
+  guess: number;
+  serverReceivedAt: number;
+}
+
+/** predict_room: one player's vote or prediction submission. */
+interface PlayerPollSubmission {
+  key: AnswerKey;
+  serverReceivedAt: number;
+}
+
 /** In-memory guest session: maps token hash → { hostId, roomCode } */
 const guestSessions = new Map<string, { hostId: string; roomCode: string }>();
 
@@ -134,6 +154,12 @@ export class GameRoom {
   private activeQuestion: QuestionWithMeta | null = null;
   private questionStartTime = 0;
   private answers = new Map<string, PlayerAnswer>();
+  // closest_wins / predict_room submissions — cleared alongside `answers` whenever
+  // a new question starts. Keyed by playerId; predict_room needs both maps
+  // populated for a player before they count as "done" (R11).
+  private guesses = new Map<string, PlayerGuess>();
+  private votes = new Map<string, PlayerPollSubmission>();
+  private predictions = new Map<string, PlayerPollSubmission>();
   private positionHistory: PositionSnapshot[] = [];
   private gameId: string | null = null;
   private lastRoundResult: RoundResult | null = null;
@@ -445,6 +471,9 @@ export class GameRoom {
           type: message.type,
           questionId: message.payload.questionId,
           answer: message.payload.answer,
+          guess: message.payload.guess,
+          vote: message.payload.vote,
+          prediction: message.payload.prediction,
         };
       case 'UNBIND':
         return { type: message.type, hasDeviceId: !!message.payload.deviceId };
@@ -503,7 +532,7 @@ export class GameRoom {
         break;
       }
       case 'ANSWER': {
-        this.handleAnswer(ws, message.payload.questionId, message.payload.answer);
+        this.handleAnswerPayload(ws, message.payload);
         break;
       }
       case 'PING': {
@@ -638,10 +667,29 @@ export class GameRoom {
       case 'QUESTION':
       case 'REVEALING': {
         const q = this.getCurrentQuestion();
+        const question = q ? this.buildQuestionPayload(q) : undefined;
+
+        if (q?.type === 'closest_wins') {
+          const g = this.guesses.get(player.playerId);
+          return { phase, question, hasAnswered: !!g, yourGuess: g?.guess };
+        }
+
+        if (q?.type === 'predict_room') {
+          const v = this.votes.get(player.playerId);
+          const p = this.predictions.get(player.playerId);
+          return {
+            phase,
+            question,
+            hasAnswered: !!v && !!p,
+            yourVote: v?.key,
+            yourPrediction: p?.key,
+          };
+        }
+
         const answer = this.answers.get(player.playerId);
         return {
           phase,
-          question: q ? this.buildQuestionPayload(q) : undefined,
+          question,
           hasAnswered: !!answer,
           yourAnswer: answer?.answer,
         };
@@ -708,6 +756,7 @@ export class GameRoom {
         ? { type: q.media.type, url: q.media.url, previewDuration: q.media.previewDuration }
         : undefined,
       audio: q.audio ?? undefined,
+      range: q.range,
     };
   }
 
@@ -1110,6 +1159,9 @@ export class GameRoom {
     this.phase = 'QUESTION';
     this.mediaPreviewEndsAt = 0;
     this.answers.clear();
+    this.guesses.clear();
+    this.votes.clear();
+    this.predictions.clear();
     this.questionStartTime = Date.now();
 
     const tags = !q.hideTags && q.tags.length > 0 ? q.tags : undefined;
@@ -1128,6 +1180,7 @@ export class GameRoom {
         ? { type: q.media.type, url: q.media.url, previewDuration: q.media.previewDuration }
         : undefined,
       audio: q.audio ?? undefined,
+      range: q.range,
     };
 
     this.broadcast({ type: 'QUESTION', payload });
@@ -1152,17 +1205,39 @@ export class GameRoom {
       if (remaining <= 0) {
         this.endQuestion();
       } else {
-        // Check if all connected players answered
-        if (this.allConnectedPlayersAnswered()) {
+        // Check if all connected players have submitted everything this
+        // question's type needs
+        if (this.allConnectedPlayersDone()) {
           this.endQuestion();
         }
       }
     }, 1000);
   }
 
-  private allConnectedPlayersAnswered(): boolean {
+  /**
+   * Whether every connected player has submitted everything the active
+   * question's type needs: an `answer` for choice types, a `guess` for
+   * closest_wins, or both a `vote` and a `prediction` for predict_room (R11) —
+   * ends the round early instead of waiting out the full timer.
+   */
+  private allConnectedPlayersDone(): boolean {
     const connected = this.connectedPlayerCount;
-    return connected > 0 && this.answers.size >= connected;
+    if (connected === 0) return false;
+
+    const type = this.activeQuestion?.type;
+    if (type === 'closest_wins') {
+      return this.guesses.size >= connected;
+    }
+    if (type === 'predict_room') {
+      for (const player of this.players.values()) {
+        if (!player.isConnected) continue;
+        if (!this.votes.has(player.playerId) || !this.predictions.has(player.playerId)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    return this.answers.size >= connected;
   }
 
   private async handleIdentify(
@@ -1299,6 +1374,148 @@ export class GameRoom {
     await this.handleIdentify(ws, deviceId);
   }
 
+  /**
+   * Route a structurally-valid ANSWER payload (parseClientMessage already
+   * guarantees exactly one of answer/guess/vote/prediction is set) by the
+   * active question's type. isValidAnswerPayloadForType rejects a payload
+   * shape that doesn't match the active question — e.g. a `guess` sent while
+   * a multiple_choice question is live.
+   */
+  private handleAnswerPayload(ws: ServerWebSocket<WSData>, payload: AnswerPayload): void {
+    const q = this.getCurrentQuestion();
+    if (!isValidAnswerPayloadForType(q?.type, payload)) return;
+
+    switch (q?.type) {
+      case 'closest_wins':
+        if (payload.guess !== undefined) {
+          this.handleGuess(ws, payload.questionId, payload.guess);
+        }
+        return;
+      case 'predict_room':
+        if (payload.vote !== undefined) {
+          this.handleVote(ws, payload.questionId, payload.vote);
+        } else if (payload.prediction !== undefined) {
+          this.handlePrediction(ws, payload.questionId, payload.prediction);
+        }
+        return;
+      default:
+        if (payload.answer !== undefined) {
+          this.handleAnswer(ws, payload.questionId, payload.answer);
+        }
+    }
+  }
+
+  /** closest_wins: one immutable numeric guess per player (R4/R6). */
+  private handleGuess(ws: ServerWebSocket<WSData>, questionId: string, guess: number): void {
+    if (this.phase !== 'QUESTION') return;
+    const q = this.getCurrentQuestion();
+    if (!q || q.id !== questionId || q.type !== 'closest_wins') return;
+
+    const playerId = ws.data.playerId;
+    if (!playerId || this.guesses.has(playerId)) return;
+
+    const serverReceivedAt = Date.now();
+    this.guesses.set(playerId, { guess, serverReceivedAt });
+
+    this.logEvent('ANSWER_RECEIVED', playerId, {
+      questionId,
+      guess,
+      responseTimeMs: serverReceivedAt - this.questionStartTime,
+    });
+
+    this.sendTo(ws, {
+      type: 'ANSWER_ACK',
+      payload: { questionId, serverReceivedAt, field: 'guess' },
+    });
+
+    // TV only shows a lock-in count, never the value (R7).
+    this.sendToHost({
+      type: 'PLAYER_ANSWERED',
+      payload: { playerId, questionId, kind: 'guess' },
+    });
+
+    if (this.allConnectedPlayersDone()) {
+      this.endQuestion();
+    }
+  }
+
+  /** predict_room: one immutable vote per player, unscored input (R11/KD5). */
+  private handleVote(ws: ServerWebSocket<WSData>, questionId: string, vote: AnswerKey): void {
+    if (this.phase !== 'QUESTION') return;
+    const q = this.getCurrentQuestion();
+    if (!q || q.id !== questionId || q.type !== 'predict_room') return;
+
+    const playerId = ws.data.playerId;
+    if (!playerId || this.votes.has(playerId)) return;
+
+    const serverReceivedAt = Date.now();
+    this.votes.set(playerId, { key: vote, serverReceivedAt });
+
+    // Votes are anonymous to every client by product requirement (R13) — this
+    // logEvent call is server-side only (same as correctAnswer logging today)
+    // and never reaches a broadcast/snapshot payload.
+    this.logEvent('ANSWER_RECEIVED', playerId, {
+      questionId,
+      vote,
+      responseTimeMs: serverReceivedAt - this.questionStartTime,
+    });
+
+    this.sendTo(ws, {
+      type: 'ANSWER_ACK',
+      payload: { questionId, serverReceivedAt, field: 'vote' },
+    });
+
+    this.sendToHost({
+      type: 'PLAYER_ANSWERED',
+      payload: { playerId, questionId, kind: 'vote' },
+    });
+
+    if (this.allConnectedPlayersDone()) {
+      this.endQuestion();
+    }
+  }
+
+  /**
+   * predict_room: one immutable prediction per player, submitted after the
+   * player's own vote (R11) — rejects a prediction from a player who hasn't
+   * voted yet.
+   */
+  private handlePrediction(
+    ws: ServerWebSocket<WSData>,
+    questionId: string,
+    prediction: AnswerKey,
+  ): void {
+    if (this.phase !== 'QUESTION') return;
+    const q = this.getCurrentQuestion();
+    if (!q || q.id !== questionId || q.type !== 'predict_room') return;
+
+    const playerId = ws.data.playerId;
+    if (!playerId || !this.votes.has(playerId) || this.predictions.has(playerId)) return;
+
+    const serverReceivedAt = Date.now();
+    this.predictions.set(playerId, { key: prediction, serverReceivedAt });
+
+    this.logEvent('ANSWER_RECEIVED', playerId, {
+      questionId,
+      prediction,
+      responseTimeMs: serverReceivedAt - this.questionStartTime,
+    });
+
+    this.sendTo(ws, {
+      type: 'ANSWER_ACK',
+      payload: { questionId, serverReceivedAt, field: 'prediction' },
+    });
+
+    this.sendToHost({
+      type: 'PLAYER_ANSWERED',
+      payload: { playerId, questionId, kind: 'prediction' },
+    });
+
+    if (this.allConnectedPlayersDone()) {
+      this.endQuestion();
+    }
+  }
+
   private handleAnswer(ws: ServerWebSocket<WSData>, questionId: string, answer: AnswerKey): void {
     if (this.phase !== 'QUESTION') {
       this.logEvent('ANSWER_RECEIVED', ws.data.playerId ?? null, {
@@ -1348,7 +1565,7 @@ export class GameRoom {
     });
 
     // Check if all connected players answered
-    if (this.allConnectedPlayersAnswered()) {
+    if (this.allConnectedPlayersDone()) {
       this.endQuestion();
     }
   }
@@ -1372,6 +1589,88 @@ export class GameRoom {
       return;
     }
 
+    // Dispatch scoring by question type (R3/R8/R12): choice types keep the
+    // existing time-bonus/catch-up/difficulty machinery; closest_wins and
+    // predict_room score by proximity/prediction only, with no multipliers.
+    const roundResult =
+      q.type === 'closest_wins'
+        ? this.resolveClosestWinsRound(q)
+        : q.type === 'predict_room'
+          ? this.resolvePredictRoomRound(q)
+          : this.resolveChoiceRound(q);
+
+    // Compute rankings for this round
+    const rankings = this.buildRankings();
+    roundResult.rankings = rankings;
+
+    // Track position history
+    this.positionHistory.push({
+      round: this.currentQuestionIndex + 1,
+      positions: rankings.map((r) => ({
+        playerId: r.playerId,
+        name: r.name,
+        rank: r.rank,
+        score: r.score,
+      })),
+    });
+
+    this.phase = 'RESULTS';
+    this.lastRoundResult = roundResult;
+
+    this.broadcast({ type: 'ROUND_END', payload: roundResult });
+
+    // Track question usage (fire-and-forget) — applies to every question type
+    questionsRepo
+      .markQuestionAsked(this.db, q.id)
+      .catch((err) => console.error('Failed to update question usage:', err));
+
+    // Record round results (configured games only)
+    if (this.gameId) {
+      const gameId = this.gameId;
+      const roundNumber = this.currentQuestionIndex + 1;
+      const playerResults = roundResult.playerResults;
+      const roundResults: Parameters<typeof gamesRepo.insertRoundResults>[2] = playerResults.map(
+        (pr) => {
+          const playerRanking = rankings.find((r) => r.playerId === pr.playerId);
+          const player = this.players.get(pr.playerId);
+          return {
+            questionId: q.id,
+            roundNumber,
+            playerId: pr.playerId,
+            playerName: pr.name,
+            answer: pr.answer,
+            isCorrect: pr.isCorrect,
+            responseTimeMs: pr.responseTimeMs,
+            pointsEarned: pr.pointsEarned,
+            totalScore: pr.totalScore,
+            rank: playerRanking?.rank ?? 0,
+            profileId: player?.profileId ?? null,
+          };
+        },
+      );
+      gamesRepo
+        .insertRoundResults(this.db, gameId, roundResults)
+        .catch((err) => console.error('Failed to insert round results:', err));
+
+      // Update tag-ELO scores for profiled players (skip for personalized
+      // non-adaptive, and skip entirely for closest_wins/predict_room — R16:
+      // these types are knowledge-free, so they carry no difficulty signal).
+      const hasTagSignal = q.type !== 'closest_wins' && q.type !== 'predict_room';
+      if (hasTagSignal && (this.gameType !== 'personalized' || this.adaptiveMode)) {
+        this.updateTagScoresAfterRound(q, playerResults).catch((err) =>
+          console.error('Failed to update tag scores:', err),
+        );
+      }
+    }
+
+    this.resultsTimeout = setTimeout(() => {
+      this.resultsTimeout = null;
+      this.advanceWhenPreloadReady();
+    }, RESULTS_DELAY_MS);
+  }
+
+  /** Choice types (multiple_choice, true_false): existing scoring, unchanged. */
+  private resolveChoiceRound(q: QuestionWithMeta): RoundResult {
     const correctAnswer = q.correctAnswer as AnswerKey;
     const timeLimit = this.configuredTimeLimit ?? q.timeLimit ?? DEFAULT_QUESTION_TIME_LIMIT;
 
@@ -1439,78 +1738,132 @@ export class GameRoom {
       });
     }
 
-    // Compute rankings for this round
-    const rankings = this.buildRankings();
-
-    // Track position history
-    this.positionHistory.push({
-      round: this.currentQuestionIndex + 1,
-      positions: rankings.map((r) => ({
-        playerId: r.playerId,
-        name: r.name,
-        rank: r.rank,
-        score: r.score,
-      })),
-    });
-
-    this.phase = 'RESULTS';
-
-    const roundResult: RoundResult = {
+    return {
       questionId: q.id,
       correctAnswer,
       tags: q.tags.length > 0 ? q.tags : undefined,
       questionDifficulty: q.difficulty ?? 3,
       playerResults,
-      rankings,
+      questionType: q.type,
     };
-    this.lastRoundResult = roundResult;
+  }
 
-    this.broadcast({ type: 'ROUND_END', payload: roundResult });
+  /**
+   * closest_wins: score every submitted guess by proximity only (KD4/R8) — no
+   * time bonus, no catch-up/difficulty/lifetime multipliers, so equal
+   * distances always earn equal points (AE2). `isClosest` flags every guess
+   * tied for the minimum distance; a player who never guessed scores 0.
+   */
+  private resolveClosestWinsRound(q: QuestionWithMeta): RoundResult {
+    const correctValue = q.correctValue ?? 0;
+    const min = q.range?.min ?? 0;
+    const max = q.range?.max ?? 0;
 
-    // Track question usage (fire-and-forget)
-    questionsRepo
-      .markQuestionAsked(this.db, q.id)
-      .catch((err) => console.error('Failed to update question usage:', err));
-
-    // Record round results and update tag scores (configured games only)
-    if (this.gameId) {
-      const gameId = this.gameId;
-      const roundNumber = this.currentQuestionIndex + 1;
-      const roundResults: Parameters<typeof gamesRepo.insertRoundResults>[2] = playerResults.map(
-        (pr) => {
-          const playerRanking = rankings.find((r) => r.playerId === pr.playerId);
-          const player = this.players.get(pr.playerId);
-          return {
-            questionId: q.id,
-            roundNumber,
-            playerId: pr.playerId,
-            playerName: pr.name,
-            answer: pr.answer,
-            isCorrect: pr.isCorrect,
-            responseTimeMs: pr.responseTimeMs,
-            pointsEarned: pr.pointsEarned,
-            totalScore: pr.totalScore,
-            rank: playerRanking?.rank ?? 0,
-            profileId: player?.profileId ?? null,
-          };
-        },
-      );
-      gamesRepo
-        .insertRoundResults(this.db, gameId, roundResults)
-        .catch((err) => console.error('Failed to insert round results:', err));
-
-      // Update tag scores for profiled players (skip for personalized non-adaptive)
-      if (this.gameType !== 'personalized' || this.adaptiveMode) {
-        this.updateTagScoresAfterRound(q, playerResults).catch((err) =>
-          console.error('Failed to update tag scores:', err),
-        );
-      }
+    let minDistance = Infinity;
+    const distanceByPlayer = new Map<string, number>();
+    for (const [playerId, g] of this.guesses) {
+      const { distance } = calculateClosestScore(g.guess, correctValue, min, max);
+      distanceByPlayer.set(playerId, distance);
+      if (distance < minDistance) minDistance = distance;
     }
 
-    this.resultsTimeout = setTimeout(() => {
-      this.resultsTimeout = null;
-      this.advanceWhenPreloadReady();
-    }, RESULTS_DELAY_MS);
+    const playerResults: PlayerResult[] = [];
+    for (const player of this.players.values()) {
+      const g = this.guesses.get(player.playerId);
+      let pointsEarned = 0;
+      let distance: number | undefined;
+      let isClosest = false;
+
+      if (g) {
+        const scored = calculateClosestScore(g.guess, correctValue, min, max);
+        distance = scored.distance;
+        pointsEarned = scored.points;
+        isClosest = distance === minDistance;
+      }
+
+      if (pointsEarned > 0) {
+        player.score += pointsEarned;
+      }
+
+      playerResults.push({
+        playerId: player.playerId,
+        name: player.name,
+        answer: null,
+        isCorrect: isClosest,
+        responseTimeMs: g ? g.serverReceivedAt - this.questionStartTime : null,
+        baseScore: pointsEarned,
+        difficultyMultiplier: 1,
+        pointsEarned,
+        totalScore: player.score,
+        guess: g?.guess ?? null,
+        distance,
+        isClosest,
+      });
+    }
+
+    return {
+      questionId: q.id,
+      correctAnswer: null,
+      tags: q.tags.length > 0 ? q.tags : undefined,
+      questionDifficulty: q.difficulty ?? 3,
+      playerResults,
+      questionType: q.type,
+      correctValue,
+    };
+  }
+
+  /**
+   * predict_room: only the prediction scores (KD5/R12) — the vote is
+   * unscored input, tallied anonymously into `voteCounts`. A tie for the
+   * most votes means every prediction of a tied option counts (R12/AE4). A
+   * player who voted but never predicted (timeout) scores 0 (R11/AE3).
+   */
+  private resolvePredictRoomRound(q: QuestionWithMeta): RoundResult {
+    const voteCounts: Partial<Record<AnswerKey, number>> = {};
+    for (const { key } of this.votes.values()) {
+      voteCounts[key] = (voteCounts[key] ?? 0) + 1;
+    }
+    const winningOptions = resolvePollWinners(voteCounts);
+
+    const playerResults: PlayerResult[] = [];
+    for (const player of this.players.values()) {
+      const predictionEntry = this.predictions.get(player.playerId);
+      const prediction = predictionEntry?.key ?? null;
+      const predictedCorrectly = prediction !== null && winningOptions.includes(prediction);
+      const pointsEarned = predictedCorrectly ? PREDICT_POINTS : 0;
+
+      if (pointsEarned > 0) {
+        player.score += pointsEarned;
+      }
+
+      const submittedAt =
+        predictionEntry?.serverReceivedAt ?? this.votes.get(player.playerId)?.serverReceivedAt;
+
+      playerResults.push({
+        playerId: player.playerId,
+        name: player.name,
+        answer: null,
+        isCorrect: predictedCorrectly,
+        responseTimeMs: submittedAt !== undefined ? submittedAt - this.questionStartTime : null,
+        baseScore: pointsEarned,
+        difficultyMultiplier: 1,
+        pointsEarned,
+        totalScore: player.score,
+        prediction,
+        predictedCorrectly,
+      });
+    }
+
+    return {
+      questionId: q.id,
+      correctAnswer: null,
+      tags: q.tags.length > 0 ? q.tags : undefined,
+      questionDifficulty: q.difficulty ?? 3,
+      playerResults,
+      questionType: q.type,
+      voteCounts,
+      winningOptions,
+    };
   }
 
   /**
@@ -1795,6 +2148,9 @@ export class GameRoom {
     this.usedQuestionIds.clear();
     this.currentQuestionIndex = 0;
     this.answers.clear();
+    this.guesses.clear();
+    this.votes.clear();
+    this.predictions.clear();
     this.positionHistory = [];
     this.activeQuestion = null;
     this.gameId = null;

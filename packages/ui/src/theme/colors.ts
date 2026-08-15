@@ -36,6 +36,10 @@ export const colors = {
   segTrack: d.segTrack,
   accentSoft: d.accentSoft,
   accentInk: d.accentInk,
+
+  // Question-type accent (predict-the-room badge). Palette 1 has no purple;
+  // lavender is the closest swatch and matches the player-color set.
+  accentLavender: '#B79CFF',
 };
 
 export const gradients = {

@@ -16,7 +16,10 @@ export {
   type GameConfig,
   type GamePhase,
   nextQuestion,
+  type Prediction,
   receiveAnswer,
+  receivePrediction,
+  receiveVote,
   resetGame,
   setConfigError,
   setCountdown,
@@ -57,9 +60,20 @@ export {
   type SelectableQuestion,
   selectNextQuestion,
 } from './utils/questionSelection';
+export {
+  defaultGuessStep,
+  FALSE_KEY,
+  resolvePollWinners,
+  TRUE_KEY,
+  trueFalseCorrectKey,
+  trueFalseOptions,
+} from './utils/questionTypes';
 // Utilities
 export {
   BASE_POINTS,
+  CLOSEST_FLOOR_POINTS,
+  CLOSEST_MAX_POINTS,
+  calculateClosestScore,
   calculateScore,
   computeCatchUpInfluence,
   computeLifetimeHandicap,
@@ -68,6 +82,7 @@ export {
   getPositionSuffix,
   MAX_TIME_BONUS,
   type PlayerScore,
+  PREDICT_POINTS,
   type RankedPlayer,
   rankPlayers,
   type ScoreBreakdown,

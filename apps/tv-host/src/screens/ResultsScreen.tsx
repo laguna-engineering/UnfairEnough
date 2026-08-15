@@ -10,10 +10,14 @@ import {
   typography,
   useTheme,
 } from '@unfairenough/ui';
+import type { AnswerKey } from '@unfairenough/ws-protocol';
 import type React from 'react';
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useGameController } from '../hooks/useGameController';
+import { ClosestWinsResults } from './questionTypes/ClosestWinsResults';
+import { PredictRoomResults } from './questionTypes/PredictRoomResults';
+import { TwoChoiceResults } from './questionTypes/TwoChoiceResults';
 
 // Past this many players a single column risks running off the bottom of the
 // (auto-advancing, non-scrollable) results screen, so we split into two columns.
@@ -23,8 +27,18 @@ export const ResultsScreen: React.FC = () => {
   const { t } = useTranslation();
   const { theme } = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
-  const { state, currentQuestion, roundResults, roundTags, rankings, positionHistory } =
-    useGameController();
+  const {
+    state,
+    currentQuestion,
+    roundResults,
+    roundTags,
+    rankings,
+    positionHistory,
+    roundQuestionType,
+    roundCorrectValue,
+    roundVoteCounts,
+    roundWinningOptions,
+  } = useGameController();
 
   const players = playersSelectors.selectAll(state.players);
 
@@ -56,9 +70,51 @@ export const ResultsScreen: React.FC = () => {
 
   if (!currentQuestion) return null;
 
+  const showRankChange = positionHistory.length > 1;
+  const questionType = roundQuestionType ?? currentQuestion.type ?? 'multiple_choice';
+
+  if (questionType === 'closest_wins') {
+    return (
+      <ClosestWinsResults
+        question={currentQuestion}
+        playerResults={roundResults}
+        players={players}
+        correctValue={roundCorrectValue ?? 0}
+        rankings={rankings}
+      />
+    );
+  }
+
+  if (questionType === 'predict_room') {
+    return (
+      <PredictRoomResults
+        question={currentQuestion}
+        playerResults={roundResults}
+        players={players}
+        voteCounts={roundVoteCounts ?? {}}
+        winningOptions={roundWinningOptions ?? []}
+      />
+    );
+  }
+
+  if (questionType === 'true_false' || currentQuestion.options.length === 2) {
+    const correctAnswer = (state.game.correctAnswer ?? currentQuestion.options[0]?.key) as
+      | AnswerKey
+      | undefined;
+    if (!correctAnswer) return null;
+    return (
+      <TwoChoiceResults
+        question={currentQuestion}
+        correctAnswer={correctAnswer}
+        playerResults={roundResults}
+        leaderboardEntries={leaderboardEntries}
+        showRankChange={showRankChange}
+      />
+    );
+  }
+
   const correctAnswer = state.game.correctAnswer ?? currentQuestion.options[0]?.key;
 
-  const showRankChange = positionHistory.length > 1;
   const twoColumns = leaderboardEntries.length > TWO_COLUMN_THRESHOLD;
   const splitIndex = Math.ceil(leaderboardEntries.length / 2);
   const firstColumn = twoColumns ? leaderboardEntries.slice(0, splitIndex) : leaderboardEntries;

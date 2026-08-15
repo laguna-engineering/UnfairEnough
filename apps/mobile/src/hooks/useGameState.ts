@@ -49,6 +49,10 @@ export function useGameState() {
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<AnswerKey | null>(null);
   const [confirmedAnswer, setConfirmedAnswer] = useState<AnswerKey | null>(null);
+  // closest_wins / predict_room one-shot submissions. Reset per question, like confirmedAnswer.
+  const [confirmedGuess, setConfirmedGuess] = useState<number | null>(null);
+  const [confirmedVote, setConfirmedVote] = useState<AnswerKey | null>(null);
+  const [confirmedPrediction, setConfirmedPrediction] = useState<AnswerKey | null>(null);
   const [roundResult, setRoundResult] = useState<RoundResult | null>(null);
   const [gameResult, setGameResult] = useState<GameResult | null>(null);
   const [mediaPreview, setMediaPreview] = useState<MediaPreviewPayload | null>(null);
@@ -59,6 +63,9 @@ export function useGameState() {
   const [error, setError] = useState<string | null>(null);
   const languageOverridden = useRef(false);
   const connectAttemptRef = useRef(0);
+  // Which ANSWER field is awaiting its ACK. predict_room's vote ack should not
+  // flip the phase to ANSWERED — the player still owes a prediction (step 2).
+  const pendingAckFieldRef = useRef<'answer' | 'guess' | 'vote' | 'prediction' | null>(null);
 
   const getOrInitDeviceId = useCallback(async (): Promise<string | null> => {
     const cachedDeviceId = getDeviceId();
@@ -169,6 +176,13 @@ export function useGameState() {
             setCurrentQuestion(snap.question);
             setTimeRemaining(snap.question.timeLimit);
             setMediaPreview(null);
+            // The snapshot only carries yourAnswer (choice types); closest_wins/
+            // predict_room submissions aren't restored on reconnect — same as
+            // today's behavior for those fields, just not crashing on them.
+            setConfirmedGuess(null);
+            setConfirmedVote(null);
+            setConfirmedPrediction(null);
+            pendingAckFieldRef.current = null;
             if (snap.hasAnswered || snap.phase === 'REVEALING') {
               // Already answered, or the answer window has closed — show the
               // post-answer waiting state rather than an answerable question.
@@ -216,12 +230,21 @@ export function useGameState() {
         setTimeRemaining(question.timeLimit);
         setSelectedAnswer(null);
         setConfirmedAnswer(null);
+        setConfirmedGuess(null);
+        setConfirmedVote(null);
+        setConfirmedPrediction(null);
+        pendingAckFieldRef.current = null;
         setMediaPreview(null);
       },
       onTick: (remaining) => {
         setTimeRemaining(remaining);
       },
       onAnswerAck: () => {
+        const field = pendingAckFieldRef.current;
+        pendingAckFieldRef.current = null;
+        // predict_room's vote is step 1 of 2 — stay in PLAYING so PlayScreen
+        // renders the prediction step instead of the post-answer waiting state.
+        if (field === 'vote') return;
         setPhase('ANSWERED');
       },
       onRoundEnd: (result) => {
@@ -255,6 +278,10 @@ export function useGameState() {
           setCurrentQuestion(null);
           setSelectedAnswer(null);
           setConfirmedAnswer(null);
+          setConfirmedGuess(null);
+          setConfirmedVote(null);
+          setConfirmedPrediction(null);
+          pendingAckFieldRef.current = null;
           setRoundResult(null);
           setGameResult(null);
           setMediaPreview(null);
@@ -407,9 +434,43 @@ export function useGameState() {
       if (confirmedAnswer || !currentQuestion) return;
       setSelectedAnswer(answer);
       setConfirmedAnswer(answer);
+      pendingAckFieldRef.current = 'answer';
       wsClient.sendAnswer(currentQuestion.id, answer);
     },
     [confirmedAnswer, currentQuestion],
+  );
+
+  /** closest_wins: submit a numeric guess. One-shot, like submitAnswer. */
+  const submitGuess = useCallback(
+    (guess: number) => {
+      if (confirmedGuess !== null || !currentQuestion) return;
+      setConfirmedGuess(guess);
+      pendingAckFieldRef.current = 'guess';
+      wsClient.sendGuess(currentQuestion.id, guess);
+    },
+    [confirmedGuess, currentQuestion],
+  );
+
+  /** predict_room step 1: submit this player's own vote. One-shot. */
+  const submitVote = useCallback(
+    (vote: AnswerKey) => {
+      if (confirmedVote || !currentQuestion) return;
+      setConfirmedVote(vote);
+      pendingAckFieldRef.current = 'vote';
+      wsClient.sendVote(currentQuestion.id, vote);
+    },
+    [confirmedVote, currentQuestion],
+  );
+
+  /** predict_room step 2: submit this player's prediction. One-shot. */
+  const submitPrediction = useCallback(
+    (prediction: AnswerKey) => {
+      if (confirmedPrediction || !currentQuestion) return;
+      setConfirmedPrediction(prediction);
+      pendingAckFieldRef.current = 'prediction';
+      wsClient.sendPrediction(currentQuestion.id, prediction);
+    },
+    [confirmedPrediction, currentQuestion],
   );
 
   const goToJoin = useCallback(() => {
@@ -421,6 +482,10 @@ export function useGameState() {
     setCurrentQuestion(null);
     setSelectedAnswer(null);
     setConfirmedAnswer(null);
+    setConfirmedGuess(null);
+    setConfirmedVote(null);
+    setConfirmedPrediction(null);
+    pendingAckFieldRef.current = null;
     setRoundResult(null);
     setGameResult(null);
     setMediaPreview(null);
@@ -454,6 +519,9 @@ export function useGameState() {
     timeRemaining,
     selectedAnswer,
     confirmedAnswer,
+    confirmedGuess,
+    confirmedVote,
+    confirmedPrediction,
     roundResult,
     gameResult,
     mediaPreview,
@@ -471,6 +539,9 @@ export function useGameState() {
     rejectIdentity,
     goToJoin,
     submitAnswer,
+    submitGuess,
+    submitVote,
+    submitPrediction,
     reset,
     setLanguageOverride,
   };

@@ -101,5 +101,17 @@ export function useGameController() {
     rankings: state.game.rankings,
     positionHistory: state.game.positionHistory,
     gameConfig: state.game.config,
+    // Answered/voted/predicted counts, derived identically in local and hosted
+    // mode: local dispatches the real answer/vote/prediction into the slice,
+    // hosted dispatches a placeholder keyed by PLAYER_ANSWERED's `kind` — either
+    // way the counter is just how many entries landed in each dict.
+    answeredCount: Object.keys(state.game.answers).length,
+    votedCount: Object.keys(state.game.votes).length,
+    predictedCount: Object.keys(state.game.predictions).length,
+    // Round-result extras for the reveal (closest_wins/predict_room).
+    roundQuestionType: state.game.questionType,
+    roundCorrectValue: state.game.correctValue,
+    roundVoteCounts: state.game.voteCounts,
+    roundWinningOptions: state.game.winningOptions,
   };
 }

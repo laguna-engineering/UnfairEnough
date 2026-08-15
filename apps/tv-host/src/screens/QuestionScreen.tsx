@@ -23,12 +23,24 @@ import {
 import { useBgMusicContext } from '../hooks/BgMusicContext';
 import { useGameController } from '../hooks/useGameController';
 import { resolveMediaUrl } from '../utils/mediaUrl';
+import { ClosestWinsQuestion } from './questionTypes/ClosestWinsQuestion';
+import { PredictRoomQuestion } from './questionTypes/PredictRoomQuestion';
+import { TwoChoiceQuestion } from './questionTypes/TwoChoiceQuestion';
 
 export const QuestionScreen: React.FC = () => {
   const { t } = useTranslation();
   const { theme } = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
-  const { state, currentQuestion, countdown, mode, serverUrl } = useGameController();
+  const {
+    state,
+    currentQuestion,
+    countdown,
+    mode,
+    serverUrl,
+    answeredCount,
+    votedCount,
+    predictedCount,
+  } = useGameController();
   const { pause, resume } = useBgMusicContext();
 
   // Long questions wrap to 3+ lines at the default h1 size, which grows the card
@@ -77,7 +89,43 @@ export const QuestionScreen: React.FC = () => {
   if (!currentQuestion) return null;
 
   const totalPlayers = playersSelectors.selectTotal(state.players);
-  const answeredCount = Object.keys(state.game.answers).length;
+
+  if (currentQuestion.type === 'closest_wins') {
+    const players = playersSelectors.selectAll(state.players);
+    return (
+      <ClosestWinsQuestion
+        question={currentQuestion}
+        countdown={countdown}
+        lockedInCount={answeredCount}
+        totalPlayers={totalPlayers}
+        players={players}
+        lockedInIds={new Set(Object.keys(state.game.answers))}
+      />
+    );
+  }
+
+  if (currentQuestion.type === 'predict_room') {
+    return (
+      <PredictRoomQuestion
+        question={currentQuestion}
+        countdown={countdown}
+        votedCount={votedCount}
+        predictedCount={predictedCount}
+        totalPlayers={totalPlayers}
+      />
+    );
+  }
+
+  if (currentQuestion.type === 'true_false' || currentQuestion.options.length === 2) {
+    return (
+      <TwoChoiceQuestion
+        question={currentQuestion}
+        countdown={countdown}
+        answeredCount={answeredCount}
+        totalPlayers={totalPlayers}
+      />
+    );
+  }
 
   return (
     <ScreenBackground style={styles.container}>

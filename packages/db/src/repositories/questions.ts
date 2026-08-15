@@ -8,9 +8,20 @@ import type {
   QuestionWithMeta,
 } from '../schema';
 import { hostScope } from '../utils';
+import { trueFalseCorrectKey, trueFalseOptions } from './questionTypeNormalization';
 
+/**
+ * Normalize a raw row into the shape game code always sees, regardless of how
+ * the type-specific data is actually stored:
+ * - true_false: synthesizes the True/False options and maps `correctAnswer`
+ *   ('true'/'false') to the tile key ('A'/'B') game code compares against.
+ * - closest_wins: empty `options`, numeric `correctValue`, and `range` read
+ *   from the range_* columns (correct_answer holds the decimal string).
+ * - predict_room: keeps its authored options; `correctAnswer` is '' (no
+ *   correct choice — only predictions score).
+ */
 function rowToQuestionWithMeta(row: QuestionRow): QuestionWithMeta {
-  return {
+  const base = {
     id: row.id,
     setId: row.set_id,
     originalId: row.original_id,
@@ -31,8 +42,6 @@ function rowToQuestionWithMeta(row: QuestionRow): QuestionWithMeta {
           duration: row.audio_duration ?? undefined,
         }
       : null,
-    options: JSON.parse(row.options),
-    correctAnswer: row.correct_answer,
     playerDifficulty: row.player_difficulty ? JSON.parse(row.player_difficulty) : null,
     difficulty: row.difficulty,
     explanation: row.explanation,
@@ -40,6 +49,33 @@ function rowToQuestionWithMeta(row: QuestionRow): QuestionWithMeta {
     language: row.language,
     timesAsked: row.times_asked,
     lastAskedAt: row.last_asked_at,
+  };
+
+  if (row.type === 'true_false') {
+    return {
+      ...base,
+      options: trueFalseOptions(),
+      correctAnswer: trueFalseCorrectKey(row.correct_answer),
+    };
+  }
+
+  if (row.type === 'closest_wins') {
+    return {
+      ...base,
+      options: [],
+      correctAnswer: row.correct_answer,
+      correctValue: Number(row.correct_answer),
+      range:
+        row.range_min !== null && row.range_max !== null
+          ? { min: row.range_min, max: row.range_max, step: row.range_step ?? undefined }
+          : undefined,
+    };
+  }
+
+  return {
+    ...base,
+    options: JSON.parse(row.options),
+    correctAnswer: row.correct_answer,
   };
 }
 
@@ -92,11 +128,19 @@ export async function importQuestionSet(
 
   for (const q of input.questions) {
     const questionId = generateId();
+    // closest_wins has no correctAnswer key — the correct value lives in the
+    // same TEXT column as its decimal string; predict_room has no correct
+    // answer at all (validator already resolves it to '').
+    const correctAnswer =
+      q.type === 'closest_wins' && typeof q.correctValue === 'number'
+        ? String(q.correctValue)
+        : q.correctAnswer;
     await db.run(
       `INSERT INTO questions (id, set_id, original_id, type, text, category, tags, time_limit,
         media_type, media_url, media_preview_duration, audio_url, audio_play, audio_role, audio_duration,
-        options, correct_answer, player_difficulty, difficulty, explanation, hide_tags, language)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        options, correct_answer, player_difficulty, difficulty, explanation, hide_tags, language,
+        range_min, range_max, range_step)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         questionId,
         setId,
@@ -114,12 +158,15 @@ export async function importQuestionSet(
         q.audio?.role ?? null,
         q.audio?.duration ?? null,
         JSON.stringify(q.options),
-        q.correctAnswer,
+        correctAnswer,
         q.playerDifficulty ? JSON.stringify(q.playerDifficulty) : null,
         q.difficulty ?? 3,
         q.explanation ?? null,
         q.hideTags ? 1 : 0,
         q.language ?? setLanguage,
+        q.range?.min ?? null,
+        q.range?.max ?? null,
+        q.range?.step ?? null,
       ],
     );
   }

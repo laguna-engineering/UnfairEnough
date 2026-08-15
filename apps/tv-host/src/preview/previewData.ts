@@ -127,6 +127,8 @@ export function buildPreviewState(phase: GamePhase): RootState {
     questionIndex: 4,
     countdown: 0,
     answers: {},
+    votes: {},
+    predictions: {},
     roundResults: [],
     correctAnswer: null,
     roundTags: [],

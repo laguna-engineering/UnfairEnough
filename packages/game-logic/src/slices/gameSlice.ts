@@ -7,6 +7,7 @@ import type {
   PositionSnapshot,
   Question,
   QuestionAudio,
+  QuestionType,
 } from '@unfairenough/ws-protocol';
 
 // State machine pattern for game phases - prevents invalid transitions
@@ -36,7 +37,20 @@ function isValidTransition(from: GamePhase, to: GamePhase): boolean {
 
 export interface Answer {
   playerId: string;
-  answer: AnswerKey;
+  /** Choice types (multiple_choice, true_false). */
+  answer?: AnswerKey;
+  /** closest_wins: the player's numeric guess. */
+  guess?: number;
+  serverReceivedAt: number;
+}
+
+/**
+ * predict_room prediction, tracked separately from `votes` (see GameState.votes)
+ * because a player submits both a vote and a prediction, in that order.
+ */
+export interface Prediction {
+  playerId: string;
+  prediction: AnswerKey;
   serverReceivedAt: number;
 }
 
@@ -64,8 +78,24 @@ interface GameState {
   questionIndex: number;
   countdown: number;
   answers: Record<string, Answer>;
+  /**
+   * predict_room votes, keyed by playerId. Kept LOCAL to this TV/host state only —
+   * never broadcast per-player (see PlayerResult's no-vote-field note in
+   * ws-protocol) — aggregated into `voteCounts` at reveal time.
+   */
+  votes: Record<string, AnswerKey>;
+  /** predict_room predictions, keyed by playerId. Only recorded after the player's own vote. */
+  predictions: Record<string, Prediction>;
   roundResults: PlayerResult[];
   correctAnswer: AnswerKey | null;
+  /** The just-resolved round's question type, alongside correctAnswer. */
+  questionType?: QuestionType;
+  /** closest_wins: the authored correct numeric value for the just-resolved round. */
+  correctValue?: number;
+  /** predict_room: aggregate vote counts for the just-resolved round. */
+  voteCounts?: Partial<Record<AnswerKey, number>>;
+  /** predict_room: options tied for the most votes in the just-resolved round. */
+  winningOptions?: AnswerKey[];
   roundTags: string[];
   rankings: PlayerRanking[];
   positionHistory: PositionSnapshot[];
@@ -85,6 +115,8 @@ const initialState: GameState = {
   questionIndex: 0,
   countdown: 0,
   answers: {},
+  votes: {},
+  predictions: {},
   roundResults: [],
   correctAnswer: null,
   roundTags: [],
@@ -141,6 +173,8 @@ const gameSlice = createSlice({
       state.mediaPreview = null;
       state.countdown = action.payload.timeLimit;
       state.answers = {};
+      state.votes = {};
+      state.predictions = {};
     },
 
     setCountdown(state, action: PayloadAction<number>) {
@@ -156,10 +190,32 @@ const gameSlice = createSlice({
     },
 
     receiveAnswer(state, action: PayloadAction<Answer>) {
-      const { playerId, answer, serverReceivedAt } = action.payload;
-      // Only accept first answer from each player
+      const { playerId, answer, guess, serverReceivedAt } = action.payload;
+      // Only accept first answer/guess from each player
       if (!state.answers[playerId] && state.phase === 'QUESTION') {
-        state.answers[playerId] = { playerId, answer, serverReceivedAt };
+        state.answers[playerId] = { playerId, answer, guess, serverReceivedAt };
+      }
+    },
+
+    /** predict_room: a player's vote. Only the first vote per player counts. */
+    receiveVote(state, action: PayloadAction<{ playerId: string; vote: AnswerKey }>) {
+      const { playerId, vote } = action.payload;
+      if (!state.votes[playerId] && state.phase === 'QUESTION') {
+        state.votes[playerId] = vote;
+      }
+    },
+
+    /**
+     * predict_room: a player's prediction. Only accepted after the player has
+     * already voted (R11 ordering), and only the first prediction counts.
+     */
+    receivePrediction(
+      state,
+      action: PayloadAction<{ playerId: string; prediction: AnswerKey; serverReceivedAt: number }>,
+    ) {
+      const { playerId, prediction, serverReceivedAt } = action.payload;
+      if (state.votes[playerId] && !state.predictions[playerId] && state.phase === 'QUESTION') {
+        state.predictions[playerId] = { playerId, prediction, serverReceivedAt };
       }
     },
 
@@ -173,14 +229,22 @@ const gameSlice = createSlice({
       action: PayloadAction<{
         results: PlayerResult[];
         rankings: PlayerRanking[];
-        correctAnswer: AnswerKey;
+        correctAnswer: AnswerKey | null;
         tags?: string[];
+        questionType?: QuestionType;
+        correctValue?: number;
+        voteCounts?: Partial<Record<AnswerKey, number>>;
+        winningOptions?: AnswerKey[];
       }>,
     ) {
       if (!isValidTransition(state.phase, 'RESULTS')) return;
       state.phase = 'RESULTS';
       state.roundResults = action.payload.results;
       state.correctAnswer = action.payload.correctAnswer;
+      state.questionType = action.payload.questionType;
+      state.correctValue = action.payload.correctValue;
+      state.voteCounts = action.payload.voteCounts;
+      state.winningOptions = action.payload.winningOptions;
       state.roundTags = action.payload.tags ?? [];
       state.rankings = action.payload.rankings;
       state.positionHistory.push({
@@ -199,6 +263,10 @@ const gameSlice = createSlice({
       state.questionIndex += 1;
       state.roundResults = [];
       state.correctAnswer = null;
+      state.questionType = undefined;
+      state.correctValue = undefined;
+      state.voteCounts = undefined;
+      state.winningOptions = undefined;
       state.roundTags = [];
       // Phase stays at RESULTS — showQuestion or showMediaPreview will handle the transition
       // Keep rankings (last round's) and positionHistory (cumulative)
@@ -225,8 +293,14 @@ const gameSlice = createSlice({
       state.questionIndex = 0;
       state.countdown = 0;
       state.answers = {};
+      state.votes = {};
+      state.predictions = {};
       state.roundResults = [];
       state.correctAnswer = null;
+      state.questionType = undefined;
+      state.correctValue = undefined;
+      state.voteCounts = undefined;
+      state.winningOptions = undefined;
       state.roundTags = [];
       state.rankings = [];
       state.positionHistory = [];
@@ -261,6 +335,8 @@ export const {
   cancelGame,
   updateConfig,
   setConfigError,
+  receiveVote,
+  receivePrediction,
 } = gameSlice.actions;
 
 export default gameSlice.reducer;

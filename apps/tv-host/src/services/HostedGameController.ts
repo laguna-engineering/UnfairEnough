@@ -11,6 +11,8 @@ import {
   nextQuestion,
   type RootState,
   receiveAnswer,
+  receivePrediction,
+  receiveVote,
   removePlayer,
   resetGame,
   resetScores,
@@ -314,12 +316,36 @@ export class HostedGameController implements IGameController {
         break;
 
       case 'PLAYER_ANSWERED': {
-        const { playerId: answeredId, questionId: answeredQId } = message.payload;
+        // The hosted server never tells the host the real value (answers/guesses
+        // are scored server-side; votes are private by design) — this only
+        // drives the TV's "N of M" progress counters, so the placeholder key/
+        // value dispatched per `kind` is arbitrary and never rendered.
+        const { playerId: answeredId, questionId: answeredQId, kind } = message.payload;
         const currentQ = this.store.getState().game.currentQuestion;
-        if (currentQ?.id === answeredQId) {
-          this.store.dispatch(
-            receiveAnswer({ playerId: answeredId, answer: 'A', serverReceivedAt: Date.now() }),
-          );
+        if (currentQ?.id !== answeredQId) break;
+
+        switch (kind) {
+          case 'guess':
+            this.store.dispatch(
+              receiveAnswer({ playerId: answeredId, guess: 0, serverReceivedAt: Date.now() }),
+            );
+            break;
+          case 'vote':
+            this.store.dispatch(receiveVote({ playerId: answeredId, vote: 'A' }));
+            break;
+          case 'prediction':
+            this.store.dispatch(
+              receivePrediction({
+                playerId: answeredId,
+                prediction: 'A',
+                serverReceivedAt: Date.now(),
+              }),
+            );
+            break;
+          default:
+            this.store.dispatch(
+              receiveAnswer({ playerId: answeredId, answer: 'A', serverReceivedAt: Date.now() }),
+            );
         }
         break;
       }
@@ -329,7 +355,16 @@ export class HostedGameController implements IGameController {
         break;
 
       case 'ROUND_END': {
-        const { playerResults, rankings, tags, correctAnswer } = message.payload;
+        const {
+          playerResults,
+          rankings,
+          tags,
+          correctAnswer,
+          questionType,
+          correctValue,
+          voteCounts,
+          winningOptions,
+        } = message.payload;
         // Update each player's score
         for (const pr of playerResults) {
           this.store.dispatch(updateScore({ id: pr.playerId, score: pr.totalScore }));
@@ -340,6 +375,10 @@ export class HostedGameController implements IGameController {
             rankings: rankings ?? [],
             correctAnswer,
             tags,
+            questionType,
+            correctValue,
+            voteCounts,
+            winningOptions,
           }),
         );
         break;

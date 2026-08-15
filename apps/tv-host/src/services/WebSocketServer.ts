@@ -39,7 +39,14 @@ type PlayerReconnectedCallback = (data: { playerId: string }) => void;
 type AnswerReceivedCallback = (data: {
   playerId: string;
   questionId: string;
-  answer: 'A' | 'B' | 'C' | 'D';
+  /** Choice types (multiple_choice, true_false). */
+  answer?: 'A' | 'B' | 'C' | 'D';
+  /** closest_wins. */
+  guess?: number;
+  /** predict_room, step 1. */
+  vote?: 'A' | 'B' | 'C' | 'D';
+  /** predict_room, step 2 (only after the player's own vote). */
+  prediction?: 'A' | 'B' | 'C' | 'D';
   serverReceivedAt: number;
 }) => void;
 
@@ -311,14 +318,30 @@ class WebSocketServerService {
         case 'ANSWER': {
           if (client.playerId) {
             const serverReceivedAt = Date.now();
+            const { questionId, answer, guess, vote, prediction } = message.payload;
+            // Exactly one of answer/guess/vote/prediction is set per message
+            // (see AnswerPayload) — track which for the ack + callback.
+            const field =
+              answer !== undefined
+                ? 'answer'
+                : guess !== undefined
+                  ? 'guess'
+                  : vote !== undefined
+                    ? 'vote'
+                    : prediction !== undefined
+                      ? 'prediction'
+                      : undefined;
             this.sendToClient(client, {
               type: 'ANSWER_ACK',
-              payload: { questionId: message.payload.questionId, serverReceivedAt },
+              payload: { questionId, serverReceivedAt, field },
             });
             this.callbacks.onAnswerReceived?.({
               playerId: client.playerId,
-              questionId: message.payload.questionId,
-              answer: message.payload.answer,
+              questionId,
+              answer,
+              guess,
+              vote,
+              prediction,
               serverReceivedAt,
             });
           }

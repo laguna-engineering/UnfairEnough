@@ -13,6 +13,7 @@ import {
   addPlayer,
   addPoints,
   buildQuestionPool,
+  calculateClosestScore,
   calculateScore,
   computeEffectiveDifficulty,
   computeLifetimeHandicap,
@@ -29,13 +30,17 @@ import {
   filterRecentlyServedQuestions,
   limitPicturesPerAnswerYear,
   nextQuestion,
+  PREDICT_POINTS,
   playersSelectors,
   type RootState,
   rankPlayers,
   receiveAnswer,
+  receivePrediction,
+  receiveVote,
   removePlayer,
   resetGame,
   resolvePlayerDifficulty,
+  resolvePollWinners,
   selectNextQuestion,
   setPlayerConnected,
   setServerReady,
@@ -48,7 +53,12 @@ import {
   tickQuestionTimer,
   updateConfig,
 } from '@unfairenough/game-logic';
-import type { AnswerKey, PlayerResult, StateSnapshotPayload } from '@unfairenough/ws-protocol';
+import type {
+  AnswerKey,
+  PlayerResult,
+  QuestionType,
+  StateSnapshotPayload,
+} from '@unfairenough/ws-protocol';
 import { prefetchMedia } from '../utils/prefetchMedia';
 import { getDb, initDatabase } from './database';
 import type { IGameController } from './IGameController';
@@ -414,7 +424,9 @@ class GameController implements IGameController {
       }
 
       case 'RESULTS': {
-        if (!game.correctAnswer) return { phase };
+        // correctAnswer is legitimately null for closest_wins/predict_room —
+        // gate on whether a round actually resolved instead.
+        if (game.roundResults.length === 0) return { phase };
         return {
           phase,
           roundResult: {
@@ -424,6 +436,10 @@ class GameController implements IGameController {
             questionDifficulty: this.activeQuestion?.difficulty ?? 3,
             playerResults: game.roundResults,
             rankings: game.rankings,
+            questionType: game.questionType,
+            correctValue: game.correctValue,
+            voteCounts: game.voteCounts,
+            winningOptions: game.winningOptions,
           },
         };
       }
@@ -694,12 +710,19 @@ class GameController implements IGameController {
       if (newState.game.countdown <= 0) {
         this.endQuestion();
       } else {
-        // Check if all connected players answered
+        // Check if all connected players have finished the round. predict_room
+        // needs BOTH a vote and a prediction, so "done" means a prediction is
+        // recorded (predictions can only exist once a vote already landed);
+        // every other type (including closest_wins' guess) lands in `answers`.
         const connectedPlayers = playersSelectors
           .selectAll(newState.players)
           .filter((p) => p.isConnected);
-        const answeredCount = Object.keys(newState.game.answers).length;
-        if (answeredCount >= connectedPlayers.length && connectedPlayers.length > 0) {
+        const questionType = this.activeQuestion?.type ?? 'multiple_choice';
+        const doneCount =
+          questionType === 'predict_room'
+            ? Object.keys(newState.game.predictions).length
+            : Object.keys(newState.game.answers).length;
+        if (doneCount >= connectedPlayers.length && connectedPlayers.length > 0) {
           this.endQuestion();
         }
       }
@@ -707,18 +730,58 @@ class GameController implements IGameController {
   }
 
   /**
-   * Handle an incoming answer
+   * Handle an incoming answer/guess/vote/prediction, routed by the active
+   * question's type (mirrors the hosted server's per-type ANSWER handling).
    */
   private handleAnswer(data: {
     playerId: string;
     questionId: string;
-    answer: AnswerKey;
+    answer?: AnswerKey;
+    guess?: number;
+    vote?: AnswerKey;
+    prediction?: AnswerKey;
     serverReceivedAt: number;
   }): void {
     const state = this.getState();
     if (state.game.phase !== 'QUESTION') return;
     if (state.game.currentQuestion?.id !== data.questionId) return;
 
+    const questionType: QuestionType = this.activeQuestion?.type ?? 'multiple_choice';
+
+    if (questionType === 'closest_wins') {
+      // One immutable, finite guess per player — the reducer itself only
+      // accepts the first, this just filters out garbage input.
+      if (data.guess === undefined || !Number.isFinite(data.guess)) return;
+      this.store.dispatch(
+        receiveAnswer({
+          playerId: data.playerId,
+          guess: data.guess,
+          serverReceivedAt: data.serverReceivedAt,
+        }),
+      );
+      return;
+    }
+
+    if (questionType === 'predict_room') {
+      // Vote and prediction arrive as separate messages; the reducer enforces
+      // vote-before-prediction and "first one wins" immutability.
+      if (data.vote !== undefined) {
+        this.store.dispatch(receiveVote({ playerId: data.playerId, vote: data.vote }));
+      }
+      if (data.prediction !== undefined) {
+        this.store.dispatch(
+          receivePrediction({
+            playerId: data.playerId,
+            prediction: data.prediction,
+            serverReceivedAt: data.serverReceivedAt,
+          }),
+        );
+      }
+      return;
+    }
+
+    // Choice types (multiple_choice, true_false) — unchanged.
+    if (data.answer === undefined) return;
     this.store.dispatch(
       receiveAnswer({
         playerId: data.playerId,
@@ -743,16 +806,33 @@ class GameController implements IGameController {
   }
 
   /**
-   * Calculate and show round results with difficulty multipliers
+   * Calculate and show round results, routed by question type (mirrors the
+   * hosted server's per-type scoring).
    */
   private showRoundResults(): void {
-    const state = this.getState();
     const currentQuestion = this.getCurrentQuestion();
     if (!currentQuestion) {
       this.endGame();
       return;
     }
 
+    const questionType = currentQuestion.type ?? 'multiple_choice';
+    if (questionType === 'closest_wins') {
+      this.showClosestWinsResults(currentQuestion);
+    } else if (questionType === 'predict_room') {
+      this.showPredictRoomResults(currentQuestion);
+    } else {
+      this.showChoiceResults(currentQuestion);
+    }
+  }
+
+  /**
+   * Choice types (multiple_choice, true_false) — unchanged scoring: base
+   * points + time bonus, catch-up multiplier, difficulty multiplier, lifetime
+   * handicap.
+   */
+  private showChoiceResults(currentQuestion: QuestionWithMeta): void {
+    const state = this.getState();
     const correctAnswer = currentQuestion.correctAnswer as AnswerKey;
     const timeLimit = state.game.config.questionTimeLimit;
 
@@ -829,7 +909,146 @@ class GameController implements IGameController {
       };
     });
 
-    // Compute rankings
+    this.finishRound(currentQuestion, playerResults, correctAnswer);
+  }
+
+  /**
+   * closest_wins — proximity-only scoring (KD4/R8): calculateClosestScore
+   * handles the distance curve, with NO time bonus, catch-up, difficulty
+   * multiplier, or lifetime handicap, so equal distances always earn equal
+   * points (AE2) regardless of who guessed first. A player who never guessed
+   * scores 0; isClosest flags every player tied for the minimum distance.
+   */
+  private showClosestWinsResults(currentQuestion: QuestionWithMeta): void {
+    const state = this.getState();
+    const players = playersSelectors.selectAll(state.players);
+    const answers = state.game.answers;
+    const correctValue = currentQuestion.correctValue ?? 0;
+    const range = currentQuestion.range ?? { min: 0, max: 0 };
+
+    const scored = players.map((player) => {
+      const guess = answers[player.id]?.guess;
+      if (guess === undefined || !Number.isFinite(guess)) {
+        return {
+          player,
+          guess: null as number | null,
+          distance: undefined as number | undefined,
+          points: 0,
+        };
+      }
+      const { points, distance } = calculateClosestScore(guess, correctValue, range.min, range.max);
+      return { player, guess, distance, points };
+    });
+
+    const distances = scored
+      .filter((s): s is typeof s & { distance: number } => s.distance !== undefined)
+      .map((s) => s.distance);
+    const minDistance = distances.length > 0 ? Math.min(...distances) : null;
+
+    const playerResults: PlayerResult[] = scored.map(({ player, guess, distance, points }) => {
+      const isClosest = distance !== undefined && minDistance !== null && distance === minDistance;
+
+      if (points > 0) {
+        this.store.dispatch(addPoints({ id: player.id, points }));
+      }
+      const updatedPlayer = playersSelectors.selectById(this.getState().players, player.id);
+
+      return {
+        playerId: player.id,
+        name: player.name,
+        answer: null,
+        isCorrect: isClosest,
+        responseTimeMs: null,
+        baseScore: points,
+        difficultyMultiplier: 1,
+        pointsEarned: points,
+        totalScore: updatedPlayer?.score ?? player.score,
+        guess,
+        distance,
+        isClosest,
+      };
+    });
+
+    // Skip tag-ELO/difficulty updates — closest_wins is knowledge-light.
+    this.finishRound(
+      currentQuestion,
+      playerResults,
+      null,
+      { questionType: 'closest_wins', correctValue },
+      { skipTagUpdates: true },
+    );
+  }
+
+  /**
+   * predict_room — only the prediction scores (KD5/R12): votes tally into
+   * voteCounts (never broadcast per-player) and winningOptions comes from
+   * resolvePollWinners (ties all count, AE4). PREDICT_POINTS is flat — no
+   * time bonus, catch-up, difficulty multiplier, or lifetime handicap.
+   */
+  private showPredictRoomResults(currentQuestion: QuestionWithMeta): void {
+    const state = this.getState();
+    const players = playersSelectors.selectAll(state.players);
+    const votes = state.game.votes;
+    const predictions = state.game.predictions;
+
+    const voteCounts: Partial<Record<AnswerKey, number>> = {};
+    for (const vote of Object.values(votes)) {
+      voteCounts[vote] = (voteCounts[vote] ?? 0) + 1;
+    }
+    const winningOptions = resolvePollWinners(voteCounts);
+
+    const playerResults: PlayerResult[] = players.map((player) => {
+      const prediction = predictions[player.id]?.prediction ?? null;
+      const predictedCorrectly = prediction !== null && winningOptions.includes(prediction);
+      const points = predictedCorrectly ? PREDICT_POINTS : 0;
+
+      if (points > 0) {
+        this.store.dispatch(addPoints({ id: player.id, points }));
+      }
+      const updatedPlayer = playersSelectors.selectById(this.getState().players, player.id);
+
+      return {
+        playerId: player.id,
+        name: player.name,
+        answer: null,
+        isCorrect: predictedCorrectly,
+        responseTimeMs: null,
+        baseScore: points,
+        difficultyMultiplier: 1,
+        pointsEarned: points,
+        totalScore: updatedPlayer?.score ?? player.score,
+        prediction,
+        predictedCorrectly,
+      };
+    });
+
+    // Skip tag-ELO/difficulty updates — predict_room is knowledge-free (R16).
+    this.finishRound(
+      currentQuestion,
+      playerResults,
+      null,
+      { questionType: 'predict_room', voteCounts, winningOptions },
+      { skipTagUpdates: true },
+    );
+  }
+
+  /**
+   * Shared tail for all three question types: rank players, dispatch/broadcast
+   * the round result, record usage, optionally update tag scores, and hold for
+   * the next question.
+   */
+  private finishRound(
+    currentQuestion: QuestionWithMeta,
+    playerResults: PlayerResult[],
+    correctAnswer: AnswerKey | null,
+    extra?: {
+      questionType?: QuestionType;
+      correctValue?: number;
+      voteCounts?: Partial<Record<AnswerKey, number>>;
+      winningOptions?: AnswerKey[];
+    },
+    options?: { skipTagUpdates?: boolean },
+  ): void {
     const updatedState = this.getState();
     const updatedPlayers = playersSelectors.selectAll(updatedState.players);
     const rankings = rankPlayers(
@@ -841,39 +1060,45 @@ class GameController implements IGameController {
       rank: r.rank,
     }));
 
+    const tags = currentQuestion.tags.length > 0 ? currentQuestion.tags : undefined;
+
     this.store.dispatch(
       showRoundResults({
         results: playerResults,
         rankings,
         correctAnswer,
-        tags: currentQuestion.tags.length > 0 ? currentQuestion.tags : undefined,
+        tags,
+        ...extra,
       }),
     );
 
-    // Broadcast results with tags
     wsServer.broadcast({
       type: 'ROUND_END',
       payload: {
         questionId: currentQuestion.id,
         correctAnswer,
-        tags: currentQuestion.tags.length > 0 ? currentQuestion.tags : undefined,
+        tags,
         questionDifficulty: currentQuestion.difficulty ?? 3,
         playerResults,
         rankings,
+        ...extra,
       },
     });
 
-    // Track question usage (fire-and-forget)
+    // Track question usage (fire-and-forget) — freshness recording applies to
+    // every type, including the two that skip tag/difficulty updates below.
     questionsRepo
       .markQuestionAsked(getDb(), currentQuestion.id)
       .catch((err) => console.error('Failed to update question usage:', err));
 
-    // Update tag scores for profiled players (skip for casual and custom non-adaptive)
-    const cfg = this.getState().game.config;
-    if (cfg.gameType === 'configured' || (cfg.gameType === 'personalized' && cfg.adaptiveMode)) {
-      this.updateTagScoresAfterRound(currentQuestion, playerResults).catch((err) =>
-        console.error('Failed to update tag scores:', err),
-      );
+    if (!options?.skipTagUpdates) {
+      // Update tag scores for profiled players (skip for casual and custom non-adaptive)
+      const cfg = this.getState().game.config;
+      if (cfg.gameType === 'configured' || (cfg.gameType === 'personalized' && cfg.adaptiveMode)) {
+        this.updateTagScoresAfterRound(currentQuestion, playerResults).catch((err) =>
+          console.error('Failed to update tag scores:', err),
+        );
+      }
     }
 
     // Move to next question after showing results, holding for the next media.

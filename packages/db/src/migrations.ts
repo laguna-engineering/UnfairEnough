@@ -319,6 +319,17 @@ const MIGRATION_V18 = `
 ALTER TABLE games ADD COLUMN tags TEXT;
 `;
 
+/**
+ * V19: closest_wins numeric range. `range_min`/`range_max` bound the phone's
+ * slider/number pad (R5); `range_step` optionally sets its granularity. Unused
+ * (NULL) for every other question type.
+ */
+const MIGRATION_V19 = `
+ALTER TABLE questions ADD COLUMN range_min INTEGER;
+ALTER TABLE questions ADD COLUMN range_max INTEGER;
+ALTER TABLE questions ADD COLUMN range_step INTEGER;
+`;
+
 interface Migration {
   version: number;
   sql: string;
@@ -345,6 +356,7 @@ const migrations: Migration[] = [
   { version: 16, sql: MIGRATION_V16 },
   { version: 17, sql: MIGRATION_V17 },
   { version: 18, sql: MIGRATION_V18 },
+  { version: 19, sql: MIGRATION_V19 },
 ];
 
 /**

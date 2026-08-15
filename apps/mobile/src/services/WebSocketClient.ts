@@ -333,6 +333,9 @@ class WebSocketClient {
           type: message.type,
           questionId: message.payload.questionId,
           answer: message.payload.answer,
+          guess: message.payload.guess,
+          vote: message.payload.vote,
+          prediction: message.payload.prediction,
         };
       case 'UNBIND':
         return { type: message.type, hasDeviceId: !!message.payload.deviceId };
@@ -369,6 +372,21 @@ class WebSocketClient {
 
   sendAnswer(questionId: string, answer: AnswerKey): void {
     this.send({ type: 'ANSWER', payload: { questionId, answer } });
+  }
+
+  /** closest_wins: submit a numeric guess. */
+  sendGuess(questionId: string, guess: number): void {
+    this.send({ type: 'ANSWER', payload: { questionId, guess } });
+  }
+
+  /** predict_room step 1: submit this player's own vote. */
+  sendVote(questionId: string, vote: AnswerKey): void {
+    this.send({ type: 'ANSWER', payload: { questionId, vote } });
+  }
+
+  /** predict_room step 2: submit this player's prediction of the room's pick. */
+  sendPrediction(questionId: string, prediction: AnswerKey): void {
+    this.send({ type: 'ANSWER', payload: { questionId, prediction } });
   }
 
   private startPingInterval(): void {
