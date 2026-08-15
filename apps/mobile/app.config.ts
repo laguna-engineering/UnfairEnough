@@ -23,6 +23,11 @@ function loadRootEnv(): Record<string, string> {
 }
 
 const env = loadRootEnv();
+// EAS strips .env files from build archives; eas.json's per-profile `env` block
+// supplies these values there instead, so real environment variables must win
+// over the file — otherwise the fingerprint runtime version diverges between
+// the local machine and the build sandbox.
+if (process.env.DEFAULT_LANG) env.DEFAULT_LANG = process.env.DEFAULT_LANG;
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,

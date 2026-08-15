@@ -62,3 +62,9 @@ apps/server/public*/
 /.design-sync/.cache/
 /.design-sync/learnings/
 /.design-sync/node_modules
+
+# EAS local build artifacts
+apps/*/build-*.apk
+apps/*/build-*.aab
+apps/*/build-*.tar.gz
+apps/*/build-*.ipa

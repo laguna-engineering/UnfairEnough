@@ -8,21 +8,27 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_TV": "1"
+        "EXPO_TV": "1",
+        "DEFAULT_LANG": "it"
       }
     },
     "preview": {
       "distribution": "internal",
       "channel": "preview",
       "env": {
-        "EXPO_TV": "1"
+        "EXPO_TV": "1",
+        "DEFAULT_LANG": "it"
       }
     },
     "production": {
       "channel": "production",
       "autoIncrement": true,
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
-        "EXPO_TV": "1"
+        "EXPO_TV": "1",
+        "DEFAULT_LANG": "it"
       }
     }
   },

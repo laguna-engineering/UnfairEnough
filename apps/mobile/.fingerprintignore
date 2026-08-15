@@ -1,0 +1,5 @@
+# android/ and ios/ are CNG-generated (gitignored) but kept locally for the
+# gradlew/adb workflows. EAS build archives exclude them, so the fingerprint
+# must too — otherwise local and build-time runtime versions diverge.
+android/**
+ios/**
