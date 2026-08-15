@@ -43,6 +43,7 @@ questions/*
 # Background music (bundled into the TV app at build time, kept out of git)
 apps/tv-host/assets/music/*
 !apps/tv-host/assets/music/.gitkeep
+apps/server/music/
 
 # Claude
 .claude/*.local.json
