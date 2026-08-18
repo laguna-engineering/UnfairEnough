@@ -1,7 +1,10 @@
 # EAS archive exclusions. This file REPLACES .gitignore for `eas build`/
-# `eas update` archiving, and exists for exactly one delta: the TV background
+# `eas update` archiving, and exists for exactly two deltas: the TV background
 # music (apps/tv-host/assets/music/) is kept out of git but MUST ship in build
-# archives, since useBgMusic.ts requires the tracks at bundle time.
+# archives, since useBgMusic.ts requires the tracks at bundle time; and the
+# root .env, which app.config.ts bakes into `extra` — stripping it made the
+# fingerprint runtime version diverge between the local machine and the build
+# sandbox. Builds run locally (eas build --local), so .env stays on this machine.
 # Keep this in sync with .gitignore when adding new exclusions.
 node_modules/
 .expo/
@@ -29,8 +32,8 @@ web-build/
 *.db-wal
 *.db.bak-*
 
-# Environment
-.env
+# Environment: .env deliberately NOT excluded here (see header) — it must ship
+# in build archives so the sandbox evaluates the same app config as this machine.
 
 # macOS
 .DS_Store

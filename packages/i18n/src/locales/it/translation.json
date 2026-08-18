@@ -141,7 +141,8 @@
     "connectionFailed": "Connessione fallita",
     "retry": "Riprova",
     "back": "Indietro",
-    "recentServers": "Server recenti"
+    "recentServers": "Server recenti",
+    "defaultServer": "Server preconfigurato"
   },
   "game": {
     "getReady": "Preparati!",

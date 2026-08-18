@@ -20,9 +20,11 @@ type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'failed';
 interface Props {
   onConnected: (serverUrl: string, mobileBaseUrl: string | null) => void;
   onBack: () => void;
+  /** Preconfigured server (from extra.serverUrl) offered as a one-click option. */
+  defaultServerUrl?: string;
 }
 
-export const ConnectScreen: React.FC<Props> = ({ onConnected, onBack }) => {
+export const ConnectScreen: React.FC<Props> = ({ onConnected, onBack, defaultServerUrl }) => {
   const { t } = useTranslation();
   const { theme } = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
@@ -39,48 +41,51 @@ export const ConnectScreen: React.FC<Props> = ({ onConnected, onBack }) => {
     });
   }, []);
 
-  const handleConnect = useCallback(() => {
-    if (!serverUrl.trim()) return;
+  const handleConnect = useCallback(
+    (urlOverride?: string) => {
+      const trimmed = (urlOverride ?? serverUrl).trim();
+      if (!trimmed) return;
 
-    setStatus('connecting');
+      setStatus('connecting');
 
-    // Normalize URL: extract host and detect protocol
-    const trimmed = serverUrl.trim();
-    const isSecure = /^https:\/\/|^wss:\/\//.test(trimmed);
-    const host = trimmed.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '');
-    const proto = isSecure ? 'https' : 'http';
-    const healthUrl = `${proto}://${host}/api/health`;
+      // Normalize URL: extract host and detect protocol
+      const isSecure = /^https:\/\/|^wss:\/\//.test(trimmed);
+      const host = trimmed.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '');
+      const proto = isSecure ? 'https' : 'http';
+      const healthUrl = `${proto}://${host}/api/health`;
 
-    debugLog('[ConnectScreen] healthUrl:', healthUrl, 'isSecure:', isSecure);
-    fetch(healthUrl)
-      .then(async (res) => {
-        debugLog('[ConnectScreen] health response status:', res.status);
-        if (res.ok) {
-          setStatus('connected');
-          addRecentServer(`${proto}://${host}`).then(() => setRecentServers(getRecentServers()));
+      debugLog('[ConnectScreen] healthUrl:', healthUrl, 'isSecure:', isSecure);
+      fetch(healthUrl)
+        .then(async (res) => {
+          debugLog('[ConnectScreen] health response status:', res.status);
+          if (res.ok) {
+            setStatus('connected');
+            addRecentServer(`${proto}://${host}`).then(() => setRecentServers(getRecentServers()));
 
-          // Use the server's LAN IP when on the same network, otherwise keep the original host
-          const data = await res.json().catch(() => ({}));
-          debugLog('[ConnectScreen] health data:', JSON.stringify(data));
-          const isLanConnection = /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(host);
-          const effectiveHost =
-            isLanConnection && data.lanIp && data.port
-              ? `${data.lanIp}:${data.port}`
-              : `${proto}://${host}`;
+            // Use the server's LAN IP when on the same network, otherwise keep the original host
+            const data = await res.json().catch(() => ({}));
+            debugLog('[ConnectScreen] health data:', JSON.stringify(data));
+            const isLanConnection = /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(host);
+            const effectiveHost =
+              isLanConnection && data.lanIp && data.port
+                ? `${data.lanIp}:${data.port}`
+                : `${proto}://${host}`;
 
-          debugLog('[ConnectScreen] calling onConnected with:', effectiveHost);
-          // Short delay so user sees "Connected!" before transition
-          setTimeout(() => onConnected(effectiveHost, data.mobileBaseUrl ?? null), 500);
-        } else {
-          debugLog('[ConnectScreen] health check failed:', res.status);
+            debugLog('[ConnectScreen] calling onConnected with:', effectiveHost);
+            // Short delay so user sees "Connected!" before transition
+            setTimeout(() => onConnected(effectiveHost, data.mobileBaseUrl ?? null), 500);
+          } else {
+            debugLog('[ConnectScreen] health check failed:', res.status);
+            setStatus('failed');
+          }
+        })
+        .catch((err) => {
+          debugLog('[ConnectScreen] health check error:', err);
           setStatus('failed');
-        }
-      })
-      .catch((err) => {
-        debugLog('[ConnectScreen] health check error:', err);
-        setStatus('failed');
-      });
-  }, [serverUrl, onConnected]);
+        });
+    },
+    [serverUrl, onConnected],
+  );
 
   const statusColor =
     status === 'connected' ? theme.success : status === 'failed' ? theme.error : theme.inkSoft;
@@ -110,25 +115,48 @@ export const ConnectScreen: React.FC<Props> = ({ onConnected, onBack }) => {
           autoCorrect={false}
           keyboardType="url"
           editable={status !== 'connecting'}
-          onSubmitEditing={handleConnect}
+          onSubmitEditing={() => handleConnect()}
         />
 
-        {recentServers.length > 0 && (
+        {defaultServerUrl && (
+          <View style={styles.recentContainer}>
+            <Text style={styles.recentLabel}>{t('connect.defaultServer')}</Text>
+            <Pressable
+              hasTVPreferredFocus
+              disabled={status === 'connecting'}
+              style={(state) => [
+                styles.recentRow,
+                (state as any).focused && styles.focused,
+                state.pressed && styles.pressed,
+              ]}
+              onPress={() => {
+                setServerUrl(defaultServerUrl);
+                handleConnect(defaultServerUrl);
+              }}
+            >
+              <Text style={styles.recentRowText}>{defaultServerUrl}</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {recentServers.filter((a) => a !== defaultServerUrl).length > 0 && (
           <View style={styles.recentContainer}>
             <Text style={styles.recentLabel}>{t('connect.recentServers')}</Text>
-            {recentServers.map((address) => (
-              <Pressable
-                key={address}
-                style={(state) => [
-                  styles.recentRow,
-                  (state as any).focused && styles.focused,
-                  state.pressed && styles.pressed,
-                ]}
-                onPress={() => setServerUrl(address)}
-              >
-                <Text style={styles.recentRowText}>{address}</Text>
-              </Pressable>
-            ))}
+            {recentServers
+              .filter((a) => a !== defaultServerUrl)
+              .map((address) => (
+                <Pressable
+                  key={address}
+                  style={(state) => [
+                    styles.recentRow,
+                    (state as any).focused && styles.focused,
+                    state.pressed && styles.pressed,
+                  ]}
+                  onPress={() => setServerUrl(address)}
+                >
+                  <Text style={styles.recentRowText}>{address}</Text>
+                </Pressable>
+              ))}
           </View>
         )}
 
@@ -139,7 +167,7 @@ export const ConnectScreen: React.FC<Props> = ({ onConnected, onBack }) => {
         <View style={styles.buttons}>
           <Button
             title={status === 'failed' ? t('connect.retry') : t('common.connect')}
-            onPress={handleConnect}
+            onPress={() => handleConnect()}
             disabled={!serverUrl.trim() || status === 'connecting'}
             size="large"
             style={styles.connectButton}

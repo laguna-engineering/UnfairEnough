@@ -92,6 +92,7 @@ export default function App() {
     webPreviewPhase ? 'preview' : Platform.OS === 'web' ? 'connect' : 'mode_select',
   );
   const [hostedServerUrl, setHostedServerUrl] = useState<string>('');
+  const [connectDefaultUrl, setConnectDefaultUrl] = useState<string | null>(null);
   const [hostedMobileBaseUrl, setHostedMobileBaseUrl] = useState<string | null>(null);
   const hostedControllerRef = useRef<HostedGameController | null>(null);
   const [authChallenge, setAuthChallenge] = useState<AuthChallenge | null>(null);
@@ -159,55 +160,11 @@ export default function App() {
     };
   }, []);
 
-  const handleSelectAccount = useCallback((isRetry = false) => {
-    if (!configServerUrl) {
-      // No server URL configured — fall back to connect screen
-      setScreen('connect');
-      return;
-    }
-
-    if (!isRetry) {
-      authRetryCountRef.current = 0;
-    }
-
-    setHostedServerUrl(configServerUrl);
-    setAuthChallenge(null);
-    setAuthLoginState('connecting');
-
-    hostedControllerRef.current?.cleanup();
-    hostedControllerRef.current = new HostedGameController(configServerUrl, {
-      onRoomCreated: () => setScreen('hosted_game'),
-      onAuthChallenge: (challenge) => {
-        setAuthChallenge(challenge);
-        setAuthLoginState('waiting');
-      },
-      onAuthSuccess: (sessionToken, hostId, displayName) => {
-        setAuthLoginState('approved');
-        saveAuthState({
-          sessionToken,
-          serverUrl: configServerUrl,
-          hostDisplayName: displayName,
-          hostId,
-        });
-      },
-      onAuthFailed: () => setAuthLoginState('failed'),
-      onAuthExpired: () => {
-        authRetryCountRef.current += 1;
-        if (authRetryCountRef.current >= MAX_AUTH_RETRIES) {
-          setAuthLoginState('failed');
-          return;
-        }
-        setAuthLoginState('expired');
-        // Auto-reconnect to get a new code
-        authRetryTimeoutRef.current = setTimeout(() => {
-          authRetryTimeoutRef.current = null;
-          hostedControllerRef.current?.cleanup();
-          handleSelectAccount(true);
-        }, 1500);
-      },
-    });
-    hostedControllerRef.current.initialize();
-    setScreen('account_login');
+  // Account mode goes through the connect screen like hosted mode, but offers
+  // the .env-configured server (extra.serverUrl) as a one-click default option.
+  const handleSelectAccount = useCallback(() => {
+    setConnectDefaultUrl(configServerUrl || null);
+    setScreen('connect');
   }, []);
 
   const handleSelectLocal = useCallback(() => {
@@ -215,6 +172,7 @@ export default function App() {
   }, []);
 
   const handleSelectHosted = useCallback(() => {
+    setConnectDefaultUrl(null);
     setScreen('connect');
   }, []);
 
@@ -308,7 +266,11 @@ export default function App() {
       return (
         <>
           <StatusBar style="light" hidden />
-          <ConnectScreen onConnected={handleConnected} onBack={handleBack} />
+          <ConnectScreen
+            onConnected={handleConnected}
+            onBack={handleBack}
+            defaultServerUrl={connectDefaultUrl ?? undefined}
+          />
         </>
       );
 

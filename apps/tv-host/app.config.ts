@@ -34,10 +34,10 @@ function loadRootEnv(): Record<string, string> {
 }
 
 const env = loadRootEnv();
-// EAS strips .env files from build archives; eas.json's per-profile `env` block
-// supplies these values there instead, so real environment variables must win
-// over the file — otherwise the fingerprint runtime version diverges between
-// the local machine and the build sandbox.
+// The root .env ships in EAS build archives (see .easignore) so this config
+// evaluates identically on the local machine and in the build sandbox — the
+// fingerprint runtime version must agree between the two. Real environment
+// variables (e.g. eas.json per-profile `env`) still win over the file.
 if (process.env.DEFAULT_LANG) env.DEFAULT_LANG = process.env.DEFAULT_LANG;
 if (process.env.SERVER_URL) env.SERVER_URL = process.env.SERVER_URL;
 
