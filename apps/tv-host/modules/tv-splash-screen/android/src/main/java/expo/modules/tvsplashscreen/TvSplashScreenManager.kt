@@ -11,7 +11,10 @@ object TvSplashScreenManager {
   private var overlay: FrameLayout? = null
 
   fun registerOnActivity(activity: Activity) {
-    val content = activity.findViewById<ViewGroup>(android.R.id.content)
+    // Attach to the decor view, not android.R.id.content: expo-updates defers
+    // loadApp past onCreate, and its later setContentView() clears the content
+    // frame — which would silently remove this overlay before the first draw.
+    val decor = activity.window.decorView as ViewGroup
 
     val frame = FrameLayout(activity).apply {
       setBackgroundColor(Color.parseColor("#aed8ff"))
@@ -36,7 +39,7 @@ object TvSplashScreenManager {
       frame.addView(logo)
     }
 
-    content.addView(frame)
+    decor.addView(frame)
     overlay = frame
   }
 
