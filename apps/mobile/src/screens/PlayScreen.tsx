@@ -203,8 +203,9 @@ const TwoChoicePlay: React.FC<{
 
   const tiles: { key: AnswerKey; label: string; icon?: string; tile: AnswerTile }[] = isTrueFalse
     ? [
-        { key: TRUE_KEY, icon: '✓', label: t('game.trueLabel'), tile: answerTiles.A },
-        { key: FALSE_KEY, icon: '✕', label: t('game.falseLabel'), tile: answerTiles.B },
+        // Match TV colors: TRUE is blue, FALSE is pink (keys still A/B for scoring)
+        { key: TRUE_KEY, icon: '✓', label: t('game.trueLabel'), tile: answerTiles.B },
+        { key: FALSE_KEY, icon: '✕', label: t('game.falseLabel'), tile: answerTiles.A },
       ]
     : question.options
         .slice(0, 2)
@@ -273,7 +274,9 @@ interface GuessSliderProps {
 }
 
 const GuessSlider: React.FC<GuessSliderProps> = ({ min, max, step, value, onChange, disabled }) => {
+  const trackRef = useRef<View>(null);
   const trackWidthRef = useRef(0);
+  const trackLeftRef = useRef(0);
 
   const updateFromX = useCallback(
     (x: number) => {
@@ -285,12 +288,32 @@ const GuessSlider: React.FC<GuessSliderProps> = ({ min, max, step, value, onChan
     [min, max, step, onChange],
   );
 
+  // The PanResponder is created once and would otherwise close over the first
+  // render's updateFromX/disabled — stale range and lock state on later
+  // questions — so gesture callbacks read the latest values through refs.
+  const updateRef = useRef(updateFromX);
+  updateRef.current = updateFromX;
+  const disabledRef = useRef(!!disabled);
+  disabledRef.current = !!disabled;
+
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => !disabled,
-      onMoveShouldSetPanResponder: () => !disabled,
-      onPanResponderGrant: (evt) => updateFromX(evt.nativeEvent.locationX),
-      onPanResponderMove: (evt) => updateFromX(evt.nativeEvent.locationX),
+      onStartShouldSetPanResponder: () => !disabledRef.current,
+      onMoveShouldSetPanResponder: () => !disabledRef.current,
+      onPanResponderGrant: (evt) => {
+        // Work in page coordinates: locationX on move events can be relative
+        // to the child under the finger (fill/thumb), which makes the thumb
+        // jump while dragging.
+        const { pageX } = evt.nativeEvent;
+        trackRef.current?.measureInWindow((x, _y, width) => {
+          trackLeftRef.current = x;
+          if (width > 0) trackWidthRef.current = width;
+          updateRef.current(pageX - x);
+        });
+      },
+      onPanResponderMove: (_evt, gestureState) => {
+        updateRef.current(gestureState.moveX - trackLeftRef.current);
+      },
     }),
   ).current;
 
@@ -298,14 +321,15 @@ const GuessSlider: React.FC<GuessSliderProps> = ({ min, max, step, value, onChan
 
   return (
     <View
+      ref={trackRef}
       style={sliderStyles.track}
       onLayout={(e) => {
         trackWidthRef.current = e.nativeEvent.layout.width;
       }}
       {...panResponder.panHandlers}
     >
-      <View style={[sliderStyles.fill, { width: `${ratio * 100}%` }]} />
-      <View style={[sliderStyles.thumb, { left: `${ratio * 100}%` }]} />
+      <View style={[sliderStyles.fill, { width: `${ratio * 100}%` }]} pointerEvents="none" />
+      <View style={[sliderStyles.thumb, { left: `${ratio * 100}%` }]} pointerEvents="none" />
     </View>
   );
 };

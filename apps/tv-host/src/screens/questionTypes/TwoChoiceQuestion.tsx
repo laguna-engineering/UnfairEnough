@@ -16,6 +16,17 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { TypeBadge } from './TypeBadge';
 
+/**
+ * Starting font size by option length so long answers fit the tile. Needed
+ * because the web build ignores adjustsFontSizeToFit (native-only prop),
+ * which we still set as a backstop on TV devices.
+ */
+const tileLabelSizeFor = (text: string) => {
+  if (text.length <= 18) return null; // default displayMedium (48)
+  if (text.length <= 40) return { fontSize: 36, lineHeight: 42 };
+  return { fontSize: 28, lineHeight: 34 };
+};
+
 interface TwoChoiceQuestionProps {
   question: Question & { serverTimestamp: number };
   countdown: number;
@@ -70,13 +81,27 @@ export const TwoChoiceQuestion: React.FC<TwoChoiceQuestionProps> = ({
               <View style={styles.letterCircle}>
                 <Text style={styles.letterText}>{question.options[0]?.key}</Text>
               </View>
-              <Text style={styles.tileLabel}>{question.options[0]?.text}</Text>
+              <Text
+                style={[styles.tileLabel, tileLabelSizeFor(question.options[0]?.text ?? '')]}
+                numberOfLines={4}
+                adjustsFontSizeToFit
+                minimumFontScale={0.5}
+              >
+                {question.options[0]?.text}
+              </Text>
             </LinearGradient>
             <LinearGradient colors={gradients.secondary} style={styles.tile}>
               <View style={styles.letterCircle}>
                 <Text style={styles.letterText}>{question.options[1]?.key}</Text>
               </View>
-              <Text style={styles.tileLabel}>{question.options[1]?.text}</Text>
+              <Text
+                style={[styles.tileLabel, tileLabelSizeFor(question.options[1]?.text ?? '')]}
+                numberOfLines={4}
+                adjustsFontSizeToFit
+                minimumFontScale={0.5}
+              >
+                {question.options[1]?.text}
+              </Text>
             </LinearGradient>
           </>
         )}

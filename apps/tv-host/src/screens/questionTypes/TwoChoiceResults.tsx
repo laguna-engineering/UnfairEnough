@@ -17,6 +17,10 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { TypeBadge } from './TypeBadge';
 
+// Past this many players a single column risks running off the bottom of the
+// (auto-advancing, non-scrollable) results screen, so we split into two columns.
+const TWO_COLUMN_THRESHOLD = 8;
+
 interface TwoChoiceResultsProps {
   question: Question & { serverTimestamp: number };
   correctAnswer: AnswerKey;
@@ -40,6 +44,11 @@ export const TwoChoiceResults: React.FC<TwoChoiceResultsProps> = ({
   const totalPlayers = playerResults.length;
   const pickedCount = (key: AnswerKey) => playerResults.filter((r) => r.answer === key).length;
 
+  const twoColumns = leaderboardEntries.length > TWO_COLUMN_THRESHOLD;
+  const splitIndex = Math.ceil(leaderboardEntries.length / 2);
+  const firstColumn = twoColumns ? leaderboardEntries.slice(0, splitIndex) : leaderboardEntries;
+  const secondColumn = twoColumns ? leaderboardEntries.slice(splitIndex) : [];
+
   const fastest = playerResults
     .filter((r) => r.isCorrect && r.responseTimeMs !== null)
     .sort((a, b) => (a.responseTimeMs ?? 0) - (b.responseTimeMs ?? 0))[0];
@@ -54,7 +63,14 @@ export const TwoChoiceResults: React.FC<TwoChoiceResultsProps> = ({
         style={[styles.tile, isCorrect ? styles.tileGlow : styles.tileDimmed]}
       >
         <Text style={styles.glyph}>{glyph}</Text>
-        <Text style={styles.tileLabel}>{label}</Text>
+        <Text
+          style={styles.tileLabel}
+          numberOfLines={2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.6}
+        >
+          {label}
+        </Text>
         {isCorrect && (
           <View style={styles.pickedChip}>
             <Text style={styles.pickedChipText}>
@@ -94,7 +110,18 @@ export const TwoChoiceResults: React.FC<TwoChoiceResultsProps> = ({
 
       <View style={styles.leaderboardSection}>
         <Text style={styles.leaderboardTitle}>{t('results.leaderboard')}</Text>
-        <Leaderboard entries={leaderboardEntries} showRankChange={showRankChange} showPoints />
+        {twoColumns ? (
+          <View style={styles.leaderboardColumns}>
+            <View style={styles.leaderboardColumn}>
+              <Leaderboard entries={firstColumn} showRankChange={showRankChange} showPoints />
+            </View>
+            <View style={styles.leaderboardColumn}>
+              <Leaderboard entries={secondColumn} showRankChange={showRankChange} showPoints />
+            </View>
+          </View>
+        ) : (
+          <Leaderboard entries={leaderboardEntries} showRankChange={showRankChange} showPoints />
+        )}
       </View>
     </ScreenBackground>
   );
@@ -123,7 +150,7 @@ const makeStyles = (t: ThemeTokens) =>
     tiles: {
       flexDirection: 'row',
       gap: spacing.lg,
-      height: 220,
+      height: 128,
     },
     tile: {
       flex: 1,
@@ -143,12 +170,12 @@ const makeStyles = (t: ThemeTokens) =>
     },
     glyph: {
       ...typography.displayLarge,
-      fontSize: 72,
-      lineHeight: 76,
+      fontSize: 40,
+      lineHeight: 44,
       color: '#ffffff',
     },
     tileLabel: {
-      ...typography.h2,
+      ...typography.h3,
       color: '#ffffff',
       textAlign: 'center',
       paddingHorizontal: spacing.md,
@@ -172,6 +199,13 @@ const makeStyles = (t: ThemeTokens) =>
     leaderboardSection: {
       flex: 1,
       marginTop: spacing.lg,
+    },
+    leaderboardColumns: {
+      flexDirection: 'row',
+      gap: spacing.xl,
+    },
+    leaderboardColumn: {
+      flex: 1,
     },
     leaderboardTitle: {
       ...typography.h3,
