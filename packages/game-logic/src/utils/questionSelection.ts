@@ -173,6 +173,21 @@ export interface RoundSelectionContext {
   roundIndex?: number; // 0-based current round; omit for full catch-up (backward compat)
   totalRounds?: number;
   previousQuestionTags?: string[]; // tags of the last served question
+  /** Optional hook invoked with a description of why the question was picked. */
+  explain?: (explanation: SelectionExplanation) => void;
+}
+
+/** Why selectNextQuestion picked what it picked — for host-side logging. */
+export interface SelectionExplanation {
+  path: 'single-remaining' | 'random' | 'catch-up';
+  cause?: string; // for 'random': which fallback triggered
+  catchUpInfluence?: number; // 0..1 phase ramp
+  tagAvoidanceApplied?: boolean; // previous question's tags filtered the pool
+  poolSize?: number; // candidates after tag avoidance
+  trailing?: string[]; // player names below average score
+  leading?: string[];
+  topCandidates?: { id: string; tags: string[]; score: number }[];
+  pickedId?: string;
 }
 
 /**
@@ -193,13 +208,18 @@ export function selectNextQuestion<T extends SelectableQuestion>(
   context: RoundSelectionContext,
   random: () => number = Math.random,
 ): T {
-  if (remainingPool.length <= 1) return remainingPool[0];
+  const explain = context.explain;
+  if (remainingPool.length <= 1) {
+    explain?.({ path: 'single-remaining', pickedId: remainingPool[0]?.id });
+    return remainingPool[0];
+  }
 
   // ── Tag-avoidance filter ──────────────────────────────────
   // When all remaining candidates overlap (e.g. thematic single-tag sets),
   // the filter naturally falls back to the full pool — no special-casing needed.
   const { previousQuestionTags } = context;
   let pool = remainingPool;
+  let tagAvoidanceApplied = false;
 
   if (previousQuestionTags && previousQuestionTags.length > 0) {
     const prevTags = new Set(previousQuestionTags.map((t) => normalizeTag(t)));
@@ -208,19 +228,40 @@ export function selectNextQuestion<T extends SelectableQuestion>(
     );
     if (filtered.length > 0) {
       pool = filtered;
+      tagAvoidanceApplied = true;
     }
   }
 
-  if (pool.length === 1) return pool[0];
+  if (pool.length === 1) {
+    explain?.({
+      path: 'single-remaining',
+      tagAvoidanceApplied,
+      poolSize: 1,
+      pickedId: pool[0].id,
+    });
+    return pool[0];
+  }
 
   const { players, playerTagScores, roundIndex, totalRounds } = context;
 
   const catchUpInfluence = computeCatchUpInfluence(roundIndex, totalRounds);
 
+  const randomPick = (cause: string): T => {
+    const picked = pool[Math.floor(random() * pool.length)];
+    explain?.({
+      path: 'random',
+      cause,
+      catchUpInfluence,
+      tagAvoidanceApplied,
+      poolSize: pool.length,
+      pickedId: picked.id,
+    });
+    return picked;
+  };
+
   // Single player or zero influence → random
-  if (players.length <= 1 || catchUpInfluence === 0) {
-    return pool[Math.floor(random() * pool.length)];
-  }
+  if (players.length <= 1) return randomPick('single player');
+  if (catchUpInfluence === 0) return randomPick('no catch-up influence yet');
 
   // Identify trailing players (below average score)
   const avgScore = players.reduce((s, p) => s + p.currentScore, 0) / players.length;
@@ -228,7 +269,7 @@ export function selectNextQuestion<T extends SelectableQuestion>(
 
   // All tied, first round, or everyone trailing → random
   if (trailingPlayers.length === 0 || trailingPlayers.length === players.length) {
-    return pool[Math.floor(random() * pool.length)];
+    return randomPick('players tied (no trailing/leading split)');
   }
 
   const leadingPlayers = players.filter((p) => p.currentScore >= avgScore);
@@ -273,14 +314,32 @@ export function selectNextQuestion<T extends SelectableQuestion>(
   scored.sort((a, b) => b.score - a.score);
   const topCandidates = scored.slice(0, Math.min(5, scored.length));
 
+  const explainPick = (picked: T): T => {
+    explain?.({
+      path: 'catch-up',
+      catchUpInfluence,
+      tagAvoidanceApplied,
+      poolSize: pool.length,
+      trailing: trailingPlayers.map((p) => p.name),
+      leading: leadingPlayers.map((p) => p.name),
+      topCandidates: topCandidates.map((c) => ({
+        id: c.question.id,
+        tags: c.question.tags,
+        score: Math.round(c.score * 1000) / 1000,
+      })),
+      pickedId: picked.id,
+    });
+    return picked;
+  };
+
   const totalWeight = topCandidates.reduce((s, c) => s + Math.max(c.score, 0.1), 0);
   let roll = random() * totalWeight;
   for (const candidate of topCandidates) {
     roll -= Math.max(candidate.score, 0.1);
-    if (roll <= 0) return candidate.question;
+    if (roll <= 0) return explainPick(candidate.question);
   }
 
-  return topCandidates[0].question;
+  return explainPick(topCandidates[0].question);
 }
 
 // ── Cross-game de-duplication ─────────────────────────────────────────

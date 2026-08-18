@@ -1,4 +1,4 @@
-import type { AnswerKey, QuestionOption } from '@unfairenough/ws-protocol';
+import type { AnswerKey, QuestionOption, QuestionType } from '@unfairenough/ws-protocol';
 
 /** true_false always renders as two tiles keyed A (True) and B (False). */
 export const TRUE_KEY: AnswerKey = 'A';
@@ -22,6 +22,14 @@ export function trueFalseOptions(): QuestionOption[] {
     { key: TRUE_KEY, text: 'True' },
     { key: FALSE_KEY, text: 'False' },
   ];
+}
+
+/**
+ * Time-limit multiplier by question type. Two-step types (predict_room: vote,
+ * then prediction) give players twice the configured time.
+ */
+export function questionTimeMultiplier(type: QuestionType | undefined): number {
+  return type === 'predict_room' ? 2 : 1;
 }
 
 /**

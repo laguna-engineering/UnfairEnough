@@ -32,6 +32,7 @@ import {
   nextQuestion,
   PREDICT_POINTS,
   playersSelectors,
+  questionTimeMultiplier,
   type RootState,
   rankPlayers,
   receiveAnswer,
@@ -288,8 +289,13 @@ class GameController implements IGameController {
       let rawPool: QuestionWithMeta[];
 
       if (this.isMetaSet && questionSetId) {
-        // Meta set: load freshest questions from child sets (ordered by last_asked_at)
-        rawPool = await questionsRepo.getQuestionsByMetaSet(db, questionSetId, totalQuestions * 3);
+        // Meta set: load a wide, set-balanced pool (round-robin across child
+        // sets, freshest-first within each), capped for very large banks.
+        rawPool = await questionsRepo.getQuestionsByMetaSet(
+          db,
+          questionSetId,
+          Math.max(totalQuestions * 3, questionsRepo.META_SET_POOL_FETCH_LIMIT),
+        );
       } else {
         // Casual mode: load 3× from the general pool
         rawPool = await questionsRepo.getRandomQuestions(
@@ -677,7 +683,8 @@ class GameController implements IGameController {
   private sendQuestion(question: QuestionWithMeta): void {
     this.mediaPreviewEndsAt = 0;
     const state = this.getState();
-    const timeLimit = state.game.config.questionTimeLimit;
+    // Two-step types (predict_room: vote, then prediction) get double time.
+    const timeLimit = state.game.config.questionTimeLimit * questionTimeMultiplier(question.type);
 
     const tags = !question.hideTags && question.tags.length > 0 ? question.tags : undefined;
 

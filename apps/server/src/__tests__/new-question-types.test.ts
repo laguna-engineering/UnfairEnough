@@ -241,9 +241,10 @@ describe('predict_room resolution', () => {
     sendPrediction(room, players[0], questionId, 'A');
 
     sendVote(room, players[1], questionId, 'B');
-    // players[1] never predicts — timer must expire (no early-end since not everyone is "done").
+    // players[1] never predicts — timer must expire (no early-end since not
+    // everyone is "done"). Two-step types get 2× the 3s limit, so wait 6s+.
 
-    await wait(3500 + 2500);
+    await wait(6500 + 2500);
 
     const roundEnd = findMessage(players[0], 'ROUND_END');
     expect(roundEnd.payload.voteCounts).toEqual({ A: 1, B: 1 });
@@ -263,7 +264,8 @@ describe('predict_room resolution', () => {
     // No ANSWER_ACK should have been sent for the rejected prediction.
     expect(findMessage(players[0], 'ANSWER_ACK')).toBeUndefined();
 
-    await wait(3500 + 2500);
+    // Two-step types get 2× the 3s limit, so wait 6s+ for the timer to expire.
+    await wait(6500 + 2500);
     const roundEnd = findMessage(players[0], 'ROUND_END');
     const result = roundEnd.payload.playerResults[0];
     expect(result.prediction).toBeNull();

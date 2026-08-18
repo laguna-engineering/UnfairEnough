@@ -63,6 +63,7 @@ export {
 export {
   defaultGuessStep,
   FALSE_KEY,
+  questionTimeMultiplier,
   resolvePollWinners,
   TRUE_KEY,
   trueFalseCorrectKey,

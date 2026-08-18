@@ -35,9 +35,13 @@ import {
   filterOverusedPictureYears,
   filterRecentlyServedQuestions,
   limitPicturesPerAnswerYear,
+  type SelectionExplanation,
   selectNextQuestion,
 } from '../../../packages/game-logic/src/utils/questionSelection';
-import { resolvePollWinners } from '../../../packages/game-logic/src/utils/questionTypes';
+import {
+  questionTimeMultiplier,
+  resolvePollWinners,
+} from '../../../packages/game-logic/src/utils/questionTypes';
 import {
   calculateClosestScore,
   calculateScore,
@@ -167,6 +171,8 @@ export class GameRoom {
 
   // Tag-based personalization state
   private playerTagScores = new Map<string, Map<string, number>>();
+  /** Why the current question was picked — logged with QUESTION_SENT. */
+  private lastSelectionExplanation: SelectionExplanation | null = null;
   private currentRoundDifficulties = new Map<string, number>();
 
   // Game configuration
@@ -737,8 +743,14 @@ export class GameRoom {
     };
   }
 
+  /** Effective time limit for a question; two-step types get double time. */
+  private questionTimeLimit(q: QuestionWithMeta): number {
+    const base = this.configuredTimeLimit ?? q.timeLimit ?? DEFAULT_QUESTION_TIME_LIMIT;
+    return base * questionTimeMultiplier(q.type);
+  }
+
   private buildQuestionPayload(q: QuestionWithMeta): Question & { serverTimestamp: number } {
-    const timeLimit = this.configuredTimeLimit ?? q.timeLimit ?? DEFAULT_QUESTION_TIME_LIMIT;
+    const timeLimit = this.questionTimeLimit(q);
     const elapsed = Math.floor((Date.now() - this.questionStartTime) / 1000);
     const remaining = Math.max(0, timeLimit - elapsed);
 
@@ -935,11 +947,13 @@ export class GameRoom {
       let rawPool: QuestionWithMeta[];
 
       if (this.isMetaSet && this.questionSetId) {
-        // Meta set: load freshest questions from child sets (ordered by last_asked_at)
+        // Meta set: load a wide, set-balanced pool (round-robin across child
+        // sets, freshest-first within each) so the diversity pipeline has the
+        // full breadth to pick from, capped for very large banks.
         rawPool = await questionsRepo.getQuestionsByMetaSet(
           this.db,
           this.questionSetId,
-          requestedCount * 3,
+          Math.max(requestedCount * 3, questionsRepo.META_SET_POOL_FETCH_LIMIT),
         );
       } else {
         // Casual mode: load 3× from the general pool
@@ -1154,7 +1168,7 @@ export class GameRoom {
   }
 
   private sendQuestion(q: QuestionWithMeta): void {
-    const timeLimit = this.configuredTimeLimit ?? q.timeLimit ?? DEFAULT_QUESTION_TIME_LIMIT;
+    const timeLimit = this.questionTimeLimit(q);
 
     this.phase = 'QUESTION';
     this.mediaPreviewEndsAt = 0;
@@ -1188,6 +1202,19 @@ export class GameRoom {
     // Warm the next question's media on the host while this one plays.
     this.requestPreload();
 
+    const selection = this.lastSelectionExplanation;
+    this.lastSelectionExplanation = null;
+    if (selection) {
+      console.log(
+        `[room ${this.roomCode}] Q${this.currentQuestionIndex + 1} pick: ${selection.path}` +
+          `${selection.cause ? ` (${selection.cause})` : ''}` +
+          ` tags=[${q.tags.join(', ')}]` +
+          `${selection.catchUpInfluence !== undefined ? ` catchUp=${selection.catchUpInfluence.toFixed(2)}` : ''}` +
+          `${selection.trailing?.length ? ` trailing=[${selection.trailing.join(', ')}]` : ''}` +
+          `${selection.tagAvoidanceApplied ? ' tagAvoidance' : ''}`,
+      );
+    }
+
     this.logEvent('QUESTION_SENT', null, {
       questionId: q.id,
       text: q.text,
@@ -1195,6 +1222,8 @@ export class GameRoom {
       options: q.options,
       timeLimit,
       questionNumber: this.currentQuestionIndex + 1,
+      tags: q.tags,
+      selection: selection ?? undefined,
     });
 
     let remaining = timeLimit;
@@ -1335,12 +1364,10 @@ export class GameRoom {
 
           payload.guestSessionToken = rawGuestToken;
 
-          // Derive server URL from the host WS connection if available
-          if (this.hostWs) {
-            // The server URL is inferred from the listening port
-            const port = process.env.PORT || '3000';
-            payload.serverUrl = `http://localhost:${port}`;
-          }
+          // Derive the server URL from the joining player's own connection —
+          // a hardcoded localhost URL would be stored on the phone and break
+          // reconnects in hosted mode.
+          payload.serverUrl = (ws.data as WSData).serverBaseUrl || payload.serverUrl || '';
         } catch (err) {
           console.error('Guest session creation failed:', err);
         }
@@ -1672,7 +1699,7 @@ export class GameRoom {
   /** Choice types (multiple_choice, true_false): existing scoring, unchanged. */
   private resolveChoiceRound(q: QuestionWithMeta): RoundResult {
     const correctAnswer = q.correctAnswer as AnswerKey;
-    const timeLimit = this.configuredTimeLimit ?? q.timeLimit ?? DEFAULT_QUESTION_TIME_LIMIT;
+    const timeLimit = this.questionTimeLimit(q);
 
     // Amplify the speed bonus for answer-while-playing subject-audio questions.
     const speedBonusMultiplier = computeSpeedBonusMultiplier(q.audio);
@@ -2061,6 +2088,7 @@ export class GameRoom {
     if (players.length === 0) {
       // No profiled players — random pick (tag avoidance is skipped; it requires
       // selectNextQuestion which needs at least one profiled player for scoring)
+      this.lastSelectionExplanation = { path: 'random', cause: 'no profiled players' };
       return remaining[Math.floor(Math.random() * remaining.length)];
     }
 
@@ -2070,6 +2098,9 @@ export class GameRoom {
       roundIndex: this.currentQuestionIndex,
       totalRounds: this.totalQuestionCount,
       previousQuestionTags: this.activeQuestion?.tags,
+      explain: (e) => {
+        this.lastSelectionExplanation = e;
+      },
     });
   }
 

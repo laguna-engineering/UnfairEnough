@@ -510,16 +510,32 @@ export async function getMetaSetChildIds(db: DbAdapter, metaSetId: string): Prom
   return rows.map((r) => r.child_set_id);
 }
 
+/**
+ * Cap on questions fetched for a meta-set game pool. Keeps memory bounded if
+ * the bank grows to tens of thousands of questions; the round-robin ordering
+ * below keeps the capped slice balanced across child sets.
+ */
+export const META_SET_POOL_FETCH_LIMIT = 1000;
+
 export async function getQuestionsByMetaSet(
   db: DbAdapter,
   metaSetId: string,
   limit?: number,
 ): Promise<QuestionWithMeta[]> {
-  let sql = `SELECT q.* FROM questions q
-     JOIN meta_set_children msc ON q.set_id = msc.child_set_id
-     JOIN question_sets cs ON cs.id = msc.child_set_id AND cs.deleted_at IS NULL
-     WHERE msc.meta_set_id = ?
-     ORDER BY q.last_asked_at IS NOT NULL, q.last_asked_at ASC, RANDOM()`;
+  // Round-robin across child sets (freshest-first WITHIN each set) instead of
+  // globally freshest-first: a freshly imported child set would otherwise fill
+  // the whole limited window by itself and the game becomes single-topic.
+  let sql = `SELECT * FROM (
+       SELECT q.*, ROW_NUMBER() OVER (
+         PARTITION BY q.set_id
+         ORDER BY q.last_asked_at IS NOT NULL, q.last_asked_at ASC, RANDOM()
+       ) AS set_rank
+       FROM questions q
+       JOIN meta_set_children msc ON q.set_id = msc.child_set_id
+       JOIN question_sets cs ON cs.id = msc.child_set_id AND cs.deleted_at IS NULL
+       WHERE msc.meta_set_id = ?
+     )
+     ORDER BY set_rank, RANDOM()`;
   const params: (string | number)[] = [metaSetId];
 
   if (limit) {
