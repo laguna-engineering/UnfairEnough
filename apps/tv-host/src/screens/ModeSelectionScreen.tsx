@@ -11,6 +11,7 @@ import {
 import type React from 'react';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { APP_VERSION } from '../version';
 
 interface Props {
   onSelectAccount: () => void;
@@ -84,6 +85,8 @@ export const ModeSelectionScreen: React.FC<Props> = ({
           </Pressable>
         ))}
       </View>
+
+      <Text style={styles.version}>v{APP_VERSION}</Text>
     </ScreenBackground>
   );
 };
@@ -142,6 +145,15 @@ const makeStyles = (t: ThemeTokens) =>
       ...typography.bodyLarge,
       color: t.inkSoft,
       textAlign: 'center',
+    },
+    // Absolute so it can't shift the vertically centered cards row.
+    version: {
+      ...typography.bodySmall,
+      color: t.inkSoft,
+      opacity: 0.6,
+      position: 'absolute',
+      bottom: tvSafeArea.vertical / 2,
+      alignSelf: 'center',
     },
     focused: {
       borderColor: t.accent,

@@ -12,6 +12,7 @@ import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { addRecentServer, getRecentServers, initRecentServers } from '../services/recentServers';
+import { APP_VERSION } from '../version';
 
 // Only import camera on native platforms
 let CameraView: any = null;
@@ -206,6 +207,8 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
     setManualIp(address);
   };
 
+  const versionTag = <Text style={styles.version}>v{APP_VERSION}</Text>;
+
   const ipInputSection = (
     <>
       <Text style={styles.manualLabel}>{t('scan.enterTvIp')}</Text>
@@ -287,6 +290,7 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
             ipInputSection
           )}
         </Card>
+        {versionTag}
       </ScreenBackground>
     );
   }
@@ -296,6 +300,7 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
     return (
       <ScreenBackground style={styles.container}>
         <Text style={styles.loadingText}>{t('scan.loadingCamera')}</Text>
+        {versionTag}
       </ScreenBackground>
     );
   }
@@ -312,6 +317,7 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
             style={styles.permissionButton}
           />
         </Card>
+        {versionTag}
       </ScreenBackground>
     );
   }
@@ -324,6 +330,7 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
           <Text style={styles.title}>{t('lobby.title')}</Text>
         </View>
         <Card style={styles.manualCardLarge}>{ipInputSection}</Card>
+        {versionTag}
       </ScreenBackground>
     );
   }
@@ -390,6 +397,7 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
           />
         </View>
       </Card>
+      {versionTag}
     </ScreenBackground>
   );
 };
@@ -566,6 +574,16 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
+  },
+  // marginTop: 'auto' pins it to the bottom on the screens whose content
+  // doesn't fill the height (loading, permission, room-code entry).
+  version: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 'auto',
+    paddingTop: spacing.sm,
+    opacity: 0.6,
   },
   recentChipText: {
     ...typography.bodySmall,

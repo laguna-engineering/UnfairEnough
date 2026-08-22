@@ -33,6 +33,15 @@ yarn format               # Auto-fix formatting only
 # E2E testing (Playwright)
 yarn test:e2e             # Run all E2E tests (headless)
 yarn test:e2e:ui          # Run with Playwright UI
+
+# Releases — bump the launch-screen stamp (yy.WW.pp), commit it, publish an EAS update
+yarn release mobile       # Bump patch, or reset to .0 in a new ISO week
+yarn release tv
+yarn release mobile tv    # Both, each with its own independent version
+yarn release tv --set 26.35.0
+yarn release mobile --dry-run     # Print what would happen
+yarn release mobile --no-publish  # Bump + commit only
+yarn release tv -- --branch preview   # Args after -- go to `eas update`
 ```
 
 ## Architecture
@@ -68,3 +77,6 @@ WebSocket protocol: host creates room → players join with room code → server
 - Path alias: `@unfairenough/*` → `packages/*/src`.
 - React 19.1.0 is pinned globally via `resolutions`.
 - Max 12 players per room.
+- Each app's release stamp lives in its own `src/version.ts` (JS, so `eas update` ships it),
+  never in `app.config.ts` — both apps use the fingerprint runtime version policy and the Expo
+  config `version` field feeds that fingerprint.

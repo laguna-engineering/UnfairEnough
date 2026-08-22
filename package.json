@@ -32,7 +32,8 @@
     "eas:update:tv": "yarn workspace @unfairenough/tv-host eas:update",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "validate:media": "bun scripts/validate-media.ts"
+    "validate:media": "bun scripts/validate-media.ts",
+    "release": "bun scripts/release.ts"
   },
   "resolutions": {
     "react": "19.1.0",
