@@ -34,7 +34,7 @@ yarn format               # Auto-fix formatting only
 yarn test:e2e             # Run all E2E tests (headless)
 yarn test:e2e:ui          # Run with Playwright UI
 
-# Releases — bump the launch-screen stamp (yy.WW.pp), commit it, publish an EAS update
+# Releases — bump the launch-screen stamp (yy.WW.pp), commit it, publish an Android EAS update
 yarn release mobile       # Bump patch, or reset to .0 in a new ISO week
 yarn release tv
 yarn release mobile tv    # Both, each with its own independent version
@@ -42,6 +42,7 @@ yarn release tv --set 26.35.0
 yarn release mobile --dry-run     # Print what would happen
 yarn release mobile --no-publish  # Bump + commit only
 yarn release tv -- --branch preview   # Args after -- go to `eas update`
+                                      # (updates are Android-only unless you pass --platform)
 ```
 
 ## Architecture

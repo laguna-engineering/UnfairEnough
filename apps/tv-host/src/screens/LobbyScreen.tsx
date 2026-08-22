@@ -20,6 +20,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { useGameController } from '../hooks/useGameController';
 import { getCachedAuthState } from '../services/AuthService';
 import { getDb } from '../services/database';
+import { APP_VERSION } from '../version';
 import { ImportQuestionsModal } from './ImportQuestionsModal';
 
 const QR_SIZE = 150;
@@ -891,6 +892,8 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
           onImported={loadQuestionSets}
         />
       )}
+
+      <Text style={styles.version}>v{APP_VERSION}</Text>
     </ScreenBackground>
   );
 };
@@ -901,6 +904,15 @@ const makeStyles = (t: ThemeTokens) =>
       paddingHorizontal: spacing.xxl,
       paddingTop: spacing.md,
       paddingBottom: tvSafeArea.vertical,
+    },
+    // Bottom-right corner, inside the TV safe area so it isn't cropped by overscan.
+    version: {
+      ...typography.bodySmall,
+      color: t.inkSoft,
+      opacity: 0.5,
+      position: 'absolute',
+      right: spacing.xxl,
+      bottom: spacing.md,
     },
     header: {
       flexDirection: 'row',

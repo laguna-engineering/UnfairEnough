@@ -13,6 +13,9 @@
  *   yarn release mobile --no-publish # bump + commit only
  *   yarn release mobile -- --branch preview   # extra args go to `eas update`
  *
+ * Updates publish for Android only, since that's the only platform in use. Pass
+ * your own `-- --platform <ios|all>` if that ever changes.
+ *
  * The stamp lives in each app's src/version.ts, i.e. inside the JS bundle, so
  * `eas update` carries it to installed apps. Deliberately NOT the app.config.ts
  * `version` field: both apps use the fingerprint runtime version policy and
@@ -101,6 +104,12 @@ const passThroughAt = argv.indexOf('--');
 const easArgs = passThroughAt === -1 ? [] : argv.slice(passThroughAt + 1);
 const args = passThroughAt === -1 ? argv : argv.slice(0, passThroughAt);
 
+// Android is the only platform in use — no iOS or tvOS devices — so updates go
+// there unless a pass-through `--platform` says otherwise.
+const platformArgs = easArgs.some((arg) => arg.startsWith('--platform'))
+  ? []
+  : ['--platform', 'android'];
+
 const dryRun = args.includes('--dry-run');
 const publish = !args.includes('--no-publish');
 const commit = !args.includes('--no-commit');
@@ -146,7 +155,7 @@ if (dryRun) {
   }
   if (publish) {
     for (const { app } of releases) {
-      console.log(`  yarn ${app.updateScript} ${easArgs.join(' ')}`.trimEnd());
+      console.log(`  yarn ${app.updateScript} ${[...platformArgs, ...easArgs].join(' ')}`.trimEnd());
     }
   }
   process.exit(0);
@@ -187,11 +196,14 @@ if (otherChanges.length > 0 && publish) {
 
 if (!publish) {
   console.log('Skipped publish (--no-publish). Run it yourself with:');
-  for (const { app } of releases) console.log(`  yarn ${app.updateScript}`);
+  for (const { app } of releases) {
+    console.log(`  yarn ${app.updateScript} ${platformArgs.join(' ')}`.trimEnd());
+  }
   process.exit(0);
 }
 
 for (const { app, next } of releases) {
-  console.log(`Publishing ${app.name} ${next}…`);
-  run('yarn', [app.updateScript, '--message', `Release ${app.name} ${next}`, ...easArgs]);
+  console.log(`Publishing ${app.name} ${next} (${platformArgs[1] ?? 'platform from args'})…`);
+  const message = `Release ${app.name} ${next}`;
+  run('yarn', [app.updateScript, '--message', message, ...platformArgs, ...easArgs]);
 }
