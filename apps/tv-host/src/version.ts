@@ -10,4 +10,4 @@
 // with installed builds. Here the stamp ships inside the JS bundle, which is
 // exactly what an EAS update replaces — so a changed number on screen means the
 // update landed.
-export const APP_VERSION = '26.34.1';
+export const APP_VERSION = '26.34.2';
