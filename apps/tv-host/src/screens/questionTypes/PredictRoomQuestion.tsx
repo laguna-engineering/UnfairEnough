@@ -16,6 +16,7 @@ import type React from 'react';
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { withAlpha } from '../../utils/color';
+import { QuestionPrompt } from './QuestionPrompt';
 import { TypeBadge } from './TypeBadge';
 
 const OPTION_GRADIENTS: Record<AnswerKey, readonly [string, string]> = {
@@ -65,25 +66,28 @@ export const PredictRoomQuestion: React.FC<PredictRoomQuestionProps> = ({
         <Timer seconds={countdown} totalSeconds={question.timeLimit} size="large" />
       </View>
 
-      <Text style={styles.questionText}>{question.text}</Text>
+      <QuestionPrompt text={question.text} style={styles.prompt} />
 
       <View style={styles.grid}>
         {rows.map((row) => (
           <View key={row.map((o) => o.key).join('-')} style={styles.gridRow}>
-            {row.map((option) => (
-              <LinearGradient
-                key={option.key}
-                colors={OPTION_GRADIENTS[option.key]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.optionTile}
-              >
-                <View style={styles.letterCircle}>
-                  <Text style={styles.letterText}>{option.key}</Text>
-                </View>
-                <Text style={styles.optionText}>{option.text}</Text>
-              </LinearGradient>
-            ))}
+            {row.map((option) => {
+              const tile = theme.answerTiles[option.key];
+              return (
+                <LinearGradient
+                  key={option.key}
+                  colors={OPTION_GRADIENTS[option.key]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.optionTile}
+                >
+                  <View style={[styles.letterCircle, { backgroundColor: tile.badgeBg }]}>
+                    <Text style={[styles.letterText, { color: tile.badgeInk }]}>{option.key}</Text>
+                  </View>
+                  <Text style={[styles.optionText, { color: tile.ink }]}>{option.text}</Text>
+                </LinearGradient>
+              );
+            })}
           </View>
         ))}
       </View>
@@ -123,44 +127,43 @@ const makeStyles = (t: ThemeTokens) =>
       ...typography.h2,
       color: t.inkSoft,
     },
-    questionText: {
-      ...typography.h1,
-      color: t.ink,
-      textAlign: 'center',
+    prompt: {
       marginVertical: spacing.lg,
     },
+    // Rows size to their content and the block centres in the leftover space —
+    // same shape as the multiple-choice grid. Letting the rows flex made the
+    // four tiles stretch to fill the screen.
     grid: {
       flex: 1,
+      justifyContent: 'center',
       gap: spacing.md,
     },
     gridRow: {
-      flex: 1,
       flexDirection: 'row',
       gap: spacing.md,
     },
     optionTile: {
       flex: 1,
-      borderRadius: borderRadius.xl,
+      borderRadius: borderRadius.full,
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.md,
-      paddingHorizontal: spacing.lg,
+      padding: spacing.md,
     },
     letterCircle: {
       width: 56,
       height: 56,
       borderRadius: borderRadius.full,
-      backgroundColor: 'rgba(255,255,255,0.25)',
       alignItems: 'center',
       justifyContent: 'center',
     },
+    // Colour comes from the per-key answerTiles tokens, same as multiple choice —
+    // white ink is unreadable on the yellow and pink tiles.
     letterText: {
-      ...typography.h2,
-      color: '#ffffff',
+      ...typography.h1,
     },
     optionText: {
-      ...typography.h2,
-      color: '#ffffff',
+      ...typography.h3,
       flexShrink: 1,
     },
     countersRow: {

@@ -10,6 +10,10 @@ import {
  * Each question type has its own QUESTION and RESULTS screen on the TV. They
  * share no layout code, so each one needs its own crowded-room check — the
  * per-player chips and markers are exactly what a 12-player room stresses.
+ *
+ * Results screens come in two shapes: up to five players everyone is named on
+ * the TV, above that the at-scale layouts take over and the individual result
+ * moves to the phone. Both shapes are exercised here.
  */
 
 test.describe('multiple choice', () => {
@@ -68,23 +72,15 @@ test.describe('closest wins', () => {
     }
   });
 
-  test('results place every guess on the number line or the outlier strip', async ({ page }) => {
-    await gotoPreview(page, 'RESULTS', { players: 12, type: 'closest_wins' });
+  test('a small room puts every guess on the number line', async ({ page }) => {
+    await gotoPreview(page, 'RESULTS', { players: 5, type: 'closest_wins' });
 
     await expect(page.getByText('THE ANSWER')).toBeVisible();
     await expect(page.getByText('7,600')).toBeVisible();
     await expect(page.getByText('CLOSEST', { exact: false }).first()).toBeVisible();
 
     // A guess that renders nowhere is a player whose round vanished.
-    for (const name of previewPlayerNames(12)) {
-      await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
-    }
-  });
-
-  test('guess markers stay inside the screen with a full room', async ({ page }) => {
-    await gotoPreview(page, 'RESULTS', { players: 12, type: 'closest_wins' });
-
-    for (const name of previewPlayerNames(12)) {
+    for (const name of previewPlayerNames(5)) {
       await expectInsideViewport(
         page,
         page.getByText(name, { exact: true }).first(),
@@ -93,25 +89,31 @@ test.describe('closest wins', () => {
     }
   });
 
-  // KNOWN BUG — assignLanes() only has 3 lanes, so a 12-player room stacks
-  // chips on top of each other and the covered player's score is unreadable.
-  // Remove the test.fail() once the lane count scales with the room.
-  test('guess chips do not cover each other', async ({ page }) => {
-    test.fail();
+  test('a crowded room banks the guesses instead of stacking chips', async ({ page }) => {
     await gotoPreview(page, 'RESULTS', { players: 12, type: 'closest_wins' });
 
-    const chips = page.getByTestId('guess-chip');
-    const count = await chips.count();
+    // The number line is gone — labelled chips per guess is what used to stack
+    // players on top of each other and hide their scores.
+    await expect(page.getByTestId('guess-chip')).toHaveCount(0);
+
+    // Five bands, and between them they hold every single guess.
+    const bands = page.getByTestId('proximity-band');
+    await expect(bands).toHaveCount(5);
+    const counts = await page.getByTestId('band-count').allInnerTexts();
+    const banded = counts.reduce((sum, text) => sum + Number.parseInt(text, 10), 0);
+    expect(banded).toBe(12);
+
+    // Only the closest few get named, and their rows must not overlap.
+    const rows = page.getByTestId('closest-row');
+    await expect(rows).toHaveCount(5);
+    const count = await rows.count();
     await expectNoOverlap(
-      Array.from({ length: count }, (_, i) => chips.nth(i)),
-      Array.from({ length: count }, (_, i) => `guess chip ${i + 1}`),
+      Array.from({ length: count }, (_, i) => rows.nth(i)),
+      Array.from({ length: count }, (_, i) => `closest row ${i + 1}`),
     );
   });
 
-  // KNOWN BUG — the answer card is absolutely positioned over the track and
-  // lands on top of the question text when the correct value sits mid-range.
-  test('the answer card does not cover the question', async ({ page }) => {
-    test.fail();
+  test('the crowded-room answer does not cover the question', async ({ page }) => {
     await gotoPreview(page, 'RESULTS', { players: 12, type: 'closest_wins' });
 
     await expectNoOverlap(
@@ -134,11 +136,11 @@ test.describe('predict the room', () => {
     await expect(page.getByText('6 / 12 predicted')).toBeVisible();
   });
 
-  test('results show the vote split and everyone who called it', async ({ page }) => {
-    await gotoPreview(page, 'RESULTS', { players: 12, type: 'predict_room' });
+  test('a small room shows the vote split and names who called it', async ({ page }) => {
+    await gotoPreview(page, 'RESULTS', { players: 5, type: 'predict_room' });
 
     await expect(page.getByText("ROOM'S PICK")).toBeVisible();
-    await expect(page.getByText('Called it:')).toBeVisible();
+    await expectInsideViewport(page, page.getByText('Called it:'), 'called-it row');
 
     // The bars must account for the whole room (each is rounded on its own, so
     // the total can land a point either side of 100).
@@ -148,11 +150,18 @@ test.describe('predict the room', () => {
     expect(total).toBeLessThanOrEqual(102);
   });
 
-  test('the "called it" row stays on screen when a third of the room calls it', async ({
-    page,
-  }) => {
+  test('a crowded room shows one anonymous dot per vote', async ({ page }) => {
     await gotoPreview(page, 'RESULTS', { players: 12, type: 'predict_room' });
 
-    await expectInsideViewport(page, page.getByText('Called it:'), 'called-it row');
+    await expect(page.getByText("ROOM'S PICK")).toBeVisible();
+
+    // Votes are anonymous by protocol, so the crowd is the whole reading: one
+    // dot per vote, and every vote in the room accounted for.
+    await expect(page.getByTestId('predict-option-column')).toHaveCount(4);
+    await expect(page.getByTestId('predict-vote-dot')).toHaveCount(12);
+
+    // Nobody who called it gets named on the TV — only counted.
+    await expect(page.getByText('4 players called it')).toBeVisible();
+    await expectInsideViewport(page, page.getByText('4 players called it'), 'called-it pill');
   });
 });

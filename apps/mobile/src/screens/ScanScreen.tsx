@@ -60,6 +60,34 @@ interface ScanScreenProps {
   onLanguageChange: (lang: SupportedLanguage) => void;
 }
 
+/** Language pills, on their own row above the title so a long title can't collide. */
+function LanguageSwitcher({ onSelect }: { onSelect: (lang: SupportedLanguage) => void }) {
+  const { i18n } = useTranslation();
+  return (
+    <View style={styles.languageRow}>
+      {LANGUAGES.map((lang) => (
+        <TouchableOpacity
+          key={lang.code}
+          onPress={() => onSelect(lang.code)}
+          style={[
+            styles.languageButton,
+            i18n.language === lang.code && styles.languageButtonActive,
+          ]}
+        >
+          <Text
+            style={[
+              styles.languageButtonText,
+              i18n.language === lang.code && styles.languageButtonTextActive,
+            ]}
+          >
+            {lang.label}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
 function RecentServersList({
   servers,
   onSelect,
@@ -88,7 +116,7 @@ function RecentServersList({
 }
 
 export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageChange }) => {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [recentServers, setRecentServers] = useState<string[]>([]);
 
   const handleLanguageChange = useCallback(
@@ -241,30 +269,8 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
   if (Platform.OS === 'web') {
     return (
       <ScreenBackground style={styles.container}>
-        <View style={styles.headerRow}>
-          <Text style={styles.title}>{t('lobby.title')}</Text>
-          <View style={styles.languageSwitcher}>
-            {LANGUAGES.map((lang) => (
-              <TouchableOpacity
-                key={lang.code}
-                onPress={() => handleLanguageChange(lang.code)}
-                style={[
-                  styles.languageButton,
-                  i18n.language === lang.code && styles.languageButtonActive,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.languageButtonText,
-                    i18n.language === lang.code && styles.languageButtonTextActive,
-                  ]}
-                >
-                  {lang.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+        <LanguageSwitcher onSelect={handleLanguageChange} />
+        <Text style={styles.title}>{t('lobby.title')}</Text>
         <Text style={styles.subtitle}>{t('scan.joinGameOnTv')}</Text>
 
         <Card style={styles.manualCardLarge}>
@@ -326,9 +332,7 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
   if (showIpInput) {
     return (
       <ScreenBackground style={styles.container}>
-        <View style={styles.headerRow}>
-          <Text style={styles.title}>{t('lobby.title')}</Text>
-        </View>
+        <Text style={styles.title}>{t('lobby.title')}</Text>
         <Card style={styles.manualCardLarge}>{ipInputSection}</Card>
         {versionTag}
       </ScreenBackground>
@@ -337,30 +341,8 @@ export const ScanScreen: React.FC<ScanScreenProps> = ({ onConnect, onLanguageCha
 
   return (
     <ScreenBackground style={styles.container}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>{t('lobby.title')}</Text>
-        <View style={styles.languageSwitcher}>
-          {LANGUAGES.map((lang) => (
-            <TouchableOpacity
-              key={lang.code}
-              onPress={() => handleLanguageChange(lang.code)}
-              style={[
-                styles.languageButton,
-                i18n.language === lang.code && styles.languageButtonActive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.languageButtonText,
-                  i18n.language === lang.code && styles.languageButtonTextActive,
-                ]}
-              >
-                {lang.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
+      <LanguageSwitcher onSelect={handleLanguageChange} />
+      <Text style={styles.title}>{t('lobby.title')}</Text>
       <Text style={styles.subtitle}>{t('scan.scanQrOnTv')}</Text>
 
       <View style={styles.cameraContainer}>
@@ -412,17 +394,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.xl,
   },
-  headerRow: {
+  languageRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: spacing.xl,
-  },
-  languageSwitcher: {
-    position: 'absolute',
-    right: 0,
-    flexDirection: 'row',
+    justifyContent: 'flex-end',
     gap: spacing.xs,
+    marginTop: spacing.md,
   },
   languageButton: {
     paddingHorizontal: spacing.sm,
@@ -447,6 +423,7 @@ const styles = StyleSheet.create({
     ...typography.h1,
     color: colors.primary,
     textAlign: 'center',
+    marginTop: spacing.xl,
     marginBottom: spacing.sm,
   },
   subtitle: {

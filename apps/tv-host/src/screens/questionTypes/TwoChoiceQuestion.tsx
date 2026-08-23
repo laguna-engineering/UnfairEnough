@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import type React from 'react';
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { QuestionPrompt } from './QuestionPrompt';
 import { TypeBadge } from './TypeBadge';
 
 /**
@@ -61,16 +62,23 @@ export const TwoChoiceQuestion: React.FC<TwoChoiceQuestionProps> = ({
         <Timer seconds={countdown} totalSeconds={question.timeLimit} size="large" />
       </View>
 
-      <Text style={styles.questionText}>{question.text}</Text>
+      <QuestionPrompt
+        text={question.text}
+        size={isTrueFalse ? 'large' : 'default'}
+        style={styles.prompt}
+      />
 
-      <View style={styles.tiles}>
+      <View style={[styles.tiles, isTrueFalse && styles.tilesTrueFalse]}>
         {isTrueFalse ? (
           <>
-            <LinearGradient colors={gradients.secondary} style={styles.tile}>
+            <LinearGradient
+              colors={gradients.secondary}
+              style={[styles.tile, styles.tileTrueFalse]}
+            >
               <Text style={styles.glyph}>✓</Text>
               <Text style={styles.tileLabel}>{t('game.trueLabel')}</Text>
             </LinearGradient>
-            <LinearGradient colors={gradients.primary} style={styles.tile}>
+            <LinearGradient colors={gradients.primary} style={[styles.tile, styles.tileTrueFalse]}>
               <Text style={styles.glyph}>✕</Text>
               <Text style={styles.tileLabel}>{t('game.falseLabel')}</Text>
             </LinearGradient>
@@ -133,16 +141,20 @@ const makeStyles = (t: ThemeTokens) =>
       ...typography.h2,
       color: t.inkSoft,
     },
-    questionText: {
-      ...typography.h1,
-      color: t.ink,
-      textAlign: 'center',
+    prompt: {
       marginVertical: spacing.xl,
     },
     tiles: {
       flex: 1,
       flexDirection: 'row',
       gap: spacing.xl,
+    },
+    // A tick and a four-letter word need nothing like the whole screen, and at
+    // full height they dwarf the question — which for true/false is the only
+    // thing anyone actually has to read. Cap the pair and centre it instead.
+    tilesTrueFalse: {
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     tile: {
       flex: 1,
@@ -151,10 +163,14 @@ const makeStyles = (t: ThemeTokens) =>
       justifyContent: 'center',
       gap: spacing.sm,
     },
+    tileTrueFalse: {
+      height: 300,
+      maxWidth: 520,
+    },
     glyph: {
       ...typography.displayLarge,
-      fontSize: 96,
-      lineHeight: 100,
+      fontSize: 72,
+      lineHeight: 78,
       color: '#ffffff',
     },
     letterCircle: {

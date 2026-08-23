@@ -509,14 +509,16 @@ const cwStyles = StyleSheet.create({
     alignItems: 'center',
     marginTop: spacing.md,
   },
+  // The card is a 16% tint over the dark screen, not a solid yellow tile, so the
+  // ink is the bright accent — the same way the points card below uses `success`.
   answerLabel: {
     ...typography.label,
-    color: '#5a4b00',
+    color: colors.accentYellow,
     letterSpacing: 2,
   },
   answerValue: {
     ...typography.displayMedium,
-    color: '#5a4b00',
+    color: colors.accentYellow,
     marginTop: spacing.xs,
   },
   guessRow: {

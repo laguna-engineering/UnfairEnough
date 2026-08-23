@@ -12,6 +12,7 @@ import type { Question } from '@unfairenough/ws-protocol';
 import type React from 'react';
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { QuestionPrompt } from './QuestionPrompt';
 import { TypeBadge } from './TypeBadge';
 
 interface ClosestWinsQuestionProps {
@@ -55,7 +56,7 @@ export const ClosestWinsQuestion: React.FC<ClosestWinsQuestionProps> = ({
         <Timer seconds={countdown} totalSeconds={question.timeLimit} size="large" />
       </View>
 
-      <Text style={styles.questionText}>{question.text}</Text>
+      <QuestionPrompt text={question.text} style={styles.prompt} />
 
       <View style={styles.rangePill}>
         <Text style={styles.rangeText}>
@@ -111,10 +112,7 @@ const makeStyles = (t: ThemeTokens) =>
       ...typography.h2,
       color: t.inkSoft,
     },
-    questionText: {
-      ...typography.h1,
-      color: t.ink,
-      textAlign: 'center',
+    prompt: {
       marginVertical: spacing.lg,
     },
     rangePill: {

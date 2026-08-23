@@ -173,3 +173,52 @@ test.describe('Pre-game screens', () => {
     await expect(page.getByText(/Waiting for host/i)).toBeVisible();
   });
 });
+
+test.describe('Picking a badge on the join screen', () => {
+  test('offers every background colour the server accepts', async ({ page }) => {
+    await gotoPreview(page, 'JOIN');
+
+    // Eighteen, not the twelve the palette shipped with. If someone trims the
+    // list back, players lose choices the server still validates — and the
+    // grid's three full rows of six go ragged.
+    await expect(page.locator('[data-testid^="join-swatch-"]')).toHaveCount(18);
+    await expectNoHorizontalOverflow(page);
+  });
+
+  test('tapping the badge opens the picker, and a pick lands on the badge', async ({ page }) => {
+    await gotoPreview(page, 'JOIN');
+
+    // The preview pins the badge so this is stable; real players get a random one.
+    await expect(page.getByTestId('join-badge')).toHaveText('🦊');
+
+    await page.getByTestId('join-badge').click();
+    await expect(page.getByText('Pick your emoji')).toBeVisible();
+
+    // A different category, so this also proves the tabs swap the grid.
+    await page.getByTestId('emoji-tab-food').click();
+    await page.getByTestId('emoji-option-🍕').click();
+
+    await expect(page.getByTestId('join-badge')).toHaveText('🍕');
+
+    await page.getByTestId('emoji-sheet-done').click();
+    await expect(page.getByText('Pick your emoji')).toBeHidden();
+    // The pick survives closing the sheet — it is the badge the player joins with.
+    await expect(page.getByTestId('join-badge')).toHaveText('🍕');
+  });
+
+  test('choosing a background recolours the badge', async ({ page }) => {
+    await gotoPreview(page, 'JOIN');
+
+    const badge = page.getByTestId('join-badge');
+    const before = await badge.evaluate((el) => getComputedStyle(el).backgroundColor);
+
+    // #17C0EB — a colour from the six added alongside the picker, so this
+    // fails if the palette is rolled back to twelve.
+    await page.getByTestId('join-swatch-#17C0EB').click();
+
+    await expect
+      .poll(() => badge.evaluate((el) => getComputedStyle(el).backgroundColor))
+      .not.toBe(before);
+    await expect(badge).toHaveCSS('background-color', 'rgb(23, 192, 235)');
+  });
+});

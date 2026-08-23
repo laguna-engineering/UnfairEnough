@@ -17,7 +17,8 @@ export type PreviewScreen =
   | 'MEDIA_PREVIEW'
   | 'PLAY'
   | 'RESULT'
-  | 'GAME_OVER';
+  | 'GAME_OVER'
+  | 'EMOJI_CATALOG';
 
 export type PreviewQuestionType =
   | 'multiple_choice'
@@ -34,11 +35,19 @@ export interface PreviewParams {
   answered?: boolean;
   /** Defaults to English, which is what the assertions expect. */
   lang?: 'en' | 'it';
+  /** EMOJI_CATALOG only: render one category instead of all four. */
+  category?: EmojiCategoryId;
 }
+
+/** The picker's tabs, and the catalog's screenshot groups. */
+export type EmojiCategoryId = 'faces' | 'animals' | 'food' | 'fun';
+
+export const EMOJI_CATEGORY_IDS: EmojiCategoryId[] = ['faces', 'animals', 'food', 'fun'];
 
 export function previewUrl(screen: PreviewScreen, params: PreviewParams = {}): string {
   const query = new URLSearchParams({ preview: screen, lang: params.lang ?? 'en' });
   if (params.type !== undefined) query.set('type', params.type);
+  if (params.category !== undefined) query.set('category', params.category);
   if (params.players !== undefined) query.set('players', String(params.players));
   if (params.answered) query.set('answered', '1');
   return `/?${query.toString()}`;
@@ -69,6 +78,8 @@ function screenAnchor(screen: PreviewScreen, type: PreviewQuestionType) {
       return /Your rank:/i;
     case 'GAME_OVER':
       return /Final Standings/i;
+    case 'EMOJI_CATALOG':
+      return /FA01|AN01|FO01|FU01/;
   }
 }
 

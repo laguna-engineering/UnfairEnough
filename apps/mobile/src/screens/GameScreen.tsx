@@ -312,7 +312,7 @@ export const GameScreen: React.FC = () => {
           <Stack.Screen name="Join">
             {() => (
               <JoinScreen
-                onJoin={(name: string) => join(name, undefined, getDeviceId() ?? undefined)}
+                onJoin={(name, avatar) => join(name, undefined, getDeviceId() ?? undefined, avatar)}
                 isConnecting={connectionState === 'connecting'}
                 error={error}
               />

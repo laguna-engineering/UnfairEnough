@@ -16,6 +16,7 @@ export interface RoomPlayer {
   playerId: string;
   name: string;
   color: string;
+  emoji?: string;
   score: number;
   ws: ServerWebSocket<WSData> | null;
   deviceId?: string;

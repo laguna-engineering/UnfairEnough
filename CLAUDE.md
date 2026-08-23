@@ -84,14 +84,21 @@ a crowded-room layout by hand.
   Android TV takes the same params over `unfairenough-tv://preview?phase=...`.
 - Mobile (`localhost:8081`): `?preview=<SCREEN>` where SCREEN is one of `SCAN, JOIN,
   PICK_PROFILE, WELCOME_BACK, RETURNING, WAITING, COUNTDOWN, MEDIA_PREVIEW, PLAY, RESULT,
-  GAME_OVER`. Knobs: `players=3..50`, `type=...`, `answered=1`.
+  GAME_OVER, EMOJI_CATALOG`. Knobs: `players=3..50`, `type=...`, `answered=1`,
+  `category=faces|animals|food|fun` (EMOJI_CATALOG only — one tab instead of all four).
+- `EMOJI_CATALOG` is a review surface, not a game screen: it renders every avatar emoji
+  labelled `FA07`, `AN23`, … so the set can be pruned by eye. `yarn test:e2e
+  --project="Mobile Chrome" e2e/mobile/emoji-catalog.spec.ts` writes the sheets to
+  `screenshots/mobile/emoji/`.
 - The mock roster runs to 50 even though a room caps at 12 — layout assertions stop at the
   cap, the screenshot specs go past it to show where the screens give out.
 - Both accept `?lang=en|it`. Without it the language comes from whichever `DEFAULT_LANG`
   built the bundle, so every e2e helper pins it — Italian's longer strings are also worth
   screenshotting.
 - Mock data lives in `apps/*/src/preview/previewData.ts` and is deterministic (no `Date.now()`,
-  no RNG) so the same URL always renders the same pixels.
+  no RNG) so the same URL always renders the same pixels. The join screen randomises the
+  player's badge in the real app, so it takes an `initialAvatar` prop the preview pins —
+  anything else you make random needs the same escape hatch.
 
 ## Key constraints
 
@@ -99,8 +106,20 @@ a crowded-room layout by hand.
 - Gradient arrays in `packages/ui/src/theme/colors.ts` must use `as const` (LinearGradient `colors` prop requires tuple types).
 - tv-host has pre-existing TS errors from `react-native-tcp-socket` (conflicting React Native types between tvOS fork and socket lib). These are known.
 - `ScreenBackground` provides `flex: 1` — screen containers should not duplicate `flex: 1` or set `backgroundColor`.
+- **Avatar emoji and colours are single-sourced in `packages/shared/src/avatar.ts`.** The join
+  screen offers them, the server validates JOIN against them, and the admin dashboard writes
+  the same values — a fourth copy means a player picks a badge and silently gets a different
+  one. `packages/ui`'s `playerColors` is a leftover from an older palette and is unused.
+  Changing the emoji set is a layout question: re-run the catalog screenshots.
 - Path alias: `@unfairenough/*` → `packages/*/src`.
 - React 19.1.0 is pinned globally via `resolutions`.
+- **Six players and up, the TV switches layouts.** The results and game-over
+  screens have two shapes: up to five players everyone is named on the shared
+  screen; from six up, `apps/tv-host/src/screens/scaled/` takes over and shows
+  *shape* — vote crowds, proximity bands, a named top 12 and top 8 with the rest
+  as bands — leaving each player's own result on their phone. The threshold and
+  the cut-offs live in `scaled/scale.ts`; changing either is a layout question,
+  so re-run the 50-player screenshots.
 - Max 12 players per room by default, enforced only by the hosted server
   (`apps/server/src/room.ts`, `ROOM_FULL`). Override with the `MAX_PLAYERS` env var
   (`apps/server/.env` in dev, systemd unit in production). Local mode — the TV running its

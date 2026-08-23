@@ -16,6 +16,8 @@ import type React from 'react';
 import { useMemo } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useGameController } from '../hooks/useGameController';
+import { ScaledGameOver } from './scaled/ScaledGameOver';
+import { isScaledRoom } from './scaled/scale';
 
 export const GameOverScreen: React.FC = () => {
   const { t } = useTranslation();
@@ -73,6 +75,25 @@ export const GameOverScreen: React.FC = () => {
   }));
 
   const chartWidth = Math.min(windowWidth - 192, 800); // TV safe zone margins
+
+  // Past a handful of players the podium-plus-every-line layout stops being
+  // readable from the sofa — see scaled/scale.ts.
+  if (isScaledRoom(players.length)) {
+    return (
+      <ScaledGameOver
+        players={players}
+        rankings={rankings.map((r) => ({
+          playerId: r.id,
+          name: r.name,
+          score: r.score,
+          rank: r.rank,
+        }))}
+        positionHistory={chartHistory}
+        totalQuestions={state.game.config.totalQuestions}
+        onPlayAgain={resetGame}
+      />
+    );
+  }
 
   return (
     <ScreenBackground style={styles.container}>

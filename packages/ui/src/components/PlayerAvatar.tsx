@@ -14,6 +14,8 @@ export interface PlayerAvatarProps {
   score?: number;
   size?: 'small' | 'medium' | 'large';
   showScore?: boolean;
+  /** Off when the caller writes the name itself, at its own size. */
+  showName?: boolean;
   testID?: string;
 }
 
@@ -32,6 +34,7 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
   score,
   size = 'medium',
   showScore = false,
+  showName = true,
   testID,
 }) => {
   const { theme } = useTheme();
@@ -74,9 +77,11 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
           {emoji || initials}
         </Text>
       </LinearGradient>
-      <Text style={styles.name} numberOfLines={1}>
-        {name}
-      </Text>
+      {showName && (
+        <Text style={styles.name} numberOfLines={1}>
+          {name}
+        </Text>
+      )}
       {showScore && score !== undefined && <Text style={styles.score}>{score}</Text>}
     </View>
   );

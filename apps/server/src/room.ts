@@ -8,7 +8,7 @@ import {
   questionsRepo,
   sessionsRepo,
 } from '@unfairenough/db';
-import { debugLog } from '@unfairenough/shared';
+import { AVATAR_COLORS, debugLog } from '@unfairenough/shared';
 import type {
   AnswerKey,
   AnswerPayload,
@@ -63,20 +63,10 @@ import {
 import { generateSecureToken, hashToken, sqliteDateFromNow } from './auth/tokens';
 import type { HostMessage, RoomPlayer, WSData } from './types';
 
-const COLORS = [
-  '#FF6B9D',
-  '#4ECDC4',
-  '#FFE66D',
-  '#95E1D3',
-  '#F38181',
-  '#AA96DA',
-  '#FCBAD3',
-  '#A8D8EA',
-  '#FF9F43',
-  '#6C5CE7',
-  '#00B894',
-  '#FD79A8',
-];
+// The fallback palette, for players who join without picking a badge. Same
+// list the join screen offers, so a hand-out colour and a chosen one are
+// indistinguishable on the TV.
+const COLORS = AVATAR_COLORS;
 
 const DEFAULT_QUESTION_TIME_LIMIT = 15;
 
@@ -253,6 +243,12 @@ export class GameRoom {
     name: string,
     deviceId?: string,
     claimProfileId?: string,
+    /**
+     * The badge picked on the join screen. It wins over whatever the profile
+     * remembers — the player is looking at it as they tap Join — and is
+     * written back so the next game starts from it.
+     */
+    avatar?: { emoji?: string; color?: string },
   ): Promise<string | null> {
     debugLog('[room] addPlayer request', {
       roomCode: this.roomCode,
@@ -333,7 +329,7 @@ export class GameRoom {
         } else {
           // Create new auto-profile
           profileId = crypto.randomUUID();
-          const autoColor = COLORS[this.colorIndex++ % COLORS.length];
+          const autoColor = avatar?.color ?? COLORS[this.colorIndex++ % COLORS.length];
           await playersRepo.createPlayer(
             this.db,
             profileId,
@@ -341,12 +337,33 @@ export class GameRoom {
             autoColor,
             this.hostId,
             deviceId,
+            avatar?.emoji,
           );
           playerColor = autoColor;
+          playerEmoji = avatar?.emoji;
         }
       } catch (err) {
         // Don't block joining if DB fails — play as anonymous
         console.error('Player profile lookup failed:', err);
+      }
+    }
+
+    // What the player picked on the join screen beats what the profile
+    // remembers, and replaces it — they chose it seconds ago, looking at it.
+    const storedColor = playerColor;
+    const storedEmoji = playerEmoji;
+    if (avatar?.color) playerColor = avatar.color;
+    if (avatar?.emoji) playerEmoji = avatar.emoji;
+
+    if (profileId && (playerColor !== storedColor || playerEmoji !== storedEmoji)) {
+      try {
+        await playersRepo.updateProfile(this.db, profileId, {
+          avatarColor: playerColor,
+          avatarEmoji: playerEmoji,
+        });
+      } catch (err) {
+        // A badge that won't persist still plays fine for this game.
+        console.error('Avatar persist failed:', err);
       }
     }
 
@@ -356,6 +373,7 @@ export class GameRoom {
     const welcomePayload: WelcomePayload = {
       playerId,
       playerColor: color,
+      playerEmoji,
       roomCode: this.roomCode,
       language: this.language,
     };
@@ -379,6 +397,7 @@ export class GameRoom {
       playerId,
       name: playerName,
       color,
+      emoji: playerEmoji,
       score: 0,
       ws,
       deviceId,
@@ -541,6 +560,10 @@ export class GameRoom {
           message.payload.name,
           message.payload.deviceId,
           message.payload.profileId,
+          {
+            emoji: message.payload.avatarEmoji,
+            color: message.payload.avatarColor,
+          },
         );
         break;
       }
@@ -645,6 +668,7 @@ export class GameRoom {
       payload: {
         playerId: player.playerId,
         playerColor: player.color,
+        playerEmoji: player.emoji,
         roomCode: this.roomCode,
         language: this.language,
       },

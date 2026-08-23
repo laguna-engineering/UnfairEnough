@@ -5,7 +5,12 @@ import { expectInsideViewport, gotoPreview, previewPlayerNames } from './helpers
  * A TV screen cannot scroll and nobody can interact with it, so anything that
  * lands outside the 1080p viewport is content the room never sees. These tests
  * pin the layout rules for rooms bigger than the 4–5 players most development
- * happens with, up to the 12-player cap.
+ * happens with, up to the 12-player cap and past it.
+ *
+ * Above five players the results and game-over screens switch to the at-scale
+ * layouts (apps/tv-host/src/screens/scaled/). They still name everybody up to
+ * twelve; past that the tail becomes score bands and each player's own position
+ * lives on their phone.
  */
 
 const CROWDED_SIZES = [5, 8, 12];
@@ -75,7 +80,7 @@ test.describe('Results leaderboard with a full room', () => {
     });
   }
 
-  test('splits into two columns past 8 players', async ({ page }) => {
+  test('splits into two columns above 5 players', async ({ page }) => {
     await gotoPreview(page, 'RESULTS', { players: 12 });
 
     const rows = page.getByTestId('leaderboard-row');
@@ -85,12 +90,12 @@ test.describe('Results leaderboard with a full room', () => {
     if (!firstBox || !lastBox) return;
 
     // #12 sits in the second column, i.e. to the right of #1 rather than below
-    // a 12-row stack that would not fit.
+    // a 12-row stack that would each be half as tall.
     expect(lastBox.x).toBeGreaterThan(firstBox.x + firstBox.width / 2);
   });
 
-  test('stays in one column at 8 players', async ({ page }) => {
-    await gotoPreview(page, 'RESULTS', { players: 8 });
+  test('stays in one column at 5 players', async ({ page }) => {
+    await gotoPreview(page, 'RESULTS', { players: 5 });
 
     const rows = page.getByTestId('leaderboard-row');
     const firstBox = await rows.first().boundingBox();
@@ -99,6 +104,32 @@ test.describe('Results leaderboard with a full room', () => {
 
     expect(lastBox.x).toBeCloseTo(firstBox.x, 0);
     expect(lastBox.y).toBeGreaterThan(firstBox.y);
+  });
+
+  test('past 12 players it names twelve and clouds the rest', async ({ page }) => {
+    await gotoPreview(page, 'RESULTS', { players: 50 });
+
+    // The named part stops at twelve — a 50th row would be unreadable anyway.
+    await expect(page.getByTestId('leaderboard-row')).toHaveCount(12);
+    await expect(page.getByText('TOP 12', { exact: true })).toBeVisible();
+
+    // Every unnamed player still has to be accounted for somewhere, or the
+    // screen is quietly telling the room that 38 people did not play. The
+    // crowd is the count — one dot each — so the caption has to agree with it.
+    await expect(page.getByTestId('field-dot')).toHaveCount(50 - 12);
+    await expect(page.getByTestId('field-count')).toHaveText('38 more players');
+  });
+
+  test('the whole at-scale board stays on screen at 50 players', async ({ page }) => {
+    await gotoPreview(page, 'RESULTS', { players: 50 });
+
+    const rows = page.getByTestId('leaderboard-row');
+    const count = await rows.count();
+    for (let i = 0; i < count; i++) {
+      await expectInsideViewport(page, rows.nth(i), `leaderboard row ${i + 1}/${count}`);
+    }
+
+    await expectInsideViewport(page, page.getByTestId('field-cloud'), 'field cloud');
   });
 });
 
@@ -121,12 +152,27 @@ test.describe('Game over with a full room', () => {
     });
   }
 
-  test('the rank chart plots every player, not just the podium', async ({ page }) => {
-    await gotoPreview(page, 'GAME_OVER', { players: 12 });
+  test('the rank chart plots every player in a small room', async ({ page }) => {
+    await gotoPreview(page, 'GAME_OVER', { players: 5 });
 
-    // The chart legend is the only place the bottom half of the room appears.
-    for (const name of previewPlayerNames(12)) {
+    // Up to five lines are followable, so nobody is left off the chart.
+    for (const name of previewPlayerNames(5)) {
       await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
     }
+  });
+
+  test('the rank chart plots the top 8 and accounts for the rest', async ({ page }) => {
+    await gotoPreview(page, 'GAME_OVER', { players: 12 });
+
+    // Twelve crossing lines is a scribble, so the chart names the eight that
+    // finished on top…
+    await expect(page.getByTestId('chart-legend-row')).toHaveCount(8);
+    for (const name of previewPlayerNames(8)) {
+      await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
+    }
+
+    // …and says out loud how many players the shaded band underneath holds, so
+    // the room is never silently truncated to the podium.
+    await expect(page.getByText('ranks 9–12 · 4 players')).toBeVisible();
   });
 });

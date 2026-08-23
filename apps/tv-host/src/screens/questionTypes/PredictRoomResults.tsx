@@ -69,9 +69,18 @@ export const PredictRoomResults: React.FC<PredictRoomResultsProps> = ({
           const isWinner = winningOptions.includes(option.key);
           return (
             <View key={option.key} style={[styles.barRow, !isWinner && styles.barRowDimmed]}>
-              <LinearGradient colors={OPTION_GRADIENTS[option.key]} style={styles.letterCircle}>
-                <Text style={styles.letterText}>{option.key}</Text>
-              </LinearGradient>
+              <View
+                style={[
+                  styles.letterCircle,
+                  { backgroundColor: theme.answerTiles[option.key].badgeBg },
+                ]}
+              >
+                <Text
+                  style={[styles.letterText, { color: theme.answerTiles[option.key].badgeInk }]}
+                >
+                  {option.key}
+                </Text>
+              </View>
               <View style={styles.barLabelCol}>
                 <Text style={styles.optionText}>{option.text}</Text>
                 {isWinner && (
@@ -161,9 +170,10 @@ const makeStyles = (t: ThemeTokens) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
+    // Colour comes from the per-key answerTiles tokens, same as multiple choice —
+    // white ink is unreadable on the yellow and pink tiles.
     letterText: {
       ...typography.h3,
-      color: '#ffffff',
     },
     barLabelCol: {
       width: 220,

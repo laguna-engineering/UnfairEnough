@@ -56,11 +56,12 @@ export async function createPlayer(
   avatarColor: string,
   hostId: string | null,
   deviceId?: string,
+  avatarEmoji?: string,
 ): Promise<PlayerProfile> {
   await db.run(
-    `INSERT INTO players (id, device_id, display_name, avatar_color, host_id)
-     VALUES (?, ?, ?, ?, ?)`,
-    [id, deviceId ?? null, displayName, avatarColor, hostId],
+    `INSERT INTO players (id, device_id, display_name, avatar_color, avatar_emoji, host_id)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, deviceId ?? null, displayName, avatarColor, avatarEmoji ?? null, hostId],
   );
   const profile = await getPlayer(db, id);
   if (!profile) throw new Error(`BUG: player row missing after insert (id=${id})`);

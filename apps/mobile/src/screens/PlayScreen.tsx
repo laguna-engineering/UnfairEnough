@@ -153,34 +153,21 @@ const DefaultMultipleChoicePlay: React.FC<{
         )}
       </View>
 
-      {/* Answer Buttons - 2x2 Grid */}
+      {/* One full-width row per option. A 2x2 grid halves the width every
+          option gets, which is where long answers ran out of room — and it
+          left a three-option question with a stray half-width tile. */}
       <View style={styles.answersContainer}>
-        <View style={styles.answerRow}>
-          {question.options.slice(0, 2).map((option) => (
-            <AnswerButton
-              key={option.key}
-              answerKey={option.key}
-              text={option.text}
-              state={getAnswerState(option.key)}
-              onPress={() => onSubmitAnswer(option.key)}
-              disabled={!!confirmedAnswer}
-              style={styles.answerButton}
-            />
-          ))}
-        </View>
-        <View style={styles.answerRow}>
-          {question.options.slice(2, 4).map((option) => (
-            <AnswerButton
-              key={option.key}
-              answerKey={option.key}
-              text={option.text}
-              state={getAnswerState(option.key)}
-              onPress={() => onSubmitAnswer(option.key)}
-              disabled={!!confirmedAnswer}
-              style={styles.answerButton}
-            />
-          ))}
-        </View>
+        {question.options.map((option) => (
+          <AnswerButton
+            key={option.key}
+            answerKey={option.key}
+            text={option.text}
+            state={getAnswerState(option.key)}
+            onPress={() => onSubmitAnswer(option.key)}
+            disabled={!!confirmedAnswer}
+            style={styles.answerButton}
+          />
+        ))}
       </View>
 
       <PeekGuard active={!!confirmedAnswer} />
@@ -616,13 +603,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.md,
   },
-  answerRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
   answerButton: {
-    flex: 1,
-    minHeight: 100,
+    // No `flex` here: in a column the four rows would divide the free vertical
+    // space between them and grow to fill it. A floor is enough — a long
+    // answer that wraps pushes its own row taller.
+    minHeight: 72,
   },
   peekGuard: {
     ...StyleSheet.absoluteFillObject,

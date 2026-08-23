@@ -15,11 +15,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import type React from 'react';
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { ScaledLeaderboard } from '../scaled/ScaledLeaderboard';
 import { TypeBadge } from './TypeBadge';
-
-// Past this many players a single column risks running off the bottom of the
-// (auto-advancing, non-scrollable) results screen, so we split into two columns.
-const TWO_COLUMN_THRESHOLD = 8;
 
 interface TwoChoiceResultsProps {
   question: Question & { serverTimestamp: number };
@@ -27,6 +24,8 @@ interface TwoChoiceResultsProps {
   playerResults: PlayerResult[];
   leaderboardEntries: LeaderboardEntry[];
   showRankChange: boolean;
+  /** Big room: swap the row-per-player board for the top-N-and-bands one. */
+  scaled: boolean;
 }
 
 export const TwoChoiceResults: React.FC<TwoChoiceResultsProps> = ({
@@ -35,6 +34,7 @@ export const TwoChoiceResults: React.FC<TwoChoiceResultsProps> = ({
   playerResults,
   leaderboardEntries,
   showRankChange,
+  scaled,
 }) => {
   const { t } = useTranslation();
   const { theme } = useTheme();
@@ -43,11 +43,6 @@ export const TwoChoiceResults: React.FC<TwoChoiceResultsProps> = ({
 
   const totalPlayers = playerResults.length;
   const pickedCount = (key: AnswerKey) => playerResults.filter((r) => r.answer === key).length;
-
-  const twoColumns = leaderboardEntries.length > TWO_COLUMN_THRESHOLD;
-  const splitIndex = Math.ceil(leaderboardEntries.length / 2);
-  const firstColumn = twoColumns ? leaderboardEntries.slice(0, splitIndex) : leaderboardEntries;
-  const secondColumn = twoColumns ? leaderboardEntries.slice(splitIndex) : [];
 
   const fastest = playerResults
     .filter((r) => r.isCorrect && r.responseTimeMs !== null)
@@ -109,18 +104,13 @@ export const TwoChoiceResults: React.FC<TwoChoiceResultsProps> = ({
       )}
 
       <View style={styles.leaderboardSection}>
-        <Text style={styles.leaderboardTitle}>{t('results.leaderboard')}</Text>
-        {twoColumns ? (
-          <View style={styles.leaderboardColumns}>
-            <View style={styles.leaderboardColumn}>
-              <Leaderboard entries={firstColumn} showRankChange={showRankChange} showPoints />
-            </View>
-            <View style={styles.leaderboardColumn}>
-              <Leaderboard entries={secondColumn} showRankChange={showRankChange} showPoints />
-            </View>
-          </View>
+        {scaled ? (
+          <ScaledLeaderboard entries={leaderboardEntries} showRankChange={showRankChange} />
         ) : (
-          <Leaderboard entries={leaderboardEntries} showRankChange={showRankChange} showPoints />
+          <>
+            <Text style={styles.leaderboardTitle}>{t('results.leaderboard')}</Text>
+            <Leaderboard entries={leaderboardEntries} showRankChange={showRankChange} showPoints />
+          </>
         )}
       </View>
     </ScreenBackground>
@@ -199,13 +189,6 @@ const makeStyles = (t: ThemeTokens) =>
     leaderboardSection: {
       flex: 1,
       marginTop: spacing.lg,
-    },
-    leaderboardColumns: {
-      flexDirection: 'row',
-      gap: spacing.xl,
-    },
-    leaderboardColumn: {
-      flex: 1,
     },
     leaderboardTitle: {
       ...typography.h3,

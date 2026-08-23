@@ -1,3 +1,4 @@
+import { isAvatarColor, isAvatarEmoji } from '@unfairenough/shared';
 import type { AnswerKey, ClientMessage, QuestionType } from './messages';
 
 const MAX_NAME_LENGTH = 20;
@@ -85,6 +86,8 @@ export function parseClientMessage(data: unknown): ClientMessage {
         roomCode?: unknown;
         deviceId?: unknown;
         profileId?: unknown;
+        avatarEmoji?: unknown;
+        avatarColor?: unknown;
       };
       const name = sanitizeName(p.name);
       if (!name) {
@@ -101,6 +104,11 @@ export function parseClientMessage(data: unknown): ClientMessage {
           roomCode: typeof p.roomCode === 'string' ? p.roomCode.toUpperCase() : undefined,
           deviceId,
           profileId,
+          // A badge the server doesn't offer is dropped, not rejected — an old
+          // client that sends nothing, or a new one whose catalog has drifted,
+          // still joins and gets a colour assigned the way it always was.
+          avatarEmoji: isAvatarEmoji(p.avatarEmoji) ? p.avatarEmoji : undefined,
+          avatarColor: isAvatarColor(p.avatarColor) ? p.avatarColor : undefined,
         },
       };
     }

@@ -362,8 +362,24 @@ class WebSocketClient {
     this.send({ type: 'IDENTIFY', payload: { deviceId, sessionToken, invitationToken } });
   }
 
-  join(name: string, roomCode?: string, deviceId?: string, profileId?: string): void {
-    this.send({ type: 'JOIN', payload: { name, roomCode, deviceId, profileId } });
+  join(
+    name: string,
+    roomCode?: string,
+    deviceId?: string,
+    profileId?: string,
+    avatar?: { emoji?: string; color?: string },
+  ): void {
+    this.send({
+      type: 'JOIN',
+      payload: {
+        name,
+        roomCode,
+        deviceId,
+        profileId,
+        avatarEmoji: avatar?.emoji,
+        avatarColor: avatar?.color,
+      },
+    });
   }
 
   unbind(deviceId: string): void {

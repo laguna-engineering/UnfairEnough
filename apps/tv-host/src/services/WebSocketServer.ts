@@ -3,26 +3,16 @@
  * Uses react-native-tcp-socket to run a real WebSocket server
  */
 
+import { AVATAR_COLORS, isAvatarColor, isAvatarEmoji } from '@unfairenough/shared';
 import type { Question, ServerMessage, StateSnapshotPayload } from '@unfairenough/ws-protocol';
 import { Buffer } from 'buffer';
 import * as Crypto from 'expo-crypto';
 import * as Network from 'expo-network';
 import TcpSocket from 'react-native-tcp-socket';
 
-const COLORS = [
-  '#FF6B9D',
-  '#4ECDC4',
-  '#FFE66D',
-  '#95E1D3',
-  '#F38181',
-  '#AA96DA',
-  '#FCBAD3',
-  '#A8D8EA',
-  '#FF9F43',
-  '#6C5CE7',
-  '#00B894',
-  '#FD79A8',
-];
+// Fallback palette for players who join without picking a badge — the same
+// list the join screen offers, so hand-out and chosen colours match.
+const COLORS = AVATAR_COLORS;
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
 type ServerReadyCallback = (data: { port: number; localIp: string; roomCode: string }) => void;
@@ -64,6 +54,7 @@ interface GraveyardEntry {
   playerId: string;
   name: string;
   color: string;
+  emoji?: string;
   timer: ReturnType<typeof setTimeout>;
 }
 
@@ -72,6 +63,7 @@ interface Client {
   playerId: string | null;
   playerName: string;
   playerColor: string;
+  playerEmoji?: string;
   buffer: Buffer;
   upgraded: boolean;
 }
@@ -197,14 +189,24 @@ class WebSocketServerService {
       socket.on('close', () => {
         this.clients.delete(client);
         if (client.playerId) {
-          this.startGracePeriod(client.playerId, client.playerName, client.playerColor);
+          this.startGracePeriod(
+            client.playerId,
+            client.playerName,
+            client.playerColor,
+            client.playerEmoji,
+          );
         }
       });
 
       socket.on('error', () => {
         this.clients.delete(client);
         if (client.playerId) {
-          this.startGracePeriod(client.playerId, client.playerName, client.playerColor);
+          this.startGracePeriod(
+            client.playerId,
+            client.playerName,
+            client.playerColor,
+            client.playerEmoji,
+          );
         }
       });
     });
@@ -293,19 +295,28 @@ class WebSocketServerService {
       switch (message.type) {
         case 'JOIN': {
           const playerId = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          const color = COLORS[this.colorIndex++ % COLORS.length];
+          // Local mode has no validating parser in front of it, so the badge
+          // is checked here: anything the catalog doesn't list is dropped and
+          // the player falls back to a hand-out colour.
+          const picked = message.payload.avatarColor;
+          const color = isAvatarColor(picked) ? picked : COLORS[this.colorIndex++ % COLORS.length];
+          const emoji = isAvatarEmoji(message.payload.avatarEmoji)
+            ? message.payload.avatarEmoji
+            : undefined;
           const deviceId: string | undefined = message.payload.deviceId;
-          const playerData = { playerId, name: message.payload.name, color };
+          const playerData = { playerId, name: message.payload.name, color, emoji };
 
           client.playerId = playerId;
           client.playerName = message.payload.name;
           client.playerColor = color;
+          client.playerEmoji = emoji;
 
           this.sendToClient(client, {
             type: 'WELCOME',
             payload: {
               playerId,
               playerColor: color,
+              playerEmoji: emoji,
               roomCode: this.roomCode,
               language: this.language,
             },
@@ -364,6 +375,7 @@ class WebSocketServerService {
           client.playerId = entry.playerId;
           client.playerName = entry.name;
           client.playerColor = entry.color;
+          client.playerEmoji = entry.emoji;
 
           // Re-send WELCOME
           this.sendToClient(client, {
@@ -371,6 +383,7 @@ class WebSocketServerService {
             payload: {
               playerId: entry.playerId,
               playerColor: entry.color,
+              playerEmoji: entry.emoji,
               roomCode: this.roomCode,
               language: this.language,
             },
@@ -457,7 +470,7 @@ class WebSocketServerService {
   }
 
   /** Move a disconnected player to the graveyard with a 30s grace period. */
-  private startGracePeriod(playerId: string, name: string, color: string): void {
+  private startGracePeriod(playerId: string, name: string, color: string, emoji?: string): void {
     // If already in graveyard, skip (avoid duplicate timers)
     if (this.graveyard.has(playerId)) return;
 
@@ -467,7 +480,7 @@ class WebSocketServerService {
       this.broadcast({ type: 'PLAYER_LEFT', payload: { playerId } });
     }, 30_000);
 
-    this.graveyard.set(playerId, { playerId, name, color, timer });
+    this.graveyard.set(playerId, { playerId, name, color, emoji, timer });
 
     this.callbacks.onPlayerDisconnected?.({ playerId });
     this.broadcast({ type: 'PLAYER_DISCONNECTED', payload: { playerId } });

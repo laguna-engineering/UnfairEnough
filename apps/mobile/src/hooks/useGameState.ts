@@ -403,9 +403,17 @@ export function useGameState() {
     setPhase('SCAN');
   }, []);
 
-  const join = useCallback((name: string, roomCode?: string, deviceId?: string) => {
-    wsClient.join(name, roomCode, deviceId);
-  }, []);
+  const join = useCallback(
+    (
+      name: string,
+      roomCode?: string,
+      deviceId?: string,
+      avatar?: { emoji?: string; color?: string },
+    ) => {
+      wsClient.join(name, roomCode, deviceId, undefined, avatar);
+    },
+    [],
+  );
 
   const confirmIdentity = useCallback(() => {
     if (!identifiedProfile) return;

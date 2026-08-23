@@ -2,7 +2,15 @@
 export type ClientMessage =
   | {
       type: 'JOIN';
-      payload: { name: string; roomCode?: string; deviceId?: string; profileId?: string };
+      payload: {
+        name: string;
+        roomCode?: string;
+        deviceId?: string;
+        profileId?: string;
+        /** The badge the player picked on the join screen. */
+        avatarEmoji?: string;
+        avatarColor?: string;
+      };
     }
   | {
       type: 'IDENTIFY';
@@ -101,6 +109,8 @@ export interface AnswerPayload {
 export interface WelcomePayload {
   playerId: string;
   playerColor: string;
+  /** The badge emoji the room settled on — picked, restored, or none. */
+  playerEmoji?: string;
   roomCode: string;
   language?: string;
   profile?: {

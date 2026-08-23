@@ -1,5 +1,5 @@
 import { gamesRepo, playersRepo, playerTagScoresRepo } from '@unfairenough/db';
-import { AVATAR_COLORS, AVATAR_EMOJIS } from '@unfairenough/shared';
+import { AVATAR_COLORS, isAvatarEmoji } from '@unfairenough/shared';
 import { sanitizeName } from '@unfairenough/ws-protocol';
 import { Hono } from 'hono';
 import type { AuthVariables } from '../auth/middleware';
@@ -35,7 +35,7 @@ players.post('/', async (c) => {
   }
 
   const avatarEmoji = body.avatarEmoji;
-  if (!avatarEmoji || !(AVATAR_EMOJIS as readonly string[]).includes(avatarEmoji)) {
+  if (!isAvatarEmoji(avatarEmoji)) {
     return c.json({ error: 'Invalid "avatarEmoji"' }, 400);
   }
 
@@ -80,7 +80,7 @@ players.put('/:id', async (c) => {
     fields.avatarColor = body.avatarColor;
   }
   if (body.avatarEmoji !== undefined) {
-    if (!(AVATAR_EMOJIS as readonly string[]).includes(body.avatarEmoji)) {
+    if (!isAvatarEmoji(body.avatarEmoji)) {
       return c.json({ error: 'Invalid "avatarEmoji"' }, 400);
     }
     fields.avatarEmoji = body.avatarEmoji;

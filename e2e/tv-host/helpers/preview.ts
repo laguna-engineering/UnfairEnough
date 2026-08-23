@@ -60,7 +60,8 @@ function phaseAnchor(page: Page, phase: PreviewPhase, type: PreviewQuestionType)
     case 'RESULTS':
       if (type === 'closest_wins') return page.getByText('THE ANSWER');
       if (type === 'predict_room') return page.getByText("ROOM'S PICK");
-      return page.getByText('Leaderboard');
+      // Past the top-12 cut-off the board is headed "TOP 12" instead.
+      return page.getByText(/^(Leaderboard|TOP 12)$/);
     case 'GAME_OVER':
       return page.getByText('Game Over!');
   }

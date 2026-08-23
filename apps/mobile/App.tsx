@@ -55,6 +55,7 @@ function getWebPreview(): { screen: PreviewScreenName; options: PreviewScreenOpt
           ? questionType
           : undefined,
       answered: params.get('answered') === '1',
+      categoryId: params.get('category') ?? undefined,
     },
   };
 }

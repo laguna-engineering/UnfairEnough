@@ -11,8 +11,10 @@ import { ReturningUserScreen } from '../screens/ReturningUserScreen';
 import { ScanScreen } from '../screens/ScanScreen';
 import { WaitingScreen } from '../screens/WaitingScreen';
 import { WelcomeBackScreen } from '../screens/WelcomeBackScreen';
+import { EmojiCatalogScreen } from './EmojiCatalogScreen';
 import {
   PREVIEW_GUEST_SESSION,
+  PREVIEW_JOIN_AVATAR,
   PREVIEW_MEDIA_PREVIEW,
   PREVIEW_PLAYER_ID,
   PREVIEW_PROFILES,
@@ -42,7 +44,8 @@ export type PreviewScreenName =
   | 'MEDIA_PREVIEW'
   | 'PLAY'
   | 'RESULT'
-  | 'GAME_OVER';
+  | 'GAME_OVER'
+  | 'EMOJI_CATALOG';
 
 export const PREVIEW_SCREENS: PreviewScreenName[] = [
   'SCAN',
@@ -56,6 +59,7 @@ export const PREVIEW_SCREENS: PreviewScreenName[] = [
   'PLAY',
   'RESULT',
   'GAME_OVER',
+  'EMOJI_CATALOG',
 ];
 
 export interface PreviewScreenOptions {
@@ -65,6 +69,8 @@ export interface PreviewScreenOptions {
   players?: number;
   /** PLAY only: show the state after this player has locked their answer in. */
   answered?: boolean;
+  /** EMOJI_CATALOG only: render just one category instead of all four. */
+  categoryId?: string;
 }
 
 const noop = () => {};
@@ -78,13 +84,24 @@ export const PreviewScreen: React.FC<PreviewScreenProps> = ({
   questionType = 'multiple_choice',
   players = 8,
   answered = false,
+  categoryId,
 }) => {
   switch (screen) {
     case 'SCAN':
       return <ScanScreen onConnect={noop} onLanguageChange={noop} />;
 
     case 'JOIN':
-      return <JoinScreen onJoin={noop} isConnecting={false} error={null} />;
+      return (
+        <JoinScreen
+          onJoin={noop}
+          isConnecting={false}
+          error={null}
+          initialAvatar={PREVIEW_JOIN_AVATAR}
+        />
+      );
+
+    case 'EMOJI_CATALOG':
+      return <EmojiCatalogScreen categoryId={categoryId} />;
 
     case 'PICK_PROFILE':
       return (

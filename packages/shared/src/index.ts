@@ -13,45 +13,13 @@ export const MAX_RECENT_SERVERS = 5;
 export const RECENT_SERVERS_STORAGE_KEY = 'unfairenough_recent_servers';
 export const LANGUAGE_STORAGE_KEY = 'unfairenough_language';
 
-export const AVATAR_EMOJIS = [
-  '🐱',
-  '🐶',
-  '🦊',
-  '🐼',
-  '🐰',
-  '🦁',
-  '🐸',
-  '🦄',
-  '🐙',
-  '🎮',
-  '🌟',
-  '⚡',
-  '🔥',
-  '❄️',
-  '🎯',
-  '🎪',
-  '🎨',
-  '🎵',
-  '🍕',
-  '🚀',
-  '🧔🏼‍♂️',
-  '🏈',
-  '👩🏻‍⚕️',
-  '🦦',
-  '🧩',
-] as const;
-
-export const AVATAR_COLORS = [
-  '#FF6B9D',
-  '#4ECDC4',
-  '#FFE66D',
-  '#95E1D3',
-  '#F38181',
-  '#AA96DA',
-  '#FCBAD3',
-  '#A8D8EA',
-  '#FF9F43',
-  '#6C5CE7',
-  '#00B894',
-  '#FD79A8',
-] as const;
+export {
+  AVATAR_COLORS,
+  AVATAR_EMOJI_CATEGORIES,
+  AVATAR_EMOJIS,
+  type AvatarEmojiCategory,
+  isAvatarColor,
+  isAvatarEmoji,
+  RETIRED_AVATAR_EMOJIS,
+  randomAvatar,
+} from './avatar';

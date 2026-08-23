@@ -18,10 +18,10 @@ import { useGameController } from '../hooks/useGameController';
 import { ClosestWinsResults } from './questionTypes/ClosestWinsResults';
 import { PredictRoomResults } from './questionTypes/PredictRoomResults';
 import { TwoChoiceResults } from './questionTypes/TwoChoiceResults';
-
-// Past this many players a single column risks running off the bottom of the
-// (auto-advancing, non-scrollable) results screen, so we split into two columns.
-const TWO_COLUMN_THRESHOLD = 8;
+import { ScaledClosestWinsResults } from './scaled/ScaledClosestWinsResults';
+import { ScaledLeaderboard } from './scaled/ScaledLeaderboard';
+import { ScaledPredictRoomResults } from './scaled/ScaledPredictRoomResults';
+import { isScaledRoom } from './scaled/scale';
 
 export const ResultsScreen: React.FC = () => {
   const { t } = useTranslation();
@@ -72,9 +72,20 @@ export const ResultsScreen: React.FC = () => {
 
   const showRankChange = positionHistory.length > 1;
   const questionType = roundQuestionType ?? currentQuestion.type ?? 'multiple_choice';
+  // Past a handful of players the per-player chips, markers and rows stop being
+  // readable from the back of the room — see scaled/scale.ts.
+  const scaled = isScaledRoom(players.length);
 
   if (questionType === 'closest_wins') {
-    return (
+    return scaled ? (
+      <ScaledClosestWinsResults
+        question={currentQuestion}
+        playerResults={roundResults}
+        players={players}
+        correctValue={roundCorrectValue ?? 0}
+        playerCount={players.length}
+      />
+    ) : (
       <ClosestWinsResults
         question={currentQuestion}
         playerResults={roundResults}
@@ -86,7 +97,15 @@ export const ResultsScreen: React.FC = () => {
   }
 
   if (questionType === 'predict_room') {
-    return (
+    return scaled ? (
+      <ScaledPredictRoomResults
+        question={currentQuestion}
+        playerResults={roundResults}
+        voteCounts={roundVoteCounts ?? {}}
+        winningOptions={roundWinningOptions ?? []}
+        playerCount={players.length}
+      />
+    ) : (
       <PredictRoomResults
         question={currentQuestion}
         playerResults={roundResults}
@@ -109,16 +128,12 @@ export const ResultsScreen: React.FC = () => {
         playerResults={roundResults}
         leaderboardEntries={leaderboardEntries}
         showRankChange={showRankChange}
+        scaled={scaled}
       />
     );
   }
 
   const correctAnswer = state.game.correctAnswer ?? currentQuestion.options[0]?.key;
-
-  const twoColumns = leaderboardEntries.length > TWO_COLUMN_THRESHOLD;
-  const splitIndex = Math.ceil(leaderboardEntries.length / 2);
-  const firstColumn = twoColumns ? leaderboardEntries.slice(0, splitIndex) : leaderboardEntries;
-  const secondColumn = twoColumns ? leaderboardEntries.slice(splitIndex) : [];
 
   return (
     <ScreenBackground style={styles.container}>
@@ -145,21 +160,20 @@ export const ResultsScreen: React.FC = () => {
           )}
         </Card>
 
-        {/* Leaderboard — split into two columns when many players so the whole
-            board always fits on the auto-advancing (non-scrollable) screen. */}
+        {/* Leaderboard — a row per player up to five, then the at-scale board
+            that names the top and turns the rest into bands. */}
         <View style={styles.leaderboardSection}>
-          <Text style={styles.leaderboardTitle}>{t('results.leaderboard')}</Text>
-          {twoColumns ? (
-            <View style={styles.leaderboardColumns}>
-              <View style={styles.leaderboardColumn}>
-                <Leaderboard entries={firstColumn} showRankChange={showRankChange} showPoints />
-              </View>
-              <View style={styles.leaderboardColumn}>
-                <Leaderboard entries={secondColumn} showRankChange={showRankChange} showPoints />
-              </View>
-            </View>
+          {scaled ? (
+            <ScaledLeaderboard entries={leaderboardEntries} showRankChange={showRankChange} />
           ) : (
-            <Leaderboard entries={leaderboardEntries} showRankChange={showRankChange} showPoints />
+            <>
+              <Text style={styles.leaderboardTitle}>{t('results.leaderboard')}</Text>
+              <Leaderboard
+                entries={leaderboardEntries}
+                showRankChange={showRankChange}
+                showPoints
+              />
+            </>
           )}
         </View>
       </View>
@@ -170,8 +184,7 @@ export const ResultsScreen: React.FC = () => {
 const makeStyles = (t: ThemeTokens) =>
   StyleSheet.create({
     container: {
-      paddingTop: spacing.xl,
-      paddingHorizontal: spacing.xl,
+      padding: spacing.xl,
     },
     content: {
       flex: 1,
@@ -227,13 +240,6 @@ const makeStyles = (t: ThemeTokens) =>
       color: t.chipInk,
     },
     leaderboardSection: {
-      flex: 1,
-    },
-    leaderboardColumns: {
-      flexDirection: 'row',
-      gap: spacing.xl,
-    },
-    leaderboardColumn: {
       flex: 1,
     },
     leaderboardTitle: {

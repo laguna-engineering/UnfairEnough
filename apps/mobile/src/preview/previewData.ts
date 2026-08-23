@@ -314,3 +314,9 @@ export const PREVIEW_GUEST_SESSION: GuestSession = {
   playerEmoji: '🦄',
   hostDisplayName: 'Living room TV',
 };
+
+/**
+ * The badge the JOIN preview starts from. Real players get a random one every
+ * visit; screenshots need the same pixels every run.
+ */
+export const PREVIEW_JOIN_AVATAR = { emoji: '🦊', color: '#FF6B9D' };

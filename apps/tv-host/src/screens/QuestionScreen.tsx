@@ -2,7 +2,6 @@ import { playersSelectors } from '@unfairenough/game-logic';
 import { useTranslation } from '@unfairenough/i18n';
 import {
   borderRadius,
-  Card,
   ScreenBackground,
   spacing,
   type ThemeTokens,
@@ -12,19 +11,14 @@ import {
 } from '@unfairenough/ui';
 import { type AudioPlayer, createAudioPlayer } from 'expo-audio';
 import type React from 'react';
-import { useEffect, useMemo, useState } from 'react';
-import {
-  type NativeSyntheticEvent,
-  StyleSheet,
-  Text,
-  type TextLayoutEventData,
-  View,
-} from 'react-native';
+import { useEffect, useMemo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { useBgMusicContext } from '../hooks/BgMusicContext';
 import { useGameController } from '../hooks/useGameController';
 import { resolveMediaUrl } from '../utils/mediaUrl';
 import { ClosestWinsQuestion } from './questionTypes/ClosestWinsQuestion';
 import { PredictRoomQuestion } from './questionTypes/PredictRoomQuestion';
+import { QuestionPrompt } from './questionTypes/QuestionPrompt';
 import { TwoChoiceQuestion } from './questionTypes/TwoChoiceQuestion';
 
 export const QuestionScreen: React.FC = () => {
@@ -42,19 +36,6 @@ export const QuestionScreen: React.FC = () => {
     predictedCount,
   } = useGameController();
   const { pause, resume } = useBgMusicContext();
-
-  // Long questions wrap to 3+ lines at the default h1 size, which grows the card
-  // enough to cover the tags below. Measure the rendered line count and shrink the
-  // font once the text spills past two lines. Reset whenever the question changes.
-  const questionText = currentQuestion?.text;
-  const [shrinkQuestion, setShrinkQuestion] = useState(false);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: questionText is an intentional reset trigger
-  useEffect(() => {
-    setShrinkQuestion(false);
-  }, [questionText]);
-  const handleQuestionLayout = (e: NativeSyntheticEvent<TextLayoutEventData>) => {
-    if (e.nativeEvent.lines.length > 2) setShrinkQuestion(true);
-  };
 
   // Answer-slot audio: play `play: question` clips during the QUESTION phase.
   // Subject clips play once (then silence until reveal); background music loops.
@@ -144,14 +125,7 @@ export const QuestionScreen: React.FC = () => {
       </View>
 
       {/* Question */}
-      <Card style={styles.questionCard} variant="elevated">
-        <Text
-          style={[styles.questionText, shrinkQuestion && styles.questionTextShrunk]}
-          onTextLayout={handleQuestionLayout}
-        >
-          {currentQuestion.text}
-        </Text>
-      </Card>
+      <QuestionPrompt text={currentQuestion.text} style={styles.questionCard} />
 
       {/* Tags */}
       {currentQuestion.tags && currentQuestion.tags.length > 0 && (
@@ -235,21 +209,7 @@ const makeStyles = (t: ThemeTokens) =>
       color: t.inkSoft,
     },
     questionCard: {
-      padding: spacing.lg,
       marginBottom: spacing.sm,
-      alignItems: 'center',
-    },
-    questionText: {
-      ...typography.h1,
-      // Slightly below h1 (32) so a one-line question isn't oversized on the TV.
-      fontSize: 30,
-      lineHeight: 38,
-      color: t.ink,
-      textAlign: 'center',
-    },
-    questionTextShrunk: {
-      fontSize: typography.h2.fontSize,
-      lineHeight: typography.h2.lineHeight,
     },
     tagsRow: {
       flexDirection: 'row',
