@@ -198,6 +198,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         projectId: '7b7ffb0b-984f-4323-a97f-8c12f721e767',
       },
     },
+    // Serve the web export under a subpath (e.g. /tv) so assets resolve when the server
+    // hosts it there. Set only for the production export via rebuild-web.sh; left unset in
+    // dev so `expo start` keeps serving at root.
+    experiments: process.env.WEB_BASE_URL ? { baseUrl: process.env.WEB_BASE_URL } : undefined,
   };
 
   return withPlugins(base, [withCleartextTraffic, withTvSplashScreen]);
