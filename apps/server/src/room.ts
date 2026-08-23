@@ -2163,7 +2163,11 @@ export class GameRoom {
     if (this.gameType === 'configured' || this.questionPool.length === 0) {
       return this.questions.length;
     }
-    return this.configuredTotalQuestions ?? TOTAL_QUESTIONS;
+    // Casual and meta games ask for a round count up front, but the bank may not
+    // have that many to give. Once the questions are loaded they are the real
+    // total — a five-question bank must not announce "question 5 of 10".
+    const requested = this.configuredTotalQuestions ?? TOTAL_QUESTIONS;
+    return this.questions.length > 0 ? Math.min(requested, this.questions.length) : requested;
   }
 
   private getCurrentQuestion(): QuestionWithMeta | null {
