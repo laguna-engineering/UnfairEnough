@@ -158,7 +158,12 @@ export default function App() {
     webPreview?.serverUrl ?? PREVIEW_SERVER_URL,
   );
   const [hostedServerUrl, setHostedServerUrl] = useState<string>('');
-  const [connectDefaultUrl, setConnectDefaultUrl] = useState<string | null>(null);
+  // Web has no mode select to pass through (it can't run a local server), so it lands
+  // straight on the connect screen — seed the .env server there the way
+  // handleSelectAccount does for native, or the host is left typing a URL by hand.
+  const [connectDefaultUrl, setConnectDefaultUrl] = useState<string | null>(
+    Platform.OS === 'web' ? configServerUrl || null : null,
+  );
   const [hostedMobileBaseUrl, setHostedMobileBaseUrl] = useState<string | null>(null);
   const hostedControllerRef = useRef<HostedGameController | null>(null);
   const [authChallenge, setAuthChallenge] = useState<AuthChallenge | null>(null);
