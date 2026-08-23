@@ -1,4 +1,4 @@
-import { useTranslation } from '@unfairenough/i18n';
+import { formatOrdinal, type SupportedLanguage, useTranslation } from '@unfairenough/i18n';
 import { Button, Card, colors, ScreenBackground, spacing, typography } from '@unfairenough/ui';
 import type { GameResult } from '@unfairenough/ws-protocol';
 import type React from 'react';
@@ -17,7 +17,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
   onPlayAgain,
   totalGamesBefore,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const myRanking = result.rankings.find((r) => r.playerId === playerId);
   const isWinner = result.winner.playerId === playerId;
 
@@ -54,7 +54,9 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
         ) : (
           <>
             <Text style={styles.position}>
-              {t('results.yourPosition', { position: myRanking?.rank ?? 0 })}
+              {t('results.yourPosition', {
+                position: formatOrdinal(myRanking?.rank ?? 0, i18n.language as SupportedLanguage),
+              })}
             </Text>
             <Text style={styles.score}>
               {t('results.pointsCount', { score: myRanking?.score })}
@@ -75,6 +77,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
           {result.rankings.map((player) => (
             <View
               key={player.playerId}
+              testID="standings-row"
               style={[styles.leaderboardRow, player.playerId === playerId && styles.highlightedRow]}
             >
               <Text style={[styles.rank, { color: getRankColor(player.rank) }]}>

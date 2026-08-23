@@ -38,4 +38,5 @@ i18n.use(initReactI18next).init({
 export default i18n;
 export const changeLanguage = (lng: SupportedLanguage) => i18n.changeLanguage(lng);
 export { useTranslation } from 'react-i18next';
+export { formatOrdinal } from './ordinal';
 export type { SupportedLanguage };

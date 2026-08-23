@@ -6,13 +6,13 @@ import {
 } from '@unfairenough/game-logic';
 import { changeLanguage, type SupportedLanguage } from '@unfairenough/i18n';
 import type { IGameController } from '../services/IGameController';
-import { buildPreviewState } from './previewData';
+import { buildPreviewState, type PreviewOptions } from './previewData';
 
 export class PreviewGameController implements IGameController {
   private store;
 
-  constructor(phase: GamePhase) {
-    this.store = createStore(buildPreviewState(phase));
+  constructor(phase: GamePhase, options: PreviewOptions = {}) {
+    this.store = createStore(buildPreviewState(phase, options));
   }
 
   async initialize(): Promise<void> {

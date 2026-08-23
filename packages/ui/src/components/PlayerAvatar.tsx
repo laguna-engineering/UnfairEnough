@@ -14,6 +14,7 @@ export interface PlayerAvatarProps {
   score?: number;
   size?: 'small' | 'medium' | 'large';
   showScore?: boolean;
+  testID?: string;
 }
 
 const darken = (hex: string, amount: number): string => {
@@ -31,6 +32,7 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
   score,
   size = 'medium',
   showScore = false,
+  testID,
 }) => {
   const { theme } = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
@@ -55,7 +57,7 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({
     .slice(0, 2);
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID={testID}>
       <LinearGradient
         colors={[color, darken(color, 0.2)]}
         start={{ x: 0, y: 0 }}

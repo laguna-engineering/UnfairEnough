@@ -79,7 +79,18 @@ const COLORS = [
 ];
 
 const DEFAULT_QUESTION_TIME_LIMIT = 15;
-const MAX_PLAYERS = 12;
+
+// Room capacity. Override with the MAX_PLAYERS env var (Bun reads
+// apps/server/.env; on the deployed box it goes in the systemd unit). The cap
+// is a UI limit, not a protocol one — the TV lobby only draws seven avatars
+// before collapsing the rest into a "+N" badge, and the results screens are
+// laid out for a room this size.
+const DEFAULT_MAX_PLAYERS = 12;
+const parsedMaxPlayers = Number(process.env.MAX_PLAYERS);
+const MAX_PLAYERS =
+  Number.isInteger(parsedMaxPlayers) && parsedMaxPlayers > 0
+    ? parsedMaxPlayers
+    : DEFAULT_MAX_PLAYERS;
 
 const TOTAL_QUESTIONS = 10;
 const COUNTDOWN_SECONDS = 3;

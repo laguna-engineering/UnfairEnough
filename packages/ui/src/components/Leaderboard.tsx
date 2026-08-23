@@ -49,12 +49,13 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
   const styles = useMemo(() => makeStyles(theme), [theme]);
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="leaderboard">
       {entries.map((entry) => {
         const isHighlighted = entry.playerId === highlightPlayerId;
         return (
           <View
             key={entry.playerId}
+            testID="leaderboard-row"
             style={[
               styles.row,
               isHighlighted && styles.highlightedRow,

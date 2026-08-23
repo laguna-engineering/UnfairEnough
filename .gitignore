@@ -40,6 +40,8 @@ expo-env.d.ts
 playwright-report/
 test-results/
 /playwright/.cache/
+# Screenshot artifacts from the e2e screenshot specs — review aids, not baselines
+screenshots/
 
 # Questions (ignore all except the example)
 questions/*

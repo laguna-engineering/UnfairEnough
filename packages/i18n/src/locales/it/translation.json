@@ -207,7 +207,7 @@
     "gameOver": "Fine Partita!",
     "winner": "Vincitore",
     "finalScores": "Punteggi Finali",
-    "yourPosition": "Sei arrivato {{position}}°",
+    "yourPosition": "Sei arrivato {{position}}",
     "playAgain": "Gioca Ancora",
     "backToLobby": "Torna alla Lobby",
     "congratulations": "Congratulazioni!",

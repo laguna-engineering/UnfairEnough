@@ -4,7 +4,9 @@ export { debugLog, isDebugEnabled, setDebugEnabled } from './debug';
 
 export const APP_NAME = 'Unfair Enough!';
 export const DEFAULT_QUESTION_TIME_LIMIT = 15;
-export const MAX_PLAYERS = 12;
+// Room capacity lives on the server (apps/server/src/room.ts, MAX_PLAYERS env
+// var) — it is enforced there and nowhere else, so there is no copy here to
+// drift out of sync.
 export const MAX_NAME_LENGTH = 20;
 export const ROOM_CODE_LENGTH = 4;
 export const MAX_RECENT_SERVERS = 5;

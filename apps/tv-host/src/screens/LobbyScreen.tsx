@@ -557,6 +557,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
               {players.slice(0, playerCount > 7 ? 6 : 7).map((player) => (
                 <PlayerAvatar
                   key={player.id}
+                  testID="lobby-player-avatar"
                   name={player.name}
                   color={player.color}
                   emoji={player.emoji}
@@ -564,7 +565,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
                 />
               ))}
               {playerCount > 7 && (
-                <View style={styles.overflowBadge}>
+                <View style={styles.overflowBadge} testID="lobby-overflow-badge">
                   <Text style={styles.overflowText}>+{playerCount - 6}</Text>
                 </View>
               )}

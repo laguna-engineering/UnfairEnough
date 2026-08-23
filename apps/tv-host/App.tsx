@@ -6,6 +6,7 @@ import { Nunito_700Bold } from '@expo-google-fonts/nunito/700Bold';
 import type { GamePhase } from '@unfairenough/game-logic';
 import { changeLanguage, type SupportedLanguage } from '@unfairenough/i18n';
 import { setDebugEnabled } from '@unfairenough/shared';
+import type { QuestionType } from '@unfairenough/ws-protocol';
 import Constants from 'expo-constants';
 import { useKeepAwake } from 'expo-keep-awake';
 import { StatusBar } from 'expo-status-bar';
@@ -14,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Platform } from 'react-native';
 import * as SplashScreen from './modules/tv-splash-screen/src';
 import { GameModeProvider } from './src/context/GameModeContext';
+import type { PreviewOptions } from './src/preview/previewData';
 import { AccountLoginScreen } from './src/screens/AccountLoginScreen';
 import { ConnectScreen } from './src/screens/ConnectScreen';
 import { GameScreen } from './src/screens/GameScreen';
@@ -46,11 +48,67 @@ const VALID_PREVIEW_PHASES: GamePhase[] = [
   'GAME_OVER',
 ];
 
-function getWebPreviewPhase(): GamePhase | null {
+const VALID_PREVIEW_QUESTION_TYPES: QuestionType[] = [
+  'multiple_choice',
+  'true_false',
+  'closest_wins',
+  'predict_room',
+];
+
+/**
+ * Layout knobs shared by both preview entry points (web query string, Android
+ * TV intent URI): `players`, `type` and `answered` pin down the exact room the
+ * screens render — see PreviewOptions.
+ */
+function parsePreviewOptions(params: URLSearchParams): PreviewOptions {
+  const players = Number.parseInt(params.get('players') ?? '', 10);
+  const answered = Number.parseInt(params.get('answered') ?? '', 10);
+  const questionType = params.get('type') as QuestionType | null;
+
+  return {
+    players: Number.isFinite(players) ? players : undefined,
+    answered: Number.isFinite(answered) ? answered : undefined,
+    questionType:
+      questionType && VALID_PREVIEW_QUESTION_TYPES.includes(questionType)
+        ? questionType
+        : undefined,
+  };
+}
+
+// A stand-in host for preview mode: the lobby needs *some* server to build the
+// join QR from, and no request is ever made to it (the preview controller has
+// no socket). Override with `?server=`.
+const PREVIEW_SERVER_URL = 'preview.local';
+
+function parseLang(params: URLSearchParams): SupportedLanguage | null {
+  const lang = params.get('lang');
+  return lang === 'en' || lang === 'it' ? lang : null;
+}
+
+/**
+ * `?lang=en|it` on the web dev build. The app language otherwise comes from the
+ * build-time DEFAULT_LANG, which makes screenshots and e2e assertions depend on
+ * whoever's .env built the bundle; this pins it per URL.
+ */
+function getUrlLang(): SupportedLanguage | null {
+  if (!__DEV__ || Platform.OS !== 'web') return null;
+  return parseLang(new URLSearchParams(window.location.search));
+}
+
+function getWebPreview(): {
+  phase: GamePhase;
+  options: PreviewOptions;
+  serverUrl: string;
+} | null {
   if (!__DEV__ || Platform.OS !== 'web') return null;
   const params = new URLSearchParams(window.location.search);
   const phase = params.get('preview') as GamePhase | null;
-  return phase && VALID_PREVIEW_PHASES.includes(phase) ? phase : null;
+  if (!phase || !VALID_PREVIEW_PHASES.includes(phase)) return null;
+  return {
+    phase,
+    options: parsePreviewOptions(params),
+    serverUrl: params.get('server') || PREVIEW_SERVER_URL,
+  };
 }
 
 type AppScreen =
@@ -87,9 +145,17 @@ export default function App() {
     }
   }, [ready]);
 
-  const webPreviewPhase = getWebPreviewPhase();
+  const webPreview = getWebPreview();
+  const urlLang = getUrlLang();
+  useEffect(() => {
+    if (urlLang) changeLanguage(urlLang);
+  }, [urlLang]);
+
   const [screen, setScreen] = useState<AppScreen>(
-    webPreviewPhase ? 'preview' : Platform.OS === 'web' ? 'connect' : 'mode_select',
+    webPreview ? 'preview' : Platform.OS === 'web' ? 'connect' : 'mode_select',
+  );
+  const [previewServerUrl, setPreviewServerUrl] = useState<string>(
+    webPreview?.serverUrl ?? PREVIEW_SERVER_URL,
   );
   const [hostedServerUrl, setHostedServerUrl] = useState<string>('');
   const [connectDefaultUrl, setConnectDefaultUrl] = useState<string | null>(null);
@@ -102,8 +168,11 @@ export default function App() {
   const authRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const authRetryCountRef = useRef(0);
   const previewControllerRef = useRef<IGameController | null>(
-    webPreviewPhase
-      ? new (require('./src/preview/PreviewGameController').PreviewGameController)(webPreviewPhase)
+    webPreview
+      ? new (require('./src/preview/PreviewGameController').PreviewGameController)(
+          webPreview.phase,
+          webPreview.options,
+        )
       : null,
   );
 
@@ -118,7 +187,13 @@ export default function App() {
         const phase = parsed.searchParams.get('phase') as GamePhase | null;
         if (phase && VALID_PREVIEW_PHASES.includes(phase)) {
           const { PreviewGameController } = require('./src/preview/PreviewGameController');
-          previewControllerRef.current = new PreviewGameController(phase);
+          previewControllerRef.current = new PreviewGameController(
+            phase,
+            parsePreviewOptions(parsed.searchParams),
+          );
+          const lang = parseLang(parsed.searchParams);
+          if (lang) changeLanguage(lang);
+          setPreviewServerUrl(parsed.searchParams.get('server') || PREVIEW_SERVER_URL);
           setScreen('preview');
         }
       } catch {
@@ -310,7 +385,11 @@ export default function App() {
       return (
         <>
           <StatusBar style="light" hidden />
-          <GameModeProvider mode="hosted" controller={previewControllerRef.current!}>
+          <GameModeProvider
+            mode="hosted"
+            controller={previewControllerRef.current!}
+            serverUrl={previewServerUrl}
+          >
             <GameScreen />
           </GameModeProvider>
         </>

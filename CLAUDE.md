@@ -33,6 +33,9 @@ yarn format               # Auto-fix formatting only
 # E2E testing (Playwright)
 yarn test:e2e             # Run all E2E tests (headless)
 yarn test:e2e:ui          # Run with Playwright UI
+yarn test:e2e --project="TV Host"        # TV only (1920x1080 viewport)
+yarn test:e2e --project="Mobile Chrome"  # Player app only (Pixel 5 viewport)
+# The screenshot specs write review artifacts to screenshots/ (gitignored).
 
 # Releases — bump the launch-screen stamp (yy.WW.pp), commit it, publish an Android EAS update
 yarn release mobile       # Bump patch, or reset to .0 in a new ISO week
@@ -69,6 +72,27 @@ Both apps use a `GameScreen` component that routes by game phase: `LOBBY → COU
 
 WebSocket protocol: host creates room → players join with room code → server orchestrates phases, distributes questions, collects timestamped answers, calculates scores.
 
+### Preview harness (web dev builds)
+
+Both apps can boot straight into a screen with mock data, no server and no room —
+this is what the screenshot and layout specs drive, and it's the fastest way to eyeball
+a crowded-room layout by hand.
+
+- TV (`localhost:8082`): `?preview=<PHASE>` where PHASE is one of `LOBBY, COUNTDOWN,
+  MEDIA_PREVIEW, QUESTION, REVEALING, RESULTS, GAME_OVER`. Knobs: `players=1..50`,
+  `type=multiple_choice|true_false|closest_wins|predict_room`, `answered=<n>`, `server=<host>`.
+  Android TV takes the same params over `unfairenough-tv://preview?phase=...`.
+- Mobile (`localhost:8081`): `?preview=<SCREEN>` where SCREEN is one of `SCAN, JOIN,
+  PICK_PROFILE, WELCOME_BACK, RETURNING, WAITING, COUNTDOWN, MEDIA_PREVIEW, PLAY, RESULT,
+  GAME_OVER`. Knobs: `players=3..50`, `type=...`, `answered=1`.
+- The mock roster runs to 50 even though a room caps at 12 — layout assertions stop at the
+  cap, the screenshot specs go past it to show where the screens give out.
+- Both accept `?lang=en|it`. Without it the language comes from whichever `DEFAULT_LANG`
+  built the bundle, so every e2e helper pins it — Italian's longer strings are also worth
+  screenshotting.
+- Mock data lives in `apps/*/src/preview/previewData.ts` and is deterministic (no `Date.now()`,
+  no RNG) so the same URL always renders the same pixels.
+
 ## Key constraints
 
 - `EXPO_TV=1` must be set for all tv-host commands (Metro uses `.tv.ts` extensions).
@@ -77,7 +101,11 @@ WebSocket protocol: host creates room → players join with room code → server
 - `ScreenBackground` provides `flex: 1` — screen containers should not duplicate `flex: 1` or set `backgroundColor`.
 - Path alias: `@unfairenough/*` → `packages/*/src`.
 - React 19.1.0 is pinned globally via `resolutions`.
-- Max 12 players per room.
+- Max 12 players per room by default, enforced only by the hosted server
+  (`apps/server/src/room.ts`, `ROOM_FULL`). Override with the `MAX_PLAYERS` env var
+  (`apps/server/.env` in dev, systemd unit in production). Local mode — the TV running its
+  own server — enforces no cap at all. Raising it is a layout question first: check the
+  50-player screenshots before you do.
 - Each app's release stamp lives in its own `src/version.ts` (JS, so `eas update` ships it),
   never in `app.config.ts` — both apps use the fingerprint runtime version policy and the Expo
   config `version` field feeds that fingerprint.

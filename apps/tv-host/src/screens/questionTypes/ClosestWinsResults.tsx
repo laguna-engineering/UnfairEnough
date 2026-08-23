@@ -105,7 +105,7 @@ export const ClosestWinsResults: React.FC<ClosestWinsResultsProps> = ({
               <View key={result.playerId} style={[styles.markerWrap, { left: `${pos}%` }]}>
                 <View style={[styles.markerDot, { backgroundColor: color, borderColor: color }]} />
                 <View style={[styles.markerStem, { height: top - 4, backgroundColor: color }]} />
-                <View style={[styles.markerChip, { top, borderColor: color }]}>
+                <View testID="guess-chip" style={[styles.markerChip, { top, borderColor: color }]}>
                   <Text style={[styles.markerName, { color }]}>{result.name}</Text>
                   <Text style={styles.markerValue}>{result.guess?.toLocaleString()}</Text>
                   {result.isClosest ? (
