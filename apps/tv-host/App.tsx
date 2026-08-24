@@ -8,7 +8,7 @@ import { changeLanguage, type SupportedLanguage } from '@unfairenough/i18n';
 import { setDebugEnabled } from '@unfairenough/shared';
 import type { QuestionType } from '@unfairenough/ws-protocol';
 import Constants from 'expo-constants';
-import { useKeepAwake } from 'expo-keep-awake';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { StatusBar } from 'expo-status-bar';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -125,10 +125,24 @@ type AppScreen =
   | 'hosted_game'
   | 'preview';
 
+const KEEP_AWAKE_TAG = 'unfairenough-tv';
+
+// Keep the display on so the Android TV system screensaver / daydream never
+// kicks in while the game is running (applies FLAG_KEEP_SCREEN_ON on Android).
+// Not expo's useKeepAwake: that hook has no .catch on the wake-lock request,
+// and browsers can deny it (battery saver, hidden tab) — the denial must stay
+// a no-op instead of an unhandled rejection.
+function useBestEffortKeepAwake() {
+  useEffect(() => {
+    activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => {});
+    return () => {
+      deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => {});
+    };
+  }, []);
+}
+
 export default function App() {
-  // Keep the display on so the Android TV system screensaver / daydream never
-  // kicks in while the game is running (applies FLAG_KEEP_SCREEN_ON on Android).
-  useKeepAwake();
+  useBestEffortKeepAwake();
 
   const [fontsLoaded] = useFonts({
     Fredoka_600SemiBold,

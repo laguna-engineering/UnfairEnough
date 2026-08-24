@@ -38,6 +38,21 @@ test.describe('Connecting to a hosted server', () => {
     await expect(page.getByText('TEST')).toBeVisible();
   });
 
+  test('the lobby mounts without uncaught errors on web', async ({ page }) => {
+    // The TV focus-handle effect used to call findNodeHandle ~100ms after the
+    // lobby mounted; react-native-web throws on it (React 19 dropped
+    // findDOMNode), and an error inside setTimeout never fails an assertion —
+    // only a pageerror listener catches this class of crash.
+    const errors: Error[] = [];
+    page.on('pageerror', (error) => errors.push(error));
+
+    const helpers = await setupHostedMocks(page);
+    await navigateToLobby(page, helpers);
+    await page.waitForTimeout(500);
+
+    expect(errors).toEqual([]);
+  });
+
   test('the lobby shows the join instructions alongside the code', async ({ page }) => {
     const helpers = await setupHostedMocks(page);
     await navigateToLobby(page, helpers);

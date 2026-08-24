@@ -15,7 +15,15 @@ import {
 } from '@unfairenough/ui';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { findNodeHandle, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  findNodeHandle,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useGameController } from '../hooks/useGameController';
 import { getCachedAuthState } from '../services/AuthService';
@@ -441,6 +449,9 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
   // renders — re-running keeps the `start` handle fresh once players join.
   // biome-ignore lint/correctness/useExhaustiveDependencies: canStart is an intentional re-run trigger
   useEffect(() => {
+    // nextFocus* is Android TV spatial navigation; react-native-web's
+    // findNodeHandle throws (React 19 dropped findDOMNode), so skip on web.
+    if (Platform.OS === 'web') return;
     const timer = setTimeout(() => {
       setFocusTags({
         personalized: findNodeHandle(personalizedRef.current) ?? undefined,
