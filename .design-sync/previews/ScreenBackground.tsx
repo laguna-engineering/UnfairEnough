@@ -8,7 +8,7 @@ const Frame = ({ children }: { children: React.ReactNode }) => (
 export const AsScreen = () => (
   <Frame>
     <ScreenBackground style={{ alignItems: 'center', justifyContent: 'center', gap: 20 }}>
-      <div style={{ color: '#FFFFFF', fontSize: 28, fontFamily: 'Sniglet_400Regular' }}>Unfair Enough!</div>
+      <div style={{ color: '#FFFFFF', fontSize: 28, fontFamily: 'Fredoka_600SemiBold' }}>Unfair Enough!</div>
       <div style={{ color: '#E0E0E0', fontSize: 15, fontFamily: 'Nunito_400Regular' }}>
         The deep-indigo backdrop every screen sits on
       </div>

@@ -1,12 +1,12 @@
-/* Neon Sakura brand fonts. The DS's typography.ts sets fontFamily to these
-   exact strings (Sniglet for titles/timer, Nunito for body/label/button), so
-   the @font-face family names must match them verbatim for react-native-web
-   to resolve them on the web. Wired via cfg.extraFonts. */
+/* Brand fonts. The DS's typography.ts sets fontFamily to these exact strings
+   (Fredoka for titles/timer, Nunito for body/label/button), so the @font-face
+   family names must match them verbatim for react-native-web to resolve them
+   on the web. Wired via cfg.extraFonts. */
 @font-face {
-  font-family: 'Sniglet_400Regular';
+  font-family: 'Fredoka_600SemiBold';
   font-style: normal;
-  font-weight: 400;
-  src: url('./fonts/Sniglet_400Regular.ttf') format('truetype');
+  font-weight: 600;
+  src: url('./fonts/Fredoka_600SemiBold.ttf') format('truetype');
 }
 @font-face {
   font-family: 'Nunito_400Regular';

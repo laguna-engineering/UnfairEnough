@@ -34,9 +34,9 @@ on the web through **react-native-web**. It is off the converter's default envel
 
 ## Fonts
 
-- Brand fonts **Sniglet** (titles/timer) and **Nunito** (400/600/700, body/label/button)
+- Brand fonts **Fredoka** (titles/timer) and **Nunito** (400/600/700, body/label/button)
   are set by `packages/ui/src/theme/typography.ts` as bare `fontFamily` strings
-  (`Sniglet_400Regular`, `Nunito_400Regular`, `Nunito_600SemiBold`, `Nunito_700Bold`).
+  (`Fredoka_600SemiBold`, `Nunito_400Regular`, `Nunito_600SemiBold`, `Nunito_700Bold`).
   RNW emits those literal names as CSS `font-family`; without shipped `@font-face` the
   web falls back to serif. The converter's font scrape can't see them (they're in JS,
   not CSS) so no `[FONT_MISSING]` fires — this had to be found by eye on a text-heavy

@@ -146,7 +146,7 @@ The admin dashboard is available at `http://localhost:3000/admin/` when the serv
 - **Players** — Create and manage player profiles (name, color, avatar emoji).
 - **Question Sets** — Browse imported question sets.
 - **Tags** — View tags and the questions associated with each tag.
-- **Export** — Export game data.
+- **Export** — Export player profiles (per-tag strengths) as markdown, meant to be fed to an LLM to generate questions tailored to the group.
 
 The admin dashboard is only available in hosted mode — in local mode, question sets are managed through the TV host UI.
 
@@ -188,7 +188,7 @@ packages/
   shared/          Common utilities
 
 questions/         YAML question sets (see question-set.schema.json)
-e2e/               Playwright E2E tests (mobile web)
+e2e/               Playwright E2E tests (mobile web + TV host web)
 ```
 
 ## Game Flow
@@ -273,7 +273,7 @@ yarn test:e2e:ui           # Playwright with interactive UI
 | Protocol | JSON over WebSocket, typed with `@unfairenough/ws-protocol` |
 | Database | SQLite (bun:sqlite on server, expo-sqlite on TV) |
 | i18n | i18next (EN, IT) |
-| Testing | Playwright (mobile web E2E) |
+| Testing | Playwright (mobile web + TV host web E2E) |
 | Linting | Biome (lint + format) |
 
 ## Notes
@@ -281,4 +281,8 @@ yarn test:e2e:ui           # Playwright with interactive UI
 - `EXPO_TV=1` must be set for all tv-host commands — Metro uses `.tv.ts` file extensions.
 - Path alias `@unfairenough/*` maps to `packages/*/src`.
 - React 19.1.0 is pinned globally via `resolutions`.
-- Max 12 players per room.
+- Max 12 players per room by default. Only the hosted server enforces this (override with the `MAX_PLAYERS` env var); local mode has no cap.
+
+## License
+
+[AGPL-3.0-only](./LICENSE).

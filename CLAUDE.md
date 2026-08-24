@@ -54,7 +54,7 @@ yarn release tv -- --branch preview   # Args after -- go to `eas update`
 
 ### Apps
 
-- **`apps/server/`** — Bun + Hono. Manages game rooms via WebSocket (`/ws?role=host|player&roomCode=XXXX`). Serves three context roots: `/mobile/` (dev proxy to Metro or static build), `/tv/` (TV host web build from `./public`), `/admin/` (dashboard). Root `/` redirects to `/mobile/`.
+- **`apps/server/`** — Bun + Hono. Manages game rooms via WebSocket (`/ws?role=host|player&roomCode=XXXX`). Serves three context roots: `/mobile/` (dev proxy to Metro or static build), `/tv/` (TV host web build from `./public`), `/admin/` (full content-management dashboard: question sets, questions, tags, meta sets, players, media/bundle upload, LLM export). Root `/` redirects to `/mobile/`. Also owns the account/auth system: `src/auth/` (session middleware, tokens, pending TV device-flow logins) plus `routes/auth.ts`.
 - **`apps/tv-host/`** — Expo app using `react-native-tvos` fork. Builds for Apple TV, Android TV, and web. In local mode, uses `react-native-tcp-socket` to run a WebSocket server directly on the TV device. In hosted mode, connects to the Bun server as a host client. Landscape orientation.
 - **`apps/mobile/`** — Standard Expo app (iOS, Android, web). Connects to the game server (local or hosted) as a player. Has QR scanning via `expo-camera` and React Navigation stack. Portrait orientation.
 
@@ -62,13 +62,14 @@ yarn release tv -- --branch preview   # Args after -- go to `eas update`
 
 - **`packages/ws-protocol/`** — Message types and validation for client↔server communication. Both apps and the server import this.
 - **`packages/game-logic/`** — Redux Toolkit slices (`gameSlice`, `playersSlice`), scoring/ranking utils, sample question bank.
+- **`packages/db/`** — SQLite schema, migrations, repositories, YAML question-set import. Used by both the server (`bun:sqlite`) and the TV host (`expo-sqlite`, via `adapter-expo.ts`).
 - **`packages/ui/`** — Shared components and theme ("Neon Sakura"). `expo-linear-gradient` is a peerDependency.
 - **`packages/i18n/`** — i18next with English and Italian translations.
 - **`packages/shared/`** — Common utilities.
 
 ### Game flow
 
-Both apps use a `GameScreen` component that routes by game phase: `LOBBY → COUNTDOWN → QUESTION → REVEALING → RESULTS → GAME_OVER`.
+Both apps use a `GameScreen` component that routes by game phase: `LOBBY → COUNTDOWN → MEDIA_PREVIEW (only if the question has media) → QUESTION → REVEALING → RESULTS → GAME_OVER`.
 
 WebSocket protocol: host creates room → players join with room code → server orchestrates phases, distributes questions, collects timestamped answers, calculates scores.
 

@@ -24,9 +24,9 @@ There are **no CSS classes** and no `className`. You style in two ways:
 The bundle exports the "Neon Sakura" theme alongside the components — import and use
 these, never hand-picked hex:
 
-- `colors` — `primary` (#FF6B9D pink), `secondary` (#4ECDC4 teal), `accentYellow`,
-  `accentPurple`, `background` (#1a1a2e), `card` (#16213e), `textPrimary` (#FFF),
-  `textSecondary`, `success`, `error`.
+- `colors` — `primary` (#F5619E pink), `secondary` (#89D4FF sky blue), `accentYellow`,
+  `accentPurple`, `background` (#0b1e3a), `card` (translucent white,
+  rgba(255,255,255,0.055)), `textPrimary` (#FFF), `textSecondary`, `success`, `error`.
 - `gradients` — named `as const` tuples: `screenBackground`, `card`, `primary`,
   `answerA`–`answerD`, `timerHealthy`/`timerWarning`/`timerDanger`, `winner`, …
 - `playerColors` — a 12-color array to assign per player.
@@ -39,10 +39,10 @@ Every screen sits on a **dark** deep-indigo ground. Wrap a screen's content in
 put light text on top (`colors.textPrimary`). Components assume this dark context —
 placing them on a white page will look wrong.
 
-**Fonts** (Sniglet for titles/timer, Nunito for body/labels/buttons) ship inside
+**Fonts** (Fredoka for titles/timer, Nunito for body/labels/buttons) ship inside
 `styles.css` as `@font-face`, so they are already applied — nothing to set up. When
 you write your own layout text, set `fontFamily` to a shipped family
-(`'Sniglet_400Regular'`, `'Nunito_400Regular'`, `'Nunito_600SemiBold'`,
+(`'Fredoka_600SemiBold'`, `'Nunito_400Regular'`, `'Nunito_600SemiBold'`,
 `'Nunito_700Bold'`) or your text falls back to a serif.
 
 ## Where the truth lives
