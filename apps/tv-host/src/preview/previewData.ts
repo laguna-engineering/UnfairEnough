@@ -1,5 +1,6 @@
 import type { GamePhase, RootState } from '@unfairenough/game-logic';
 import { sampleQuestions } from '@unfairenough/game-logic';
+import { MAX_NAME_LENGTH } from '@unfairenough/shared';
 import type { AnswerKey, Question, QuestionType } from '@unfairenough/ws-protocol';
 import { Image } from 'react-native';
 
@@ -26,6 +27,12 @@ export interface PreviewOptions {
   questionType?: QuestionType;
   /** How many players have answered on the QUESTION screen. Defaults to ~⅔ of the room. */
   answered?: number;
+  /**
+   * Swap the roster for worst-case names: every one exactly MAX_NAME_LENGTH
+   * characters with no spaces to wrap on. This is what proves the cap is low
+   * enough for the layouts, so it is the roster the long-name screenshots use.
+   */
+  longNames?: boolean;
 }
 
 interface MockPlayer {
@@ -112,12 +119,22 @@ const MOCK_PLAYERS: MockPlayer[] = [
 
 export const MAX_PREVIEW_PLAYERS = MOCK_PLAYERS.length;
 
+/**
+ * A name of exactly MAX_NAME_LENGTH characters with no space to break on —
+ * the widest thing the join screen can produce. Seeded off the player's real
+ * name so the roster stays distinguishable and deterministic.
+ */
+function worstCaseName(name: string): string {
+  return `${name}stiltskinbottomsworth`.slice(0, MAX_NAME_LENGTH);
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function pickPlayers(count: number): MockPlayer[] {
-  return MOCK_PLAYERS.slice(0, clamp(Math.round(count), 1, MAX_PREVIEW_PLAYERS));
+function pickPlayers(count: number, longNames = false): MockPlayer[] {
+  const picked = MOCK_PLAYERS.slice(0, clamp(Math.round(count), 1, MAX_PREVIEW_PLAYERS));
+  return longNames ? picked.map((p) => ({ ...p, name: worstCaseName(p.name) })) : picked;
 }
 
 function buildPlayersState(players: MockPlayer[]) {
@@ -359,7 +376,7 @@ function buildPredictRoomRound(players: MockPlayer[]) {
 }
 
 export function buildPreviewState(phase: GamePhase, options: PreviewOptions = {}): RootState {
-  const mockPlayers = pickPlayers(options.players ?? 8);
+  const mockPlayers = pickPlayers(options.players ?? 8, options.longNames);
   const players = buildPlayersState(mockPlayers);
   const rankings = buildRankings(mockPlayers);
   const positionHistory = buildPositionHistory(mockPlayers);

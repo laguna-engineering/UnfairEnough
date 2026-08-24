@@ -7,6 +7,9 @@ export const DEFAULT_QUESTION_TIME_LIMIT = 15;
 // Room capacity lives on the server (apps/server/src/room.ts, MAX_PLAYERS env
 // var) — it is enforced there and nowhere else, so there is no copy here to
 // drift out of sync.
+// The join screen's maxLength, the server's sanitizeName cap, and the admin
+// dashboard's maxlength all read this. A copy that drifts lets a player type a
+// name the server then silently truncates to something else.
 export const MAX_NAME_LENGTH = 20;
 export const ROOM_CODE_LENGTH = 4;
 export const MAX_RECENT_SERVERS = 5;

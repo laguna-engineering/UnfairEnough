@@ -241,6 +241,51 @@ describe('resolvePlayerDifficulty', () => {
     const staticDiff = { Bob: 4.0 };
     expect(resolvePlayerDifficulty('Alice', staticDiff, 2.5)).toBe(2.5);
   });
+
+  test('matches names authored or typed with stray whitespace', () => {
+    expect(resolvePlayerDifficulty(' Alice ', { Alice: 4.0 }, 3.0)).toBe(4.0);
+    expect(resolvePlayerDifficulty('Alice', { ' Alice ': 4.0 }, 3.0)).toBe(4.0);
+  });
+
+  test('"default" is reserved — a player of that name gets the fallback', () => {
+    // Not a personal override: the author wrote `default` to mean everyone else.
+    expect(resolvePlayerDifficulty('default', { Alice: 4.0, default: 2.0 }, 5.0)).toBe(2.0);
+    expect(resolvePlayerDifficulty('DEFAULT', { Alice: 4.0, default: 2.0 }, 5.0)).toBe(2.0);
+    // With no fallback authored, they are simply unnamed rather than matching themselves.
+    expect(resolvePlayerDifficulty('default', { Alice: 4.0 }, 5.0)).toBe(5.0);
+  });
+
+  test('ignores a non-numeric override instead of poisoning the score', () => {
+    // The importer casts parsed YAML across as Record<string, number> without
+    // checking values, and a string reaching difficultyMultiplier yields NaN —
+    // which would make this player's round score NaN.
+    const poisoned = { Alice: 'hard' } as unknown as Record<string, number>;
+    expect(resolvePlayerDifficulty('Alice', poisoned, 3.0)).toBe(3.0);
+  });
+
+  test('ignores null and NaN overrides rather than treating them as difficulty 0', () => {
+    const nulled = { Alice: null } as unknown as Record<string, number>;
+    expect(resolvePlayerDifficulty('Alice', nulled, 3.0)).toBe(3.0);
+    expect(resolvePlayerDifficulty('Alice', { Alice: Number.NaN }, 3.0)).toBe(3.0);
+    expect(resolvePlayerDifficulty('Alice', { Alice: Number.POSITIVE_INFINITY }, 3.0)).toBe(3.0);
+  });
+
+  test('falls through an unusable override to the default key', () => {
+    const staticDiff = { Alice: 'hard', default: 2.0 } as unknown as Record<string, number>;
+    expect(resolvePlayerDifficulty('Alice', staticDiff, 5.0)).toBe(2.0);
+  });
+
+  test('falls through an unusable default to the dynamic value', () => {
+    const staticDiff = { default: 'medium' } as unknown as Record<string, number>;
+    expect(resolvePlayerDifficulty('Alice', staticDiff, 3.5)).toBe(3.5);
+  });
+
+  test('a resolved difficulty always yields a usable multiplier', () => {
+    // The guard exists to protect this invariant — scoring must never see NaN.
+    const poisoned = { Alice: 'hard' } as unknown as Record<string, number>;
+    const resolved = resolvePlayerDifficulty('Alice', poisoned, 3.0);
+    expect(Number.isFinite(difficultyMultiplier(resolved))).toBe(true);
+  });
 });
 
 describe('computeEffectiveDifficulty', () => {

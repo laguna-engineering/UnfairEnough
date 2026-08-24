@@ -106,7 +106,9 @@ export const ClosestWinsResults: React.FC<ClosestWinsResultsProps> = ({
                 <View style={[styles.markerDot, { backgroundColor: color, borderColor: color }]} />
                 <View style={[styles.markerStem, { height: top - 4, backgroundColor: color }]} />
                 <View testID="guess-chip" style={[styles.markerChip, { top, borderColor: color }]}>
-                  <Text style={[styles.markerName, { color }]}>{result.name}</Text>
+                  <Text style={[styles.markerName, { color }]} numberOfLines={1}>
+                    {result.name}
+                  </Text>
                   <Text style={styles.markerValue}>{result.guess?.toLocaleString()}</Text>
                   {result.isClosest ? (
                     <Text style={styles.markerPtsClosest}>
@@ -131,7 +133,9 @@ export const ClosestWinsResults: React.FC<ClosestWinsResultsProps> = ({
                   <View
                     style={[styles.outlierDot, { backgroundColor: color, borderColor: color }]}
                   />
-                  <Text style={[styles.markerName, { color }]}>{result.name}</Text>
+                  <Text style={[styles.markerName, { color }]} numberOfLines={1}>
+                    {result.name}
+                  </Text>
                   <Text style={styles.markerValue}>{result.guess?.toLocaleString()}</Text>
                   {result.isClosest ? (
                     <Text style={styles.markerPtsClosest}>
@@ -295,6 +299,10 @@ const makeStyles = (t: ThemeTokens) =>
     },
     markerName: {
       ...typography.label,
+      // The chip is a fixed 100 wide with spacing.sm either side. Without this
+      // a max-length name draws straight over its neighbours, and the outlier
+      // chip (which sizes to its content) runs off the right edge.
+      maxWidth: 100 - spacing.sm * 2,
     },
     markerValue: {
       ...typography.bodySmall,

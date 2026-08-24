@@ -57,8 +57,8 @@ const VALID_PREVIEW_QUESTION_TYPES: QuestionType[] = [
 
 /**
  * Layout knobs shared by both preview entry points (web query string, Android
- * TV intent URI): `players`, `type` and `answered` pin down the exact room the
- * screens render — see PreviewOptions.
+ * TV intent URI): `players`, `type`, `answered` and `names` pin down the exact
+ * room the screens render — see PreviewOptions.
  */
 function parsePreviewOptions(params: URLSearchParams): PreviewOptions {
   const players = Number.parseInt(params.get('players') ?? '', 10);
@@ -68,6 +68,7 @@ function parsePreviewOptions(params: URLSearchParams): PreviewOptions {
   return {
     players: Number.isFinite(players) ? players : undefined,
     answered: Number.isFinite(answered) ? answered : undefined,
+    longNames: params.get('names') === 'long',
     questionType:
       questionType && VALID_PREVIEW_QUESTION_TYPES.includes(questionType)
         ? questionType

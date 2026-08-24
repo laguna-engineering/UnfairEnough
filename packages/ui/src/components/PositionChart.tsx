@@ -37,6 +37,10 @@ const PADDING_TOP = 20;
 const PADDING_BOTTOM = 30;
 const LINE_WIDTH = 3;
 const DOT_RADIUS = 5;
+const END_LABEL_OFFSET = 10;
+const END_LABEL_FONT_SIZE = 14;
+/** Rough advance width of the label font at END_LABEL_FONT_SIZE, in px per character. */
+const END_LABEL_CHAR_WIDTH = 7.5;
 /** Rank gridlines past this many stop being readable and start being hatching. */
 const MAX_GRIDLINES = 6;
 /**
@@ -44,6 +48,16 @@ const MAX_GRIDLINES = 6;
  * to read as "and everyone else down there" instead of a hairline.
  */
 const FIELD_BAND_RANKS = 5;
+
+/**
+ * SVG text has no ellipsizing — an over-long label just draws past the chart
+ * edge and off the screen. End labels are clipped to what the right-hand
+ * gutter fits, so only names too long for it lose characters.
+ */
+function clipToGutter(name: string): string {
+  const budget = Math.floor((PADDING_RIGHT - END_LABEL_OFFSET) / END_LABEL_CHAR_WIDTH);
+  return name.length <= budget ? name : `${name.slice(0, budget - 1)}…`;
+}
 
 export const PositionChart: React.FC<PositionChartProps> = ({
   players,
@@ -246,13 +260,13 @@ export const PositionChart: React.FC<PositionChartProps> = ({
             {/* Player name label at end */}
             {showEndLabels && (
               <SvgText
-                x={lastPoint.x + 10}
+                x={lastPoint.x + END_LABEL_OFFSET}
                 y={lastPoint.y + 5}
                 fill={player.color}
-                fontSize={14}
+                fontSize={END_LABEL_FONT_SIZE}
                 fontWeight="600"
               >
-                {player.name}
+                {clipToGutter(player.name)}
               </SvgText>
             )}
           </React.Fragment>

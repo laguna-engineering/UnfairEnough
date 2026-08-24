@@ -1,5 +1,5 @@
 import { useTranslation } from '@unfairenough/i18n';
-import { AVATAR_COLORS, randomAvatar } from '@unfairenough/shared';
+import { AVATAR_COLORS, MAX_NAME_LENGTH, randomAvatar } from '@unfairenough/shared';
 import {
   Button,
   borderRadius,
@@ -102,7 +102,7 @@ export const JoinScreen: React.FC<JoinScreenProps> = ({
                 onChangeText={setName}
                 placeholder={t('join.namePlaceholder')}
                 placeholderTextColor={colors.textSecondary}
-                maxLength={20}
+                maxLength={MAX_NAME_LENGTH}
                 returnKeyType="join"
                 onSubmitEditing={handleJoin}
               />

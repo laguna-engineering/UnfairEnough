@@ -31,6 +31,8 @@ export interface PreviewParams {
   answered?: number;
   /** Language to render in. Defaults to English, which is what assertions expect. */
   lang?: 'en' | 'it';
+  /** Give every player a worst-case max-length name with nowhere to wrap. */
+  longNames?: boolean;
 }
 
 export function previewUrl(phase: PreviewPhase, params: PreviewParams = {}): string {
@@ -38,6 +40,7 @@ export function previewUrl(phase: PreviewPhase, params: PreviewParams = {}): str
   if (params.players !== undefined) query.set('players', String(params.players));
   if (params.type !== undefined) query.set('type', params.type);
   if (params.answered !== undefined) query.set('answered', String(params.answered));
+  if (params.longNames) query.set('names', 'long');
   return `/?${query.toString()}`;
 }
 

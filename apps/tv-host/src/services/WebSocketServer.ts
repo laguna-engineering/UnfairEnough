@@ -5,6 +5,7 @@
 
 import { AVATAR_COLORS, isAvatarColor, isAvatarEmoji } from '@unfairenough/shared';
 import type { Question, ServerMessage, StateSnapshotPayload } from '@unfairenough/ws-protocol';
+import { sanitizeName } from '@unfairenough/ws-protocol';
 import { Buffer } from 'buffer';
 import * as Crypto from 'expo-crypto';
 import * as Network from 'expo-network';
@@ -304,10 +305,15 @@ class WebSocketServerService {
             ? message.payload.avatarEmoji
             : undefined;
           const deviceId: string | undefined = message.payload.deviceId;
-          const playerData = { playerId, name: message.payload.name, color, emoji };
+          // Same reason the badge is checked above: nothing validated this
+          // payload on the way in, so an unbounded name would reach the TV
+          // layouts and the DB untouched.
+          const name = sanitizeName(message.payload.name);
+          if (!name) return;
+          const playerData = { playerId, name, color, emoji };
 
           client.playerId = playerId;
-          client.playerName = message.payload.name;
+          client.playerName = name;
           client.playerColor = color;
           client.playerEmoji = emoji;
 

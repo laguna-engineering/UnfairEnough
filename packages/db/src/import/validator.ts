@@ -180,6 +180,23 @@ export function validateQuestionSet(raw: unknown): { data: QuestionSetInput; err
       }
     }
 
+    // Validate playerDifficulty. Every value feeds difficultyMultiplier, and a
+    // non-numeric one comes out NaN and turns that player's round score into
+    // NaN — so a bad override is rejected at import instead of at scoring time.
+    if (qObj.playerDifficulty !== undefined) {
+      if (typeof qObj.playerDifficulty !== 'object' || Array.isArray(qObj.playerDifficulty)) {
+        errors.push(`${prefix}.playerDifficulty: must be an object of name → number`);
+      } else {
+        for (const [key, value] of Object.entries(
+          qObj.playerDifficulty as Record<string, unknown>,
+        )) {
+          if (typeof value !== 'number' || !Number.isFinite(value)) {
+            errors.push(`${prefix}.playerDifficulty.${key}: must be a finite number`);
+          }
+        }
+      }
+    }
+
     // Validate unique IDs
     if (typeof qObj.id === 'string') {
       if (seenIds.has(qObj.id)) {

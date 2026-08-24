@@ -1,17 +1,40 @@
-import { isAvatarColor, isAvatarEmoji } from '@unfairenough/shared';
+import { isAvatarColor, isAvatarEmoji, MAX_NAME_LENGTH } from '@unfairenough/shared';
 import type { AnswerKey, ClientMessage, QuestionType } from './messages';
 
-const MAX_NAME_LENGTH = 20;
 const MAX_TOKEN_LENGTH = 256;
 const VALID_ANSWERS: AnswerKey[] = ['A', 'B', 'C', 'D'];
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** C0/C1 controls and DEL — a newline in a name breaks every single-line row. */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matching control characters is the point — this is what strips them out of names
+const CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/g;
 /**
- * Sanitize player name to prevent XSS and enforce length limits
+ * Zero-width and bidi-override characters. These cost nothing against the
+ * length cap but reorder or hide the text drawn around them, so a name can
+ * scramble a whole TV row without ever looking too long.
+ */
+const INVISIBLE_CHARS = /[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g;
+
+/**
+ * Sanitize a player name: strip what breaks layouts or escapes its row, then
+ * enforce the length cap.
+ *
+ * Removal happens before the slice so the cap is exact — stripping after it
+ * would let a name with markup in it come out shorter than MAX_NAME_LENGTH.
  */
 export function sanitizeName(name: unknown): string {
   if (typeof name !== 'string') return '';
-  return name.trim().slice(0, MAX_NAME_LENGTH).replace(/[<>]/g, '');
+  return (
+    name
+      .replace(CONTROL_CHARS, '')
+      .replace(INVISIBLE_CHARS, '')
+      .replace(/[<>]/g, '')
+      // Runs of spaces collapse: 20 spaces and one letter is not a 21-char name.
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, MAX_NAME_LENGTH)
+      .trim()
+  );
 }
 
 /**
