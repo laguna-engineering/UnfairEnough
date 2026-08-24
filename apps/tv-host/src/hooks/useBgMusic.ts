@@ -4,16 +4,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 const VOLUME = 0.25;
 
 // Background music is bundled with the app, so it plays in every mode
-// (local + hosted) with no server, network, or auth dependency.
-const TRACKS = [
-  require('../../assets/music/01-playground.mp3'),
-  require('../../assets/music/02-green-field.mp3'),
-  require('../../assets/music/03-fun-time.mp3'),
-  require('../../assets/music/04-solve-puzzle.mp3'),
-  require('../../assets/music/05-the-shepherd.mp3'),
-  require('../../assets/music/06-dancing-robot.mp3'),
-  require('../../assets/music/07-riding-horse.mp3'),
-];
+// (local + hosted) with no server, network, or auth dependency. The MP3s are
+// gitignored (copyright), so the list is built from whatever is on disk at
+// bundle time — an empty assets/music/ still builds and just plays no music.
+const musicDir = require.context('../../assets/music', false, /\.mp3$/);
+const TRACKS = musicDir
+  .keys()
+  .sort()
+  .map((key) => musicDir(key));
 
 export function useBgMusic() {
   const [isMuted, setIsMuted] = useState(false);

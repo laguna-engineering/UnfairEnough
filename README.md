@@ -27,6 +27,11 @@ yarn
 
 All packages are consumed as TypeScript source — there's no build step for shared packages.
 
+Background music is optional: drop `.mp3` files into `apps/tv-host/assets/music/` and
+they're bundled into the TV app automatically (played in filename order). The directory
+is gitignored for copyright reasons; with no files in it, the app builds and runs
+fine, just without music.
+
 ## Architecture Diagrams
 
 ### Hosted mode
