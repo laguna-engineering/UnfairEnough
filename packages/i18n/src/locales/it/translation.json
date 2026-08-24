@@ -46,7 +46,8 @@
     "minPlayersNeeded": "Servono almeno {{min}} giocatori per iniziare",
     "settings": "Impostazioni",
     "serverStarting": "Avvio server...",
-    "serverReady": "Server pronto!"
+    "serverReady": "Server pronto!",
+    "logout": "Esci"
   },
   "join": {
     "scanQR": "Scansiona Codice QR",

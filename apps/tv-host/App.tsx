@@ -20,7 +20,12 @@ import { AccountLoginScreen } from './src/screens/AccountLoginScreen';
 import { ConnectScreen } from './src/screens/ConnectScreen';
 import { GameScreen } from './src/screens/GameScreen';
 import { ModeSelectionScreen } from './src/screens/ModeSelectionScreen';
-import { clearAuthState, loadAuthState, saveAuthState } from './src/services/AuthService';
+import {
+  clearAuthState,
+  getCachedAuthState,
+  loadAuthState,
+  saveAuthState,
+} from './src/services/AuthService';
 import type { AuthChallenge } from './src/services/HostedGameController';
 import { HostedGameController } from './src/services/HostedGameController';
 import type { IGameController } from './src/services/IGameController';
@@ -208,9 +213,11 @@ export default function App() {
     });
   }, []);
 
-  // Auto-connect if stored auth exists
+  // Auto-connect if stored auth exists. On web this skips the connect screen
+  // whenever a still-valid token sits in localStorage from a previous visit.
   useEffect(() => {
-    if (Platform.OS === 'web') return; // Web goes straight to connect
+    // Never hijack the preview harness (?preview= boots straight into a screen).
+    if (getWebPreview()) return;
     loadAuthState().then((auth) => {
       if (auth) {
         // Have stored credentials — connect as authenticated host
@@ -224,7 +231,7 @@ export default function App() {
             hostedControllerRef.current?.cleanup();
             hostedControllerRef.current = null;
             clearAuthState();
-            setScreen('mode_select');
+            setScreen(Platform.OS === 'web' ? 'connect' : 'mode_select');
           },
         });
         hostedControllerRef.current.initialize();
@@ -313,6 +320,23 @@ export default function App() {
     setScreen(Platform.OS === 'web' ? 'connect' : 'mode_select');
   }, []);
 
+  // Log out from the hosted lobby: revoke the session server-side (best
+  // effort), then drop the stored token and return to the login entry point.
+  const handleLogout = useCallback(() => {
+    const auth = getCachedAuthState();
+    if (auth?.sessionToken) {
+      const isSecure = /^https:\/\/|^wss:\/\//.test(auth.serverUrl);
+      const host = auth.serverUrl.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '');
+      fetch(`${isSecure ? 'https' : 'http'}://${host}/auth/logout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${auth.sessionToken}` },
+      }).catch(() => {
+        // Best effort — the local token is cleared regardless.
+      });
+    }
+    handleBack();
+  }, [handleBack]);
+
   if (!ready) return null;
 
   let content: React.ReactNode;
@@ -381,6 +405,7 @@ export default function App() {
             controller={controller}
             serverUrl={hostedServerUrl}
             mobileBaseUrl={hostedMobileBaseUrl ?? undefined}
+            onLogout={handleLogout}
           >
             {content}
           </GameModeProvider>
@@ -395,6 +420,10 @@ export default function App() {
             mode="hosted"
             controller={previewControllerRef.current!}
             serverUrl={previewServerUrl}
+            // The real hosted lobby always has a logout button now; render it in
+            // previews too (inert — the preview has no session) so the
+            // screenshot suite reviews the layout that actually ships.
+            onLogout={() => {}}
           >
             <GameScreen />
           </GameModeProvider>

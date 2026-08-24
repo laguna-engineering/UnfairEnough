@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { type GameMode, useGameMode } from '../context/GameModeContext';
 
 export function useGameController() {
-  const { mode, controller, serverUrl, mobileBaseUrl } = useGameMode();
+  const { mode, controller, serverUrl, mobileBaseUrl, onLogout } = useGameMode();
   const [state, setState] = useState<RootState>(controller.getState());
 
   useEffect(() => {
@@ -89,6 +89,7 @@ export function useGameController() {
     mode: mode as GameMode,
     qrUrl,
     serverUrl,
+    onLogout,
     phase: state.game.phase as GamePhase,
     roomCode: state.game.roomCode,
     serverPort: state.game.serverPort,

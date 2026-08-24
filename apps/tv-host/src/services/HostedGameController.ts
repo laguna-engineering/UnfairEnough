@@ -406,6 +406,9 @@ export class HostedGameController implements IGameController {
 
       case 'AUTH_SUCCESS':
         this.authMode = false; // Auth complete, switch to normal mode
+        // Keep the token so a mid-session reconnect re-authenticates instead
+        // of landing in the unauthenticated legacy-host path.
+        this.sessionToken = message.payload.sessionToken;
         this.onAuthSuccess?.(
           message.payload.sessionToken,
           message.payload.hostId,

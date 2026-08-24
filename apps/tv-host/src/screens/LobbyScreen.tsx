@@ -167,6 +167,7 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
     mode,
     serverUrl,
     roomCode,
+    onLogout,
   } = useGameController();
   const [selectedMode, setSelectedMode] = useState<GameModeType>(gameConfig.gameType ?? 'casual');
   const [showImportModal, setShowImportModal] = useState(false);
@@ -515,6 +516,19 @@ export const LobbyScreen: React.FC<{ bgMusic?: BgMusic }> = ({ bgMusic }) => {
               </Pressable>
             ))}
           </View>
+          {mode === 'hosted' && onLogout && (
+            <Pressable
+              onPress={onLogout}
+              nextFocusDown={focusTags.start}
+              style={(state) => [
+                styles.languageButton,
+                (state as any).focused && styles.focused,
+                state.pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.languageButtonText}>{t('lobby.logout')}</Text>
+            </Pressable>
+          )}
         </View>
       </View>
 

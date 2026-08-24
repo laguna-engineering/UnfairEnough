@@ -106,6 +106,8 @@ export interface HostedMocks {
   clientMessages: Array<{ type: string; payload?: unknown }>;
   sendToHost: (data: string) => void;
   waitForWs: (timeoutMs?: number) => Promise<void>;
+  /** URL the intercepted host WebSocket connected with, null before connect. */
+  wsUrl: () => string | null;
 }
 
 /**
@@ -163,7 +165,7 @@ export async function setupHostedMocks(page: Page): Promise<HostedMocks> {
     if (!wsRoute) throw new Error('WebSocket did not connect in time');
   };
 
-  return { clientMessages, sendToHost, waitForWs };
+  return { clientMessages, sendToHost, waitForWs, wsUrl: () => wsRoute?.url() ?? null };
 }
 
 /**

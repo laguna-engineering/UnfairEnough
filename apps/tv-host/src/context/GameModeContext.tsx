@@ -9,6 +9,8 @@ interface GameModeContextValue {
   controller: IGameController;
   serverUrl?: string;
   mobileBaseUrl?: string;
+  /** Hosted mode only: revoke the session and return to login. */
+  onLogout?: () => void;
 }
 
 const GameModeContext = createContext<GameModeContextValue | null>(null);
@@ -24,6 +26,7 @@ interface GameModeProviderProps {
   controller: IGameController;
   serverUrl?: string;
   mobileBaseUrl?: string;
+  onLogout?: () => void;
   children: React.ReactNode;
 }
 
@@ -32,9 +35,10 @@ export const GameModeProvider: React.FC<GameModeProviderProps> = ({
   controller,
   serverUrl,
   mobileBaseUrl,
+  onLogout,
   children,
 }) => (
-  <GameModeContext.Provider value={{ mode, controller, serverUrl, mobileBaseUrl }}>
+  <GameModeContext.Provider value={{ mode, controller, serverUrl, mobileBaseUrl, onLogout }}>
     {children}
   </GameModeContext.Provider>
 );
