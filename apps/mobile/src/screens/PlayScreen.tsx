@@ -16,7 +16,16 @@ import {
 } from '@unfairenough/ui';
 import type { AnswerKey, Question } from '@unfairenough/ws-protocol';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Animated,
+  PanResponder,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type ViewStyle,
+} from 'react-native';
 import { TypeBadge } from '../components/TypeBadge';
 import { withAlpha } from '../utils/color';
 
@@ -287,6 +296,7 @@ const GuessSlider: React.FC<GuessSliderProps> = ({ min, max, step, value, onChan
     PanResponder.create({
       onStartShouldSetPanResponder: () => !disabledRef.current,
       onMoveShouldSetPanResponder: () => !disabledRef.current,
+      onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: (evt) => {
         // Work in page coordinates: locationX on move events can be relative
         // to the child under the finger (fill/thumb), which makes the thumb
@@ -309,14 +319,22 @@ const GuessSlider: React.FC<GuessSliderProps> = ({ min, max, step, value, onChan
   return (
     <View
       ref={trackRef}
-      style={sliderStyles.track}
+      testID="guess-slider"
+      style={[sliderStyles.touchSurface, sliderWebStyle]}
       onLayout={(e) => {
         trackWidthRef.current = e.nativeEvent.layout.width;
+        // On web measureInWindow resolves a frame after the grant handler asks
+        // for it, so seed the track origin here or the first drag jumps.
+        trackRef.current?.measureInWindow((x) => {
+          trackLeftRef.current = x;
+        });
       }}
       {...panResponder.panHandlers}
     >
-      <View style={[sliderStyles.fill, { width: `${ratio * 100}%` }]} pointerEvents="none" />
-      <View style={[sliderStyles.thumb, { left: `${ratio * 100}%` }]} pointerEvents="none" />
+      <View style={sliderStyles.track} pointerEvents="none">
+        <View style={[sliderStyles.fill, { width: `${ratio * 100}%` }]} />
+        <View style={[sliderStyles.thumb, { left: `${ratio * 100}%` }]} />
+      </View>
     </View>
   );
 };
@@ -694,7 +712,19 @@ const twoChoiceStyles = StyleSheet.create({
   },
 });
 
+// touchAction/userSelect are react-native-web styles: without them mobile-web
+// browsers claim vertical-ish drags for page scrolling and desktop drags start
+// selecting text, both of which drop the gesture mid-drag.
+const sliderWebStyle =
+  Platform.OS === 'web'
+    ? ({ touchAction: 'none', userSelect: 'none' } as unknown as ViewStyle)
+    : undefined;
+
 const sliderStyles = StyleSheet.create({
+  touchSurface: {
+    height: 48,
+    justifyContent: 'center',
+  },
   track: {
     height: 14,
     borderRadius: borderRadius.full,
