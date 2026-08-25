@@ -180,13 +180,15 @@ export function parseClientMessage(data: unknown): ClientMessage {
       if (!payload || typeof payload !== 'object') {
         throw new Error('RECONNECT requires payload');
       }
-      const p = payload as { playerId?: unknown };
+      const p = payload as { playerId?: unknown; deviceId?: unknown };
       if (typeof p.playerId !== 'string') {
         throw new Error('playerId is required');
       }
+      const deviceId =
+        typeof p.deviceId === 'string' && isValidUUID(p.deviceId) ? p.deviceId : undefined;
       return {
         type: 'RECONNECT',
-        payload: { playerId: p.playerId },
+        payload: { playerId: p.playerId, deviceId },
       };
     }
 

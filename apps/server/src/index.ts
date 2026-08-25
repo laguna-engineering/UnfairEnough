@@ -380,7 +380,7 @@ app.get(
         if (data.role === 'host') {
           room.removeHost();
         } else if (data.playerId) {
-          room.handlePlayerDisconnect(data.playerId);
+          room.handlePlayerDisconnect(data.playerId, raw as ServerWebSocket<WSData>);
         }
 
         if (room.isEmpty) {

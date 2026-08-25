@@ -49,6 +49,8 @@ interface Callbacks {
   onPlayerReconnected?: PlayerReconnectedCallback;
   onAnswerReceived?: AnswerReceivedCallback;
   onBuildStateSnapshot?: (playerId: string) => StateSnapshotPayload | null;
+  /** Mid-game, graveyard entries never expire — players can rejoin any time. */
+  isGameInProgress?: () => boolean;
 }
 
 interface GraveyardEntry {
@@ -56,7 +58,9 @@ interface GraveyardEntry {
   name: string;
   color: string;
   emoji?: string;
-  timer: ReturnType<typeof setTimeout>;
+  deviceId?: string;
+  /** null while a game is in progress — the entry lives until the game ends. */
+  timer: ReturnType<typeof setTimeout> | null;
 }
 
 interface Client {
@@ -65,6 +69,7 @@ interface Client {
   playerName: string;
   playerColor: string;
   playerEmoji?: string;
+  deviceId?: string;
   buffer: Buffer;
   upgraded: boolean;
 }
@@ -195,6 +200,7 @@ class WebSocketServerService {
             client.playerName,
             client.playerColor,
             client.playerEmoji,
+            client.deviceId,
           );
         }
       });
@@ -207,6 +213,7 @@ class WebSocketServerService {
             client.playerName,
             client.playerColor,
             client.playerEmoji,
+            client.deviceId,
           );
         }
       });
@@ -316,6 +323,7 @@ class WebSocketServerService {
           client.playerName = name;
           client.playerColor = color;
           client.playerEmoji = emoji;
+          client.deviceId = deviceId;
 
           this.sendToClient(client, {
             type: 'WELCOME',
@@ -367,7 +375,14 @@ class WebSocketServerService {
 
         case 'RECONNECT': {
           const entry = this.graveyard.get(message.payload.playerId);
-          if (!entry) {
+          // Only graveyarded (i.e. not currently connected) players can be
+          // reclaimed, and only by the device that originally joined — anyone
+          // else asking for this playerId is trying to take over the session.
+          const requesterDeviceId: string | undefined = message.payload.deviceId;
+          if (
+            !entry ||
+            (entry.deviceId && requesterDeviceId && entry.deviceId !== requesterDeviceId)
+          ) {
             this.sendToClient(client, {
               type: 'ERROR',
               payload: { code: 'SESSION_EXPIRED', message: 'Session expired. Please rejoin.' },
@@ -376,12 +391,13 @@ class WebSocketServerService {
           }
 
           // Restore the player
-          clearTimeout(entry.timer);
+          if (entry.timer) clearTimeout(entry.timer);
           this.graveyard.delete(entry.playerId);
           client.playerId = entry.playerId;
           client.playerName = entry.name;
           client.playerColor = entry.color;
           client.playerEmoji = entry.emoji;
+          client.deviceId = entry.deviceId;
 
           // Re-send WELCOME
           this.sendToClient(client, {
@@ -416,7 +432,7 @@ class WebSocketServerService {
             // Remove from graveyard if somehow there
             const entry = this.graveyard.get(playerId);
             if (entry) {
-              clearTimeout(entry.timer);
+              if (entry.timer) clearTimeout(entry.timer);
               this.graveyard.delete(playerId);
             }
             client.playerId = null;
@@ -475,21 +491,43 @@ class WebSocketServerService {
     this.language = language;
   }
 
-  /** Move a disconnected player to the graveyard with a 30s grace period. */
-  private startGracePeriod(playerId: string, name: string, color: string, emoji?: string): void {
+  /**
+   * Move a disconnected player to the graveyard. In the lobby the entry
+   * expires after a 30s grace period; mid-game it is kept until the game
+   * ends (see clearGraveyard) so the player can rejoin at any point.
+   */
+  private startGracePeriod(
+    playerId: string,
+    name: string,
+    color: string,
+    emoji?: string,
+    deviceId?: string,
+  ): void {
     // If already in graveyard, skip (avoid duplicate timers)
     if (this.graveyard.has(playerId)) return;
 
-    const timer = setTimeout(() => {
-      this.graveyard.delete(playerId);
-      this.callbacks.onPlayerLeft?.({ playerId });
-      this.broadcast({ type: 'PLAYER_LEFT', payload: { playerId } });
-    }, 30_000);
+    const timer = this.callbacks.isGameInProgress?.()
+      ? null
+      : setTimeout(() => {
+          this.graveyard.delete(playerId);
+          this.callbacks.onPlayerLeft?.({ playerId });
+          this.broadcast({ type: 'PLAYER_LEFT', payload: { playerId } });
+        }, 30_000);
 
-    this.graveyard.set(playerId, { playerId, name, color, emoji, timer });
+    this.graveyard.set(playerId, { playerId, name, color, emoji, deviceId, timer });
 
     this.callbacks.onPlayerDisconnected?.({ playerId });
     this.broadcast({ type: 'PLAYER_DISCONNECTED', payload: { playerId } });
+  }
+
+  /** Drop every graveyarded player — the game ended and they never came back. */
+  clearGraveyard(): void {
+    for (const entry of this.graveyard.values()) {
+      if (entry.timer) clearTimeout(entry.timer);
+      this.callbacks.onPlayerLeft?.({ playerId: entry.playerId });
+      this.broadcast({ type: 'PLAYER_LEFT', payload: { playerId: entry.playerId } });
+    }
+    this.graveyard.clear();
   }
 
   stop(): void {
@@ -498,7 +536,7 @@ class WebSocketServerService {
     }
     this.clients.clear();
     for (const entry of this.graveyard.values()) {
-      clearTimeout(entry.timer);
+      if (entry.timer) clearTimeout(entry.timer);
     }
     this.graveyard.clear();
     this.server?.close();

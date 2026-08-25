@@ -157,6 +157,7 @@ class GameController implements IGameController {
         this.store.dispatch(setPlayerConnected({ id: data.playerId, isConnected: true }));
       },
       onBuildStateSnapshot: (playerId) => this.buildStateSnapshot(playerId),
+      isGameInProgress: () => this.getState().game.phase !== 'LOBBY',
       onPlayerLeft: (data) => {
         // Timer expired or intentional LEAVE — full removal
         this.store.dispatch(removePlayer(data.playerId));
@@ -1378,6 +1379,10 @@ class GameController implements IGameController {
    */
   reset(): void {
     this.clearAllTimers();
+    // Players still in the graveyard never rejoined during the game — drop
+    // them (this dispatches removePlayer via onPlayerLeft) so the new lobby
+    // only shows people who are actually here.
+    wsServer.clearGraveyard();
     this.store.dispatch(resetGame());
     this.questionPool = [];
     this.usedQuestionIds.clear();

@@ -38,10 +38,23 @@ interface Callbacks {
   onError?: (error: { code: string; message: string }) => void;
 }
 
+interface LastJoin {
+  name: string;
+  roomCode?: string;
+  deviceId?: string;
+  profileId?: string;
+  avatar?: { emoji?: string; color?: string };
+}
+
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000];
 const PING_INTERVAL = 30000;
 // Errors that won't resolve by retrying — stop reconnecting so the UI can recover.
-const FATAL_ERROR_CODES = new Set(['ROOM_NOT_FOUND', 'INVALID_PARAMS', 'SESSION_INVALID']);
+const FATAL_ERROR_CODES = new Set([
+  'ROOM_NOT_FOUND',
+  'INVALID_PARAMS',
+  'SESSION_INVALID',
+  'ALREADY_CONNECTED',
+]);
 
 class WebSocketClient {
   private ws: WebSocket | null = null;
@@ -57,6 +70,7 @@ class WebSocketClient {
   private lastDeviceId: string | null = null;
   private lastSessionToken: string | null = null;
   private lastInvitationToken: string | null = null;
+  private lastJoin: LastJoin | null = null;
   private connectionState: ConnectionState = 'disconnected';
   private connectionId = 0;
 
@@ -101,6 +115,7 @@ class WebSocketClient {
     this.lastDeviceId = null;
     this.lastSessionToken = null;
     this.lastInvitationToken = null;
+    this.lastJoin = null;
     this.reconnectAttempt = 0;
     if (clearPlayerId) this.playerId = null;
 
@@ -170,9 +185,13 @@ class WebSocketClient {
         this.setConnectionState('connected');
         this.startPingInterval();
 
-        // If we have a stored playerId, try to reconnect
+        // If we have a stored playerId, try to reconnect. deviceId proves to
+        // the server that the same device is reclaiming the session.
         if (this.playerId) {
-          this.send({ type: 'RECONNECT', payload: { playerId: this.playerId } });
+          this.send({
+            type: 'RECONNECT',
+            payload: { playerId: this.playerId, deviceId: this.lastDeviceId ?? undefined },
+          });
         } else if (this.pendingDeviceId) {
           // New connection — identify the device to check for an existing profile
           this.send({
@@ -327,7 +346,11 @@ class WebSocketClient {
           hasProfileId: !!message.payload.profileId,
         };
       case 'RECONNECT':
-        return { type: message.type, playerId: message.payload.playerId };
+        return {
+          type: message.type,
+          playerId: message.payload.playerId,
+          hasDeviceId: !!message.payload.deviceId,
+        };
       case 'ANSWER':
         return {
           type: message.type,
@@ -369,6 +392,7 @@ class WebSocketClient {
     profileId?: string,
     avatar?: { emoji?: string; color?: string },
   ): void {
+    this.lastJoin = { name, roomCode, deviceId, profileId, avatar };
     this.send({
       type: 'JOIN',
       payload: {
@@ -380,6 +404,22 @@ class WebSocketClient {
         avatarColor: avatar?.color,
       },
     });
+  }
+
+  /** Whether a JOIN has been sent on this connection that could be retried. */
+  canRejoin(): boolean {
+    return this.lastJoin !== null;
+  }
+
+  /**
+   * Re-send the last JOIN (session-expired auto-rejoin). Returns false when
+   * there is nothing to resend or the socket is not open.
+   */
+  rejoinLastRoom(): boolean {
+    if (!this.lastJoin || this.ws?.readyState !== WebSocket.OPEN) return false;
+    const { name, roomCode, deviceId, profileId, avatar } = this.lastJoin;
+    this.join(name, roomCode, deviceId, profileId, avatar);
+    return true;
   }
 
   unbind(deviceId: string): void {

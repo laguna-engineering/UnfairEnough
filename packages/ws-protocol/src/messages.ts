@@ -17,7 +17,11 @@ export type ClientMessage =
       payload: { deviceId: string; sessionToken?: string; invitationToken?: string };
     }
   | { type: 'UNBIND'; payload: { deviceId: string } }
-  | { type: 'RECONNECT'; payload: { playerId: string } }
+  | {
+      type: 'RECONNECT';
+      /** deviceId lets the server verify the same device is reclaiming the session. */
+      payload: { playerId: string; deviceId?: string };
+    }
   | { type: 'ANSWER'; payload: AnswerPayload }
   | { type: 'LEAVE' }
   | { type: 'PING' };

@@ -439,15 +439,25 @@ export class GameRoom {
     this.broadcast({ type: 'PLAYER_LEFT', payload: { playerId } });
   }
 
-  /** Mark player as disconnected with a 30s grace period before full removal. */
-  handlePlayerDisconnect(playerId: string): void {
+  /**
+   * Mark player as disconnected. In the lobby a 30s grace period precedes full
+   * removal; mid-game the player keeps their seat (missed rounds score 0) so
+   * they can rejoin at any point until the room returns to the lobby.
+   */
+  handlePlayerDisconnect(playerId: string, closingWs?: ServerWebSocket<WSData>): void {
     const player = this.players.get(playerId);
     if (!player) return;
+
+    // A stale socket closing after RECONNECT already replaced it must not
+    // mark the freshly attached player as disconnected.
+    if (closingWs && player.ws !== closingWs) return;
 
     player.ws = null;
     player.isConnected = false;
 
     this.broadcast({ type: 'PLAYER_DISCONNECTED', payload: { playerId } });
+
+    if (this.phase !== 'LOBBY') return;
 
     // Start 30-second grace period
     player.disconnectTimer = setTimeout(() => {
@@ -580,10 +590,36 @@ export class GameRoom {
         break;
       }
       case 'RECONNECT': {
-        const { playerId } = message.payload;
+        const { playerId, deviceId } = message.payload;
         const player = this.players.get(playerId);
 
         if (!player) {
+          this.sendTo(ws, {
+            type: 'ERROR',
+            payload: { code: 'SESSION_EXPIRED', message: 'Session expired. Please rejoin.' },
+          });
+          return;
+        }
+
+        if (player.isConnected && player.ws) {
+          // A live socket owns this player. Only the device that joined may
+          // take the session over (its old socket can linger half-open after
+          // a network change); anyone else is trying to steal it.
+          if (!deviceId || !player.deviceId || deviceId !== player.deviceId) {
+            this.sendTo(ws, {
+              type: 'ERROR',
+              payload: { code: 'ALREADY_CONNECTED', message: 'Player is already connected.' },
+            });
+            return;
+          }
+          try {
+            player.ws.close();
+          } catch {
+            /* old socket may already be closing */
+          }
+        } else if (deviceId && player.deviceId && deviceId !== player.deviceId) {
+          // Disconnected seat, but claimed from a different device than the
+          // one that joined — don't hand the session over.
           this.sendTo(ws, {
             type: 'ERROR',
             payload: { code: 'SESSION_EXPIRED', message: 'Session expired. Please rejoin.' },
@@ -2231,8 +2267,14 @@ export class GameRoom {
     this.playerTagScores.clear();
     this.currentRoundDifficulties.clear();
 
-    // Reset scores and clear disconnect timers, but keep players
-    for (const player of this.players.values()) {
+    // Reset scores and clear disconnect timers, but keep connected players.
+    // Players still disconnected never came back during the game — drop them
+    // so the new lobby only shows people who are actually here.
+    for (const player of [...this.players.values()]) {
+      if (!player.isConnected) {
+        this.removePlayer(player.playerId);
+        continue;
+      }
       player.score = 0;
       if (player.disconnectTimer) {
         clearTimeout(player.disconnectTimer);

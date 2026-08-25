@@ -19,6 +19,19 @@ import { getDeviceId, initDeviceId } from '../services/deviceId';
 import { initLanguagePreference, saveLanguagePreference } from '../services/languagePreference';
 import { wsClient } from '../services/WebSocketClient';
 
+// Session-expired auto-rejoin: silently re-send the last JOIN with backoff
+// before giving up and sending the player back through the scan flow.
+const REJOIN_DELAYS = [1000, 4000, 8000];
+// An attempt with no WELCOME/ERROR response (e.g. socket died mid-flight)
+// counts as failed after this long.
+const REJOIN_RESPONSE_TIMEOUT = 10000;
+
+interface RejoinState {
+  attempt: number;
+  timer: ReturnType<typeof setTimeout> | null;
+  message: string;
+}
+
 export type MobileGamePhase =
   | 'RETURNING'
   | 'SCAN'
@@ -66,6 +79,74 @@ export function useGameState() {
   // Which ANSWER field is awaiting its ACK. predict_room's vote ack should not
   // flip the phase to ANSWERED — the player still owes a prediction (step 2).
   const pendingAckFieldRef = useRef<'answer' | 'guess' | 'vote' | 'prediction' | null>(null);
+  const rejoinRef = useRef<RejoinState | null>(null);
+
+  const showAlert = useCallback((message: string) => {
+    if (Platform.OS === 'web') {
+      alert(message);
+    } else {
+      const { Alert } = require('react-native');
+      Alert.alert(message);
+    }
+  }, []);
+
+  const stopRejoin = useCallback(() => {
+    const state = rejoinRef.current;
+    if (state?.timer) clearTimeout(state.timer);
+    rejoinRef.current = null;
+  }, []);
+
+  /** All rejoin attempts failed — fail loudly and return to the entry flow. */
+  const failRejoin = useCallback(
+    (message: string) => {
+      stopRejoin();
+      connectAttemptRef.current += 1;
+      wsClient.disconnect();
+      setCurrentQuestion(null);
+      setSelectedAnswer(null);
+      setConfirmedAnswer(null);
+      setConfirmedGuess(null);
+      setConfirmedVote(null);
+      setConfirmedPrediction(null);
+      pendingAckFieldRef.current = null;
+      setRoundResult(null);
+      setGameResult(null);
+      setMediaPreview(null);
+      setPhase('SCAN');
+      showAlert(message);
+    },
+    [stopRejoin, showAlert],
+  );
+
+  /** Schedule the next rejoin attempt on backoff, or give up after the last one. */
+  const advanceRejoin = useCallback(
+    function advance() {
+      const state = rejoinRef.current;
+      if (!state) return;
+      if (state.timer) {
+        clearTimeout(state.timer);
+        state.timer = null;
+      }
+      if (state.attempt >= REJOIN_DELAYS.length) {
+        failRejoin(state.message);
+        return;
+      }
+      const delay = REJOIN_DELAYS[state.attempt];
+      state.attempt += 1;
+      debugLog('[game-state] scheduling rejoin attempt', { attempt: state.attempt, delay });
+      state.timer = setTimeout(() => {
+        state.timer = null;
+        if (!wsClient.rejoinLastRoom()) {
+          advance();
+          return;
+        }
+        // Success/failure is decided by the WELCOME or ERROR reply; if neither
+        // arrives, count the attempt as failed.
+        state.timer = setTimeout(advance, REJOIN_RESPONSE_TIMEOUT);
+      }, delay);
+    },
+    [failRejoin],
+  );
 
   const getOrInitDeviceId = useCallback(async (): Promise<string | null> => {
     const cachedDeviceId = getDeviceId();
@@ -118,6 +199,10 @@ export function useGameState() {
           }
         }
 
+        // Mid-rejoin, the socket may reconnect and re-IDENTIFY on its own —
+        // don't let the identity screens interrupt the silent retry loop.
+        if (rejoinRef.current) return;
+
         if (data.profile) {
           setIdentifiedProfile(data.profile);
           setAvailableProfiles([]);
@@ -138,6 +223,7 @@ export function useGameState() {
           playerId: data.playerId,
           hasProfile: !!data.profile,
         });
+        stopRejoin();
         setPlayerInfo(data);
         setPhase('WAITING');
         setError(null);
@@ -260,6 +346,7 @@ export function useGameState() {
         setError(err.message);
 
         if (err.code === 'PROFILE_ALREADY_CLAIMED') {
+          stopRejoin();
           const deviceId = getDeviceId();
           if (deviceId) {
             setPhase('IDENTIFYING');
@@ -269,29 +356,45 @@ export function useGameState() {
         }
 
         // The reconnect grace period lapsed and the server dropped our in-room
-        // player session. Re-identifying on the same socket can't restore that
-        // player mid-game, and JOIN may be rejected while a game is in progress,
-        // so fail loudly and send the user back through the normal entry flow.
+        // player session. The socket is still bound to the room, so silently
+        // retry the original JOIN with backoff before failing loudly and
+        // sending the user back through the normal entry flow.
         if (err.code === 'SESSION_EXPIRED') {
-          connectAttemptRef.current += 1;
-          wsClient.disconnect();
-          setCurrentQuestion(null);
-          setSelectedAnswer(null);
-          setConfirmedAnswer(null);
-          setConfirmedGuess(null);
-          setConfirmedVote(null);
-          setConfirmedPrediction(null);
-          pendingAckFieldRef.current = null;
-          setRoundResult(null);
-          setGameResult(null);
-          setMediaPreview(null);
-          setPhase('SCAN');
-          if (Platform.OS === 'web') {
-            alert(err.message);
-          } else {
-            const { Alert } = require('react-native');
-            Alert.alert(err.message);
+          if (rejoinRef.current) {
+            // A rejoin attempt bounced — retry on backoff, or give up.
+            advanceRejoin();
+            return;
           }
+          if (wsClient.canRejoin()) {
+            setCurrentQuestion(null);
+            setSelectedAnswer(null);
+            setConfirmedAnswer(null);
+            setConfirmedGuess(null);
+            setConfirmedVote(null);
+            setConfirmedPrediction(null);
+            pendingAckFieldRef.current = null;
+            setRoundResult(null);
+            setGameResult(null);
+            setMediaPreview(null);
+            setPhase('IDENTIFYING');
+            rejoinRef.current = { attempt: 0, timer: null, message: err.message };
+            advanceRejoin();
+            return;
+          }
+          failRejoin(err.message);
+          return;
+        }
+
+        // Any other rejection of a rejoin attempt (e.g. GAME_IN_PROGRESS,
+        // ROOM_FULL) — keep retrying on backoff unless the error is fatal.
+        if (
+          rejoinRef.current &&
+          err.code !== 'ROOM_NOT_FOUND' &&
+          err.code !== 'INVALID_PARAMS' &&
+          err.code !== 'SESSION_INVALID' &&
+          err.code !== 'ALREADY_CONNECTED'
+        ) {
+          advanceRejoin();
           return;
         }
 
@@ -300,28 +403,27 @@ export function useGameState() {
         if (
           err.code === 'ROOM_NOT_FOUND' ||
           err.code === 'INVALID_PARAMS' ||
-          err.code === 'SESSION_INVALID'
+          err.code === 'SESSION_INVALID' ||
+          err.code === 'ALREADY_CONNECTED'
         ) {
+          stopRejoin();
           connectAttemptRef.current += 1;
           setPhase('SCAN');
-          if (Platform.OS === 'web') {
-            alert(err.message);
-          } else {
-            const { Alert } = require('react-native');
-            Alert.alert(err.message);
-          }
+          showAlert(err.message);
         }
       },
     });
 
     return () => {
+      stopRejoin();
       wsClient.disconnect();
     };
-  }, []);
+  }, [advanceRejoin, failRejoin, showAlert, stopRejoin]);
 
   const connect = useCallback(
     (url: string, invitationToken?: string) => {
       const attemptId = ++connectAttemptRef.current;
+      stopRejoin();
       setError(null);
       setPhase('IDENTIFYING');
       void (async () => {
@@ -343,13 +445,14 @@ export function useGameState() {
         wsClient.connect(url, deviceId, undefined, invitationToken);
       })();
     },
-    [getOrInitDeviceId],
+    [getOrInitDeviceId, stopRejoin],
   );
 
   /** Connect using a stored guest session (returning user flow) */
   const connectFromSession = useCallback(
     (session: GuestSession) => {
       const attemptId = ++connectAttemptRef.current;
+      stopRejoin();
       setReturningError(null);
       setError(null);
       setPhase('IDENTIFYING');
@@ -379,29 +482,31 @@ export function useGameState() {
         wsClient.connect(wsUrl, deviceId, session.sessionToken);
       })();
     },
-    [getOrInitDeviceId],
+    [getOrInitDeviceId, stopRejoin],
   );
 
   /** Disconnect from the linked host account */
   const disconnectFromHost = useCallback(async () => {
     connectAttemptRef.current += 1;
+    stopRejoin();
     wsClient.disconnect();
     await clearGuestSession();
     setStoredSession(null);
     setReturningError(null);
     setPhase('SCAN');
-  }, []);
+  }, [stopRejoin]);
 
   /** Dismiss the pre-game connection flow without forgetting the linked host account. */
   const cancelToScan = useCallback(() => {
     connectAttemptRef.current += 1;
+    stopRejoin();
     wsClient.disconnect();
     setError(null);
     setReturningError(null);
     setIdentifiedProfile(null);
     setAvailableProfiles([]);
     setPhase('SCAN');
-  }, []);
+  }, [stopRejoin]);
 
   const join = useCallback(
     (
