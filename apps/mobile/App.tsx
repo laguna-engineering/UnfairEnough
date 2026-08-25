@@ -21,8 +21,10 @@ import {
 import { GameScreen } from './src/screens/GameScreen';
 import '@unfairenough/i18n';
 
+// Native builds stay pinned to the language they were built for; on web the
+// browser locale detected by the i18n init wins, since players bring their own.
 const defaultLang = Constants.expoConfig?.extra?.defaultLang;
-if (defaultLang) changeLanguage(defaultLang as SupportedLanguage);
+if (defaultLang && Platform.OS !== 'web') changeLanguage(defaultLang as SupportedLanguage);
 
 const VALID_PREVIEW_QUESTION_TYPES: QuestionType[] = [
   'multiple_choice',
@@ -33,9 +35,9 @@ const VALID_PREVIEW_QUESTION_TYPES: QuestionType[] = [
 
 /**
  * `?preview=<SCREEN>` renders one screen with mock data (see PreviewScreen),
- * and `?lang=en|it` pins the language — otherwise it comes from whichever
- * DEFAULT_LANG built the bundle, which makes screenshots and e2e assertions
- * depend on the developer's .env. Web dev build only.
+ * and `?lang=en|it` pins the language — otherwise the browser locale decides,
+ * which makes screenshots and e2e assertions depend on the machine running
+ * them. Web dev build only.
  */
 function getWebPreview(): { screen: PreviewScreenName; options: PreviewScreenOptions } | null {
   if (!__DEV__ || Platform.OS !== 'web') return null;
@@ -61,7 +63,7 @@ function getWebPreview(): { screen: PreviewScreenName; options: PreviewScreenOpt
 }
 
 function getUrlLang(): SupportedLanguage | null {
-  if (!__DEV__ || Platform.OS !== 'web') return null;
+  if (Platform.OS !== 'web') return null;
   const lang = new URLSearchParams(window.location.search).get('lang');
   return lang === 'en' || lang === 'it' ? lang : null;
 }

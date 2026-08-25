@@ -93,9 +93,9 @@ a crowded-room layout by hand.
   `screenshots/mobile/emoji/`.
 - The mock roster runs to 50 even though a room caps at 12 — layout assertions stop at the
   cap, the screenshot specs go past it to show where the screens give out.
-- Both accept `?lang=en|it`. Without it the language comes from whichever `DEFAULT_LANG`
-  built the bundle, so every e2e helper pins it — Italian's longer strings are also worth
-  screenshotting.
+- Both accept `?lang=en|it`. Without it the TV falls back to whichever `DEFAULT_LANG`
+  built the bundle and mobile web to the browser locale, so every e2e helper pins it —
+  Italian's longer strings are also worth screenshotting.
 - Mock data lives in `apps/*/src/preview/previewData.ts` and is deterministic (no `Date.now()`,
   no RNG) so the same URL always renders the same pixels. The join screen randomises the
   player's badge in the real app, so it takes an `initialAvatar` prop the preview pins —
